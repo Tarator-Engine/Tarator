@@ -1,3 +1,3 @@
 fn main() {
-    pollster::block_on(tar_render::run());
+    pollster::block_on(tar_gui::run());
 }

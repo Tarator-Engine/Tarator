@@ -1,7 +1,7 @@
-mod camera;
-mod model;
-mod resources;
-mod texture;
+pub mod camera;
+pub mod model;
+pub mod resources;
+pub mod texture;
 
 use anyhow::Result;
 use camera::CameraUniform;
@@ -56,24 +56,24 @@ pub trait Renderer {
 }
 /// The main Renderer for the Tarator engine it Renderer is implemented for it
 pub struct WgpuRenderer {
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
-    render_pipeline: wgpu::RenderPipeline,
-    texture_bind_group_layout: wgpu::BindGroupLayout,
-    cameras: Vec<camera::RawCamera>,
-    models: Vec<model::RawModel>,
-    lights: Vec<model::RawLight>,
-    active_camera: u32,
-    depth_texture: texture::RawTexture,
-    light_bind_group_layout: wgpu::BindGroupLayout,
-    camera_bind_group_layout: wgpu::BindGroupLayout,
-    light_render_pipeline: wgpu::RenderPipeline,
+    pub surface: wgpu::Surface,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
+    pub size: winit::dpi::PhysicalSize<u32>,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub cameras: Vec<camera::RawCamera>,
+    pub models: Vec<model::RawModel>,
+    pub lights: Vec<model::RawLight>,
+    pub active_camera: u32,
+    pub depth_texture: texture::RawTexture,
+    pub light_bind_group_layout: wgpu::BindGroupLayout,
+    pub camera_bind_group_layout: wgpu::BindGroupLayout,
+    pub light_render_pipeline: wgpu::RenderPipeline,
 
     // TODO: remove this (only for testing purpouses)
-    mouse_pressed: bool,
+    pub mouse_pressed: bool,
 }
 
 /// creates a render pipeline
@@ -139,7 +139,7 @@ fn create_render_pipeline(
 
 impl WgpuRenderer {
     // TODO: remove the following two functions: testing purposes only
-    fn update(&mut self, dt: std::time::Duration) {
+    pub fn update(&mut self, dt: std::time::Duration) {
         let cam = &mut self.cameras[self.active_camera as usize];
         cam.controller.update_camera(&mut cam.cam, dt);
         cam.uniform.update_view_proj(&cam.cam, &cam.proj);
@@ -166,7 +166,7 @@ impl WgpuRenderer {
         );
     }
 
-    fn input(&mut self, event: &WindowEvent) -> bool {
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::KeyboardInput {
                 input:
@@ -197,7 +197,7 @@ impl WgpuRenderer {
         }
     }
 
-    async fn new(window: &Window) -> Self {
+    pub async fn new(window: &Window) -> Self {
         let size = window.inner_size();
 
         // The insatnce is a handle to our GPU
