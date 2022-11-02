@@ -1,4 +1,5 @@
 use std::ops::Range;
+use eframe::wgpu;
 
 use crate::texture;
 

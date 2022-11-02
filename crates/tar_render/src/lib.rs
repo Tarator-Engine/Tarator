@@ -6,12 +6,20 @@ pub mod texture;
 use anyhow::Result;
 use camera::CameraUniform;
 use cgmath::prelude::*;
-use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+
+use eframe::egui_wgpu;
+use eframe::{
+    wgpu,
+    wgpu::util::DeviceExt,
+};
+
+use std::{num::NonZeroU64, sync::Arc};
+
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -39,6 +47,425 @@ pub enum Idf {
     ID(UUID),
 }
 
+pub struct EditorRenderer {
+    last_frame: std::time::Instant,
+}
+
+impl EditorRenderer {
+    pub fn new<'a>(cc: &'a eframe::CreationContext<'a>) -> Option<Self> {
+        // Get the WGPU render state from the eframe creation context. This can also be retrieved
+        // from `eframe::Frame` when you don't have a `CreationContext` available.
+        let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
+
+        let device = &wgpu_render_state.device;
+        let queue = &&wgpu_render_state.queue;
+
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu_render_state.target_format,
+            width: 800,
+            height: 800,
+            present_mode: wgpu::PresentMode::Fifo,
+            //alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        };
+
+        let texture_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                // normal map
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: None,
+            });
+
+        let depth_texture =
+            texture::RawTexture::create_depth_texture(&device, &config, "depth_texture");
+
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[
+                    &texture_bind_group_layout,
+                    &camera_bind_group_layout,
+                    &light_bind_group_layout,
+                ],
+                push_constant_ranges: &[],
+            });
+
+        let render_pipeline = {
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("Normal Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            };
+            create_render_pipeline(
+                &device,
+                &render_pipeline_layout,
+                config.format,
+                None,
+                &[model::ModelVertex::desc(), model::RawInstance::desc()],
+                shader,
+            )
+        };
+
+        let light_render_pipeline = {
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Light Pipeline Layout"),
+                bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("Light Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
+            };
+            create_render_pipeline(
+                &device,
+                &layout,
+                config.format,
+                None,
+                &[model::ModelVertex::desc()],
+                shader,
+            )
+        };
+        let mut res = EditorRenderResources {
+            render_pipeline,
+            light_render_pipeline,
+            cameras: vec![],
+            models: vec![],
+            lights: vec![],
+            texture_bind_group_layout,
+            active_camera: 0,
+            depth_texture,
+            light_bind_group_layout,
+            camera_bind_group_layout,
+        };let int_camera =
+        camera::IntCamera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+    let projection = camera::Projection::new(
+        config.width,
+        config.height,
+        cgmath::Deg(45.0),
+        0.1,
+        100.0,
+    );
+    let camera_controller = camera::CameraController::new(4.0, 0.4);
+
+    let camera = camera::Camera {
+        cam: int_camera,
+        proj: projection,
+        controller: camera_controller,
+    };
+    const NUM_INSTANCES_PER_ROW: u32 = 10;
+    const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+        NUM_INSTANCES_PER_ROW as f32 * 0.5,
+        0.0,
+        NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    );
+
+    let instances = (0..NUM_INSTANCES_PER_ROW)
+        .flat_map(|z| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                let position = cgmath::Vector3 {
+                    x: (x as f32) * 3.0,
+                    y: 0.0,
+                    z: (z as f32) * 3.0,
+                } - INSTANCE_DISPLACEMENT;
+
+                let rotation =
+                    cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(180.0));
+                model::Instance { position, rotation }
+            })
+        })
+        .collect::<Vec<_>>();
+    let instance_data = instances
+        .iter()
+        .map(model::Instance::to_raw)
+        .collect::<Vec<_>>();
+    let instance_buffer = device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+    let obj_model = pollster::block_on(resources::load_model(
+        "cube.obj",
+        device,
+        queue,
+        &res.texture_bind_group_layout,
+        instance_buffer,
+        NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW,
+    ))
+    .unwrap();
+
+    res.add_object(GameObject::RawModel(obj_model), &device);
+
+    res.add_object(GameObject::Camera(camera), &device);
+    res.select_camera(Idf::N(0));
+
+    res.add_object(GameObject::Light(Light {
+        pos: [2.0, 2.0, 2.0],
+        color: [1.0, 1.0, 1.0],
+    }), &device);
+
+        wgpu_render_state
+            .egui_rpass
+            .write()
+            .paint_callback_resources
+            .insert(res);
+
+        Some(Self{
+            last_frame: std::time::Instant::now(),
+        })
+    }
+
+    pub fn custom_painting(&mut self, ui: &mut egui::Ui) {
+        let (rect, response) =
+            ui.allocate_exact_size(egui::Vec2::splat(800.0), egui::Sense::drag());
+
+
+        let dt = self.last_frame.elapsed();
+        self.last_frame = std::time::Instant::now();
+        // The callback function for WGPU is in two stages: prepare, and paint.
+        //
+        // The prepare callback is called every frame before paint and is given access to the wgpu
+        // Device and Queue, which can be used, for instance, to update buffers and uniforms before
+        // rendering.
+        //
+        // The paint callback is called after prepare and is given access to the render pass, which
+        // can be used to issue draw commands.
+        let cb = egui_wgpu::CallbackFn::new()
+            .prepare(move |device, queue, paint_callback_resources| {
+                let resources: &mut EditorRenderResources = paint_callback_resources.get_mut().unwrap();
+                resources.prepare(device, queue, dt);
+            })
+            .paint(move |_info, render_pass, paint_callback_resources| {
+                let resources: &EditorRenderResources = paint_callback_resources.get().unwrap();
+                resources.paint(render_pass);
+            });
+
+        let callback = egui::PaintCallback {
+            rect,
+            callback: Arc::new(cb),
+        };
+
+        ui.painter().add(callback);
+    }
+}
+
+
+pub struct EditorRenderResources {
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub cameras: Vec<camera::RawCamera>,
+    pub models: Vec<model::RawModel>,
+    pub lights: Vec<model::RawLight>,
+    pub active_camera: u32,
+    pub depth_texture: texture::RawTexture,
+    pub light_bind_group_layout: wgpu::BindGroupLayout,
+    pub camera_bind_group_layout: wgpu::BindGroupLayout,
+    pub light_render_pipeline: wgpu::RenderPipeline,
+}
+
+impl EditorRenderResources {
+    fn select_camera(&mut self, cam_idf: Idf) {
+        match cam_idf {
+            Idf::ID(_id) => todo!(
+                "self.active_camera = self.cameras.iter().position(|&x| x.id() == id).unwrap();"
+            ),
+            Idf::N(n) => self.active_camera = n,
+        }
+    }
+
+    fn add_object(&mut self, obj: GameObject, device: &wgpu::Device) {
+        match obj {
+            GameObject::Camera(cam) => {
+                let camera = cam.cam;
+                let projection = cam.proj;
+                let cam_cont = cam.controller;
+                let mut camera_uniform = CameraUniform::new();
+                camera_uniform.update_view_proj(&camera, &projection);
+
+                let camera_buffer =
+                    device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Camera Buffer"),
+                            contents: bytemuck::cast_slice(&[camera_uniform]),
+                            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        });
+
+                let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.camera_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: camera_buffer.as_entire_binding(),
+                    }],
+                    label: Some("Camera Bind Group"),
+                });
+
+                self.cameras.push(camera::RawCamera {
+                    cam: camera,
+                    proj: projection,
+                    controller: cam_cont,
+                    uniform: camera_uniform,
+                    buffer: camera_buffer,
+                    bind_group: camera_bind_group,
+                });
+            }
+
+            GameObject::RawModel(rm) => {
+                self.models.push(rm);
+            }
+
+            GameObject::Light(l) => {
+                let uniform = model::RawLightUniform {
+                    position: l.pos,
+                    _padding: 0,
+                    color: l.color,
+                    _padding2: 0,
+                };
+
+                let buffer = device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Light VB"),
+                        contents: bytemuck::cast_slice(&[uniform]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.light_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    }],
+                    label: None,
+                });
+
+                self.lights.push(model::RawLight {
+                    uniform,
+                    buffer,
+                    bind_group,
+                })
+            }
+
+            _ => todo!("implement rest"),
+        }
+    }
+
+    fn prepare(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue, dt: std::time::Duration) {
+        let cam = &mut self.cameras[self.active_camera as usize];
+        cam.controller.update_camera(&mut cam.cam, dt);
+        cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+        queue.write_buffer(
+            &self.cameras[self.active_camera as usize].buffer,
+            0,
+            bytemuck::cast_slice(&[self.cameras[self.active_camera as usize].uniform]),
+        );
+
+        if self.lights.len() == 0 {
+            log::warn!("Warning: no lights in scene (nothing to render)");
+            return;
+        }
+
+        let old_position: cgmath::Vector3<_> = self.lights[0].uniform.position.into();
+        self.lights[0].uniform.position =
+            (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0))
+                * old_position)
+                .into();
+        queue.write_buffer(
+            &self.lights[0].buffer,
+            0,
+            bytemuck::cast_slice(&[self.lights[0].uniform]),
+        );
+
+    }
+
+    fn paint<'rp>(&'rp self, render_pass: &mut wgpu::RenderPass<'rp>) {
+        if self.lights.len() == 0 {
+            log::warn!("Warning: no lights in scene (nothing to render)");
+        } else {
+            for m in &self.models {
+                render_pass.set_vertex_buffer(1, m.instance_buffer.slice(..));
+                for l in &self.lights {
+                    render_pass.set_pipeline(&self.light_render_pipeline);
+                    render_pass.draw_light_model(
+                        &m,
+                        &self.cameras[self.active_camera as usize].bind_group,
+                        &l.bind_group,
+                    );
+
+                    render_pass.set_pipeline(&self.render_pipeline);
+                    render_pass.draw_model_instanced(
+                        &m,
+                        0..m.instance_num,
+                        &self.cameras[self.active_camera as usize].bind_group,
+                        &l.bind_group,
+                    );
+                }
+            }
+        }
+
+    }
+}
+
 /// The Renderer describes a generic renderer with the functions
 /// - render -> renders a scene to a specified texture
 /// - add_object -> adds a GameObject to the renderers scene
@@ -54,8 +481,8 @@ pub trait Renderer {
     //);
     fn select_camera(&mut self, cam_idf: Idf);
 }
-/// The main Renderer for the Tarator engine it Renderer is implemented for it
-pub struct WgpuRenderer {
+/// The Renderer used in the final exported project
+pub struct NativeRenderer {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -137,7 +564,7 @@ fn create_render_pipeline(
     })
 }
 
-impl WgpuRenderer {
+impl NativeRenderer {
     // TODO: remove the following two functions: testing purposes only
     pub fn update(&mut self, dt: std::time::Duration) {
         let cam = &mut self.cameras[self.active_camera as usize];
@@ -235,7 +662,7 @@ impl WgpuRenderer {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            //alpha_mode: wgpu::CompositeAlphaMode::Auto,
         };
 
         surface.configure(&device, &config);
@@ -411,7 +838,7 @@ impl WgpuRenderer {
     }
 }
 
-impl Renderer for WgpuRenderer {
+impl Renderer for NativeRenderer {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.cameras[self.active_camera as usize]
@@ -620,7 +1047,7 @@ pub async fn run() {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let mut renderer = WgpuRenderer::new(&window).await;
+    let mut renderer = NativeRenderer::new(&window).await;
 
     let int_camera =
         camera::IntCamera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));

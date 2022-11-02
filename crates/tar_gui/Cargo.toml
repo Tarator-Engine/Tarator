@@ -7,10 +7,11 @@ edition = "2021"
 
 [dependencies]
 egui = "0.19"
-egui-winit = "0.19"
-egui-wgpu = "0.19"
-wgpu = "0.14"
+#egui-winit = "0.19"
+#egui-wgpu = "0.19"
+#wgpu = "0.14"
 winit = "0.27.4"
+eframe = {version="0.19.0", features=["wgpu"]}
 tar_render = {path="../tar_render"}
 cfg-if = "1"
 env_logger = "0.9.1"

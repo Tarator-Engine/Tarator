@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 tar_gui = {path="../tar_gui"}
+tar_render = {path="../tar_render"}
 pollster = "0.2.5"

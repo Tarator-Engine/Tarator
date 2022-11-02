@@ -2,6 +2,8 @@ use anyhow::*;
 use image::GenericImageView;
 use std::num::NonZeroU32;
 
+use eframe::wgpu;
+
 pub struct RawTexture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,

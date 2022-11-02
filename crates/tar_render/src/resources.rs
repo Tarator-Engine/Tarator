@@ -1,7 +1,8 @@
 use std::io::{BufReader, Cursor};
 
 use cfg_if::cfg_if;
-use wgpu::util::DeviceExt;
+use eframe::wgpu::util::DeviceExt;
+use eframe::wgpu;
 
 use crate::{model, texture};
 
