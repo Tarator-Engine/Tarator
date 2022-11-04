@@ -229,7 +229,6 @@ pub async fn load_model(
 
     Ok(model::RawModel {
         id: 0,
-        pos: cgmath::Vector3::new(0.0, 0.0, 0.0),
         instance_buffer,
         instance_num,
         meshes,

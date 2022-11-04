@@ -18,7 +18,7 @@ use eframe::{
     wgpu::util::DeviceExt,
 };
 
-use std::{num::NonZeroU64, sync::Arc};
+use std::sync::Arc;
 
 
 #[cfg(target_arch = "wasm32")]
@@ -33,8 +33,9 @@ type UUID = u32;
 
 /// the GameObject is a enum which is used to pass something to a
 /// Renderer's add_object()
-pub enum GameObject {
+pub enum GameObject<'a> {
     Model(model::Model),
+    ModelPath(&'a str, Vec<model::Instance>),
     RawModel(model::RawModel),
     Light(model::Light),
     Camera(camera::Camera),
@@ -50,6 +51,7 @@ pub enum Idf {
 pub struct EditorRenderer {
     last_frame: std::time::Instant,
 }
+
 
 impl EditorRenderer {
     pub fn new<'a>(cc: &'a eframe::CreationContext<'a>) -> Option<Self> {
@@ -162,7 +164,7 @@ impl EditorRenderer {
                 &device,
                 &render_pipeline_layout,
                 config.format,
-                None,
+                Some(texture::RawTexture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc(), model::RawInstance::desc()],
                 shader,
             )
@@ -466,7 +468,7 @@ impl EditorRenderResources {
     }
 }
 
-/// The Renderer describes a generic renderer with the functions
+/*/// The Renderer describes a generic renderer with the functions
 /// - render -> renders a scene to a specified texture
 /// - add_object -> adds a GameObject to the renderers scene
 /// - update -> takes a function which updates the different objects
@@ -481,6 +483,8 @@ pub trait Renderer {
     //);
     fn select_camera(&mut self, cam_idf: Idf);
 }
+*/
+
 /// The Renderer used in the final exported project
 pub struct NativeRenderer {
     pub surface: wgpu::Surface,
@@ -565,65 +569,6 @@ fn create_render_pipeline(
 }
 
 impl NativeRenderer {
-    // TODO: remove the following two functions: testing purposes only
-    pub fn update(&mut self, dt: std::time::Duration) {
-        let cam = &mut self.cameras[self.active_camera as usize];
-        cam.controller.update_camera(&mut cam.cam, dt);
-        cam.uniform.update_view_proj(&cam.cam, &cam.proj);
-        self.queue.write_buffer(
-            &self.cameras[self.active_camera as usize].buffer,
-            0,
-            bytemuck::cast_slice(&[self.cameras[self.active_camera as usize].uniform]),
-        );
-
-        if self.lights.len() == 0 {
-            log::warn!("Warning: no lights in scene (nothing to render)");
-            return;
-        }
-
-        let old_position: cgmath::Vector3<_> = self.lights[0].uniform.position.into();
-        self.lights[0].uniform.position =
-            (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0))
-                * old_position)
-                .into();
-        self.queue.write_buffer(
-            &self.lights[0].buffer,
-            0,
-            bytemuck::cast_slice(&[self.lights[0].uniform]),
-        );
-    }
-
-    pub fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        virtual_keycode: Some(key),
-                        state,
-                        ..
-                    },
-                ..
-            } => self.cameras[self.active_camera as usize]
-                .controller
-                .process_keyboard(*key, *state),
-            WindowEvent::MouseWheel { delta, .. } => {
-                self.cameras[self.active_camera as usize]
-                    .controller
-                    .process_scroll(delta);
-                true
-            }
-            WindowEvent::MouseInput {
-                button: MouseButton::Left,
-                state,
-                ..
-            } => {
-                self.mouse_pressed = *state == ElementState::Pressed;
-                true
-            }
-            _ => false,
-        }
-    }
-
     pub async fn new(window: &Window) -> Self {
         let size = window.inner_size();
 
@@ -836,9 +781,7 @@ impl NativeRenderer {
             camera_bind_group_layout,
         }
     }
-}
 
-impl Renderer for NativeRenderer {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.cameras[self.active_camera as usize]
@@ -936,6 +879,32 @@ impl Renderer for NativeRenderer {
                 })
             }
 
+            GameObject::ModelPath(p, i) => {
+                let instance_data = i
+                    .iter()
+                    .map(model::Instance::to_raw)
+                    .collect::<Vec<_>>();
+                let instance_buffer = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Instance Buffer"),
+                        contents: bytemuck::cast_slice(&instance_data),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+            
+                let obj_model = pollster::block_on(resources::load_model(
+                    p,
+                    &self.device,
+                    &self.queue,
+                    &self.texture_bind_group_layout,
+                    instance_buffer,
+                    i.len() as u32,
+                ))
+                .unwrap();
+
+                self.models.push(obj_model);
+            }
+
             _ => todo!("implement rest"),
         }
     }
@@ -1009,6 +978,65 @@ impl Renderer for NativeRenderer {
         Ok(())
     }
 }
+
+fn input(renderer: &mut NativeRenderer, event: &WindowEvent) -> bool {
+    match event {
+        WindowEvent::KeyboardInput {
+            input:
+                KeyboardInput {
+                    virtual_keycode: Some(key),
+                    state,
+                    ..
+                },
+            ..
+        } => renderer.cameras[renderer.active_camera as usize]
+            .controller
+            .process_keyboard(*key, *state),
+        WindowEvent::MouseWheel { delta, .. } => {
+            renderer.cameras[renderer.active_camera as usize]
+                .controller
+                .process_scroll(delta);
+            true
+        }
+        WindowEvent::MouseInput {
+            button: MouseButton::Left,
+            state,
+            ..
+        } => {
+            renderer.mouse_pressed = *state == ElementState::Pressed;
+            true
+        }
+        _ => false,
+    }
+}
+
+fn update(renderer: &mut NativeRenderer, dt: std::time::Duration) {
+    let cam = &mut renderer.cameras[renderer.active_camera as usize];
+    cam.controller.update_camera(&mut cam.cam, dt);
+    cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+    renderer.queue.write_buffer(
+        &renderer.cameras[renderer.active_camera as usize].buffer,
+        0,
+        bytemuck::cast_slice(&[renderer.cameras[renderer.active_camera as usize].uniform]),
+    );
+
+    if renderer.lights.len() == 0 {
+        log::warn!("Warning: no lights in scene (nothing to render)");
+        return;
+    }
+
+    let old_position: cgmath::Vector3<_> = renderer.lights[0].uniform.position.into();
+    renderer.lights[0].uniform.position =
+        (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0))
+            * old_position)
+            .into();
+    renderer.queue.write_buffer(
+        &renderer.lights[0].buffer,
+        0,
+        bytemuck::cast_slice(&[renderer.lights[0].uniform]),
+    );
+}
+
 
 pub async fn run() {
     cfg_if::cfg_if! {
@@ -1087,30 +1115,8 @@ pub async fn run() {
             })
         })
         .collect::<Vec<_>>();
-    let instance_data = instances
-        .iter()
-        .map(model::Instance::to_raw)
-        .collect::<Vec<_>>();
-    let instance_buffer = renderer
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
 
-    let obj_model = resources::load_model(
-        "cube.obj",
-        &renderer.device,
-        &renderer.queue,
-        &renderer.texture_bind_group_layout,
-        instance_buffer,
-        NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW,
-    )
-    .await
-    .unwrap();
-
-    renderer.add_object(GameObject::RawModel(obj_model));
+    renderer.add_object(GameObject::ModelPath("cube.obj", instances));
 
     renderer.add_object(GameObject::Camera(camera));
     renderer.select_camera(Idf::N(0));
@@ -1136,7 +1142,7 @@ pub async fn run() {
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == window.id() && !renderer.input(event) => {
+            } if window_id == window.id() && !input(&mut renderer, event) => {
                 match event {
                     #[cfg(not(target_arch="wasm32"))]
                     WindowEvent::CloseRequested
@@ -1163,7 +1169,7 @@ pub async fn run() {
                 let now = instant::Instant::now();
                 let dt = now - last_render_time;
                 last_render_time = now;
-                renderer.update(dt);
+                update(&mut renderer, dt);
                 match renderer.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated

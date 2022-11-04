@@ -1,24 +1,3 @@
-use tar_render::camera;
-use tar_render::model;
-use tar_render::model::Light;
-use tar_render::resources;
-use tar_render::GameObject;
-use tar_render::Idf;
-use tar_render::Renderer;
-use tar_render::NativeRenderer;
-
-use tar_render::model::Simplified;
-
-use camera::CameraUniform;
-use cgmath::prelude::*;
-use eframe::wgpu::util::DeviceExt;
-use eframe::wgpu;
-use winit::{
-    event::*,
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
-};
-
 pub struct GUI {
     renderer: tar_render::EditorRenderer,
 }
@@ -45,6 +24,7 @@ impl eframe::App for GUI {
                         ui.label(" (Portable Rust graphics API awesomeness)");
                     });
                     ui.label("It's not a very impressive demo, but it shows you can embed 3D inside of egui.");
+                    let _ = ui.button("text");
 
                     egui::Frame::canvas(ui.style()).show(ui, |ui| {
                         self.renderer.custom_painting(ui);

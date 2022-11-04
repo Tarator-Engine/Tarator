@@ -233,7 +233,6 @@ pub struct RawMesh {
 pub struct RawModel {
     pub id: i64,
     pub meshes: Vec<RawMesh>,
-    pub pos: cgmath::Vector3<f32>,
     pub materials: Vec<RawMaterial>,
     pub instance_buffer: wgpu::Buffer,
     pub instance_num: u32,
