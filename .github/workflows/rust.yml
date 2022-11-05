@@ -1,10 +1,10 @@
-name: Rust
+name: CI
 
 on:
   push:
-    branches: [ "master", "dev" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "master", "dev" ]
+    branches: [ "master" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +16,30 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: default
+        toolchain: latest
+        override: true
+
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Rust Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # You may pin to the exact commit or the version.
+      # uses: manoadamro/rust-release@028b5d008bac5437257ec3ec905b12aed11e766a
+      uses: manoadamro/rust-release@v1
+      with:
+        # Github Repo Owner
+        owner: slackers123
+        # Github Repo
+        repo: Tarator
+        # Github Token
+        token: GITHUB_TOKEN
+        # Cargo.toml path
+        cargo: Cargo.toml
+        # do not actually create release
+        dry_run: true
