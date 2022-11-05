@@ -27,19 +27,8 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     - name: Rust Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # You may pin to the exact commit or the version.
-      # uses: manoadamro/rust-release@028b5d008bac5437257ec3ec905b12aed11e766a
       uses: manoadamro/rust-release@v1
       with:
-        # Github Repo Owner
-        owner: slackers123
-        # Github Repo
-        repo: Tarator
-        # Github Token
-        token: GITHUB_TOKEN
-        # Cargo.toml path
-        cargo: Cargo.toml
-        # do not actually create release
-        dry_run: true
+        owner: ${{ github.repository_owner }}
+        repo: ${{ github.repository }}
+        token: ${{ secrets.GITHUB_TOKEN }}
