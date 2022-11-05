@@ -1,4 +1,3 @@
-use anyhow::*;
 use image::GenericImageView;
 use std::num::NonZeroU32;
 
@@ -61,10 +60,11 @@ impl RawTexture {
         bytes: &[u8],
         label: &str,
         is_normal_map: bool,
-    ) -> Result<Self> {
+    ) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory(bytes)?;
         Self::from_image(device, queue, &img, Some(label), is_normal_map)
     }
+
 
     pub fn from_image(
         device: &wgpu::Device,
@@ -72,9 +72,20 @@ impl RawTexture {
         img: &image::DynamicImage,
         label: Option<&str>,
         is_normal_map: bool,
-    ) -> Result<Self> {
+    ) -> Result<Self, image::ImageError> {
         let dimensions = img.dimensions();
         let rgba = img.to_rgba8();
+        Self::from_image_buffer(device, queue, &rgba, dimensions, label, is_normal_map)
+    }
+
+    pub fn from_image_buffer(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        rgba: &image::RgbaImage,
+        dimensions: (u32, u32),
+        label: Option<&str>,
+        is_normal_map: bool,
+    ) -> Result<Self, image::ImageError> {
 
         let size = wgpu::Extent3d {
             width: dimensions.0,

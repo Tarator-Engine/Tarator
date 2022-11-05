@@ -3,7 +3,6 @@ pub mod model;
 pub mod resources;
 pub mod texture;
 
-use anyhow::Result;
 use camera::CameraUniform;
 use cgmath::prelude::*;
 use winit::{
@@ -18,8 +17,7 @@ use eframe::{
     wgpu::util::DeviceExt,
 };
 
-use std::sync::Arc;
-
+use std::{sync::Arc};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -989,9 +987,16 @@ fn input(renderer: &mut NativeRenderer, event: &WindowEvent) -> bool {
                     ..
                 },
             ..
-        } => renderer.cameras[renderer.active_camera as usize]
+        } =>  {
+            let ret = renderer.cameras[renderer.active_camera as usize]
             .controller
-            .process_keyboard(*key, *state),
+            .process_keyboard(*key, *state);
+
+            if *key == VirtualKeyCode::P {
+                renderer.add_object(GameObject::ModelPath("cube.obj", vec![model::Instance {position: cgmath::Vector3 { x: renderer.models.len() as f32 * 2.0, y: 0.0, z: 0.0 }, rotation: cgmath::Quaternion::new(0.0, 0.0, 0.0, 0.0)}]));
+            }
+            ret
+        },
         WindowEvent::MouseWheel { delta, .. } => {
             renderer.cameras[renderer.active_camera as usize]
                 .controller
@@ -1116,7 +1121,7 @@ pub async fn run() {
         })
         .collect::<Vec<_>>();
 
-    renderer.add_object(GameObject::ModelPath("cube.obj", instances));
+    renderer.add_object(GameObject::ModelPath("C:\\Users\\slackers\\rust\\Tarator\\crates\\tar_render\\res\\bunny.obj", instances));
 
     renderer.add_object(GameObject::Camera(camera));
     renderer.select_camera(Idf::N(0));

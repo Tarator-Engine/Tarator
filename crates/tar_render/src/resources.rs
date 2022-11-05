@@ -1,10 +1,57 @@
-use std::io::{BufReader, Cursor};
+use std::{io::{BufReader, Cursor}};
 
 use cfg_if::cfg_if;
-use eframe::wgpu::util::DeviceExt;
+use eframe::wgpu::{util::DeviceExt};
 use eframe::wgpu;
+use egui::vec2;
+use thiserror::Error;
 
-use crate::{model, texture};
+trait Vec3Slice<T> {
+    fn as_slice(self) -> [T; 3];
+}
+
+impl<T> Vec3Slice<T> for cgmath::Vector3<T> {
+    fn as_slice(self) -> [T; 3] {
+        [self.x, self.y, self.z]
+    }
+}
+
+
+
+#[derive(Error, Debug)]
+pub enum ImportError {
+    #[error("unsupported type: {0:?}")]
+    UnsupportedType(String),
+    #[error("Missing file ending")]
+    NoType,
+    #[error("Io Error")]
+    Io {
+        #[from]
+        source: std::io::Error
+    },
+    #[error("Image Error")]
+    Image {
+        #[from]
+        source: image::ImageError
+    },
+    #[error("obj Error")]
+    Tobj {
+        #[from]
+        source: tobj::LoadError,
+    },
+    #[error("gltf Error")]
+    Gltf {
+        source: Box<dyn std::error::Error>,
+    },
+
+    #[error("There has to be an index buffer")]
+    NoIndexBuffer,
+    #[error("There has to be a Normal map")]
+    NoNormalMap,
+    #[error("There has to be a Base map")]
+    NoBaseMap,
+}
+use crate::{model::{self, RawMesh}, texture};
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {
@@ -19,7 +66,7 @@ fn format_url(file_name: &str) -> reqwest::Url {
     base.join(file_name).unwrap()
 }
 
-pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
+pub async fn load_string(file_name: &str) -> Result<String, ImportError> {
     cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             let url = format_url(file_name);
@@ -29,17 +76,15 @@ pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
                 .await?;
         } else {
             println!("loading: {:?}", file_name);
-            let path = std::path::Path::new(env!("OUT_DIR"))
-                .join("res")
-                .join(file_name);
-            let txt = std::fs::read_to_string(path)?;
+            let path = std::path::Path::new(file_name);
+            let txt = std::fs::read_to_string(path).map_err(|e| e)?;
         }
     }
 
     Ok(txt)
 }
 
-pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
+pub async fn load_binary(file_name: &str) -> Result<Vec<u8>, ImportError> {
     cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             let url = format_url(file_name);
@@ -50,9 +95,7 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
                 .to_vec();
         } else {
             println!("loading {:?}", file_name);
-            let path = std::path::Path::new(env!("OUT_DIR"))
-                .join("res")
-                .join(file_name);
+            let path = std::path::Path::new(file_name);
             let data = std::fs::read(path)?;
         }
     }
@@ -65,9 +108,12 @@ pub async fn load_texture(
     is_normal_map: bool,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> anyhow::Result<texture::RawTexture> {
+) -> Result<texture::RawTexture, ImportError> {
     let data = load_binary(file_name).await?;
-    texture::RawTexture::from_bytes(device, queue, &data, file_name, is_normal_map)
+    match texture::RawTexture::from_bytes(device, queue, &data, file_name, is_normal_map) {
+        Ok(v) => Ok(v),
+        Err(e) => Err(ImportError::Image { source: e }),
+    }
 }
 
 pub async fn load_model(
@@ -77,10 +123,124 @@ pub async fn load_model(
     layout: &wgpu::BindGroupLayout,
     instance_buffer: wgpu::Buffer,
     instance_num: u32,
-) -> anyhow::Result<model::RawModel> {
+) -> Result<model::RawModel, ImportError> {
+
+    let parts = file_name.split('.').collect::<Vec<&str>>();
+
+    let l = parts.len();
+
+    if l != 0 {
+        match parts[l-1].to_lowercase().as_str() {
+            "obj" => {
+                return load_obj_model(file_name, device, queue, layout, instance_buffer, instance_num).await;
+            }
+
+            "glb" |
+            "gltf" => {
+                todo!("gltf loading");
+                //return load_gltf_model(file_name, device, queue, layout, instance_buffer, instance_num).await;
+            }
+
+
+            f => {
+                return Err(ImportError::UnsupportedType(f.to_string()));
+            }
+        }
+    }
+    else {
+        return Err(ImportError::NoType)
+    }
+}
+
+// pub async fn load_gltf_model(
+//     file_name: &str,
+//     device: &wgpu::Device,
+//     queue: &wgpu::Queue,
+//     layout: &wgpu::BindGroupLayout,
+//     instance_buffer: wgpu::Buffer,
+//     instance_num: u32,
+// ) -> Result<model::RawModel, ImportError> {
+//     println!("started loading");
+//     let scenes = easy_gltf::load(file_name).map_err(|e| ImportError::Gltf {source: e})?;
+
+//     println!("gltf imported");
+//     let mut meshes = vec![];
+//     let mut materials = vec![];
+//     for scene in scenes {
+//         for model in scene.models {
+//             let o_verts = model.vertices();
+//             let mut n_verts = vec![];
+//             let o_inds = model.indices().ok_or(ImportError::NoIndexBuffer)?;
+//             let num_elements = o_inds.len() as u32;
+//             let n_inds: Vec<u32> = o_inds.iter().map(|x| *x as u32).collect();
+
+//             let mat = model.material();
+//             let diffuse_texture = (*mat).pbr.base_color_texture.to_owned().ok_or(ImportError::NoBaseMap)?;
+//             let dimensions = diffuse_texture.dimensions();
+//             let diffuse_texture = texture::RawTexture::from_image_buffer(device, queue, &diffuse_texture, dimensions, Some("basetext"), false)?;
+
+//             let normal_texture = mat.normal.to_owned().ok_or(ImportError::NoNormalMap)?;
+//             let normal_texture = normal_texture.texture;
+//             let normal_texture = texture::RawTexture::from_image(device, queue, &image::DynamicImage::ImageRgb8((*normal_texture).to_owned()), Some("normaltext"), true)?;
+            
+//             for vert in o_verts { // TODO: find out why the easy-gltf library omits bitangents (precomputation)
+//                 let bitangent = cgmath::Vector3::cross(cgmath::Vector3::new(vert.tangent.x, vert.tangent.y, vert.tangent.z), vert.normal);
+//                 n_verts.push(model::ModelVertex {
+//                     position: vert.position.as_slice(),
+//                     tangent: [vert.tangent.x, vert.tangent.y, vert.tangent.z],
+//                     normal: vert.normal.as_slice(),
+//                     tex_coords: [vert.tex_coords.x, vert.tex_coords.y],
+//                     bitangent: bitangent.as_slice(),
+//                 })
+//             }
+
+//             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//                 label: Some(&format!("{:?} Vertex Buffer", file_name)),
+//                 contents: bytemuck::cast_slice(&n_verts),
+//                 usage: wgpu::BufferUsages::VERTEX,
+//             });
+//             let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//                 label: Some(&format!("{:?} Index Buffer", file_name)),
+//                 contents: bytemuck::cast_slice(&n_inds),
+//                 usage: wgpu::BufferUsages::INDEX,
+//             });
+
+
+
+//             materials.push(model::RawMaterial::new(device, "material", diffuse_texture, normal_texture, layout));
+//             meshes.push(model::RawMesh {
+//                 num_elements,
+//                 material: materials.len()-1,
+//                 index_buffer,
+//                 vertex_buffer
+//             });
+
+//             println!("loaded one model");
+//         }
+//     }
+    
+//     Ok(model::RawModel {
+//         id: 0,
+//         meshes,
+//         materials,
+//         instance_buffer,
+//         instance_num,
+//     })
+// }
+
+pub async fn load_obj_model(
+    file_name: &str,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+    instance_buffer: wgpu::Buffer,
+    instance_num: u32,
+) -> Result<model::RawModel, ImportError> {
     let obj_text = load_string(file_name).await?;
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
+
+    let path = std::path::Path::new(file_name);
 
     let (models, obj_materials) = tobj::load_obj_buf_async(
         &mut obj_reader,
@@ -90,31 +250,28 @@ pub async fn load_model(
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(&p).await.unwrap();
+            let mat_text = load_string(&(p)).await.unwrap();
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
         },
     )
     .await?;
 
-    println!("loaded model(s)");
-
     let mut materials = Vec::new();
-    for m in obj_materials? {
-        println!("loading diffuse texture {:?}", m.diffuse_texture);
-        let diffuse_texture = load_texture(&m.diffuse_texture, false, device, queue).await?;
-        println!("loading normal texture {:?}", m.normal_texture);
-        let normal_texture = load_texture(&m.normal_texture, true, device, queue).await?;
+    if obj_materials.is_ok() {
+        for m in obj_materials? {
+            let diffuse_texture = load_texture(&m.diffuse_texture, false, device, queue).await?;
+            
+            let normal_texture = load_texture(&m.normal_texture, true, device, queue).await?;
 
-        materials.push(model::RawMaterial::new(
-            device,
-            &m.name,
-            diffuse_texture,
-            normal_texture,
-            layout,
-        ));
+            materials.push(model::RawMaterial::new(
+                device,
+                &m.name,
+                diffuse_texture,
+                normal_texture,
+                layout,
+            ));
+        }
     }
-
-    println!("loaded material(s)");
 
     let meshes = models
         .into_iter()
@@ -218,7 +375,6 @@ pub async fn load_model(
             });
 
             model::RawMesh {
-                name: file_name.to_string(),
                 vertex_buffer,
                 index_buffer,
                 num_elements: m.mesh.indices.len() as u32,

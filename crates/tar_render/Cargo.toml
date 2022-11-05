@@ -8,7 +8,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 cfg-if = "1"
-anyhow = "1.0.65"
 bytemuck = { version = "1.12.1", features = [ "derive" ] }
 cgmath = "0.18"
 env_logger = "0.9.1"
@@ -20,6 +19,9 @@ winit = "0.27.4"
 instant = "0.1.12"
 eframe = {version="0.19.0", features=["wgpu"]}
 egui = "0.19"
+thiserror = "1.0"
+easy-gltf = "0.1"
+gltf = "1.0"
 
 [dependencies.image]
 version = "0.24.4"
