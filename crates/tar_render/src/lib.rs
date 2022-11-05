@@ -1121,7 +1121,7 @@ pub async fn run() {
         })
         .collect::<Vec<_>>();
 
-    renderer.add_object(GameObject::ModelPath("C:\\Users\\slackers\\rust\\Tarator\\crates\\tar_render\\res\\bunny.obj", instances));
+    renderer.add_object(GameObject::ModelPath("/home/slackers/rust/Tarator/crates/tar_render/res/cube.obj", instances));
 
     renderer.add_object(GameObject::Camera(camera));
     renderer.select_camera(Idf::N(0));

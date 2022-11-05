@@ -240,7 +240,7 @@ pub async fn load_obj_model(
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
 
-    let path = std::path::Path::new(file_name);
+    let path = std::path::Path::new(file_name).ancestors().nth(1).unwrap().to_str().unwrap();
 
     let (models, obj_materials) = tobj::load_obj_buf_async(
         &mut obj_reader,
@@ -250,7 +250,7 @@ pub async fn load_obj_model(
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(&(p)).await.unwrap();
+            let mat_text = load_string([path, "/", &p].concat().as_str()).await.unwrap();
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
         },
     )
@@ -259,9 +259,9 @@ pub async fn load_obj_model(
     let mut materials = Vec::new();
     if obj_materials.is_ok() {
         for m in obj_materials? {
-            let diffuse_texture = load_texture(&m.diffuse_texture, false, device, queue).await?;
+            let diffuse_texture = load_texture([path, "/", &m.diffuse_texture].concat().as_str(), false, device, queue).await?;
             
-            let normal_texture = load_texture(&m.normal_texture, true, device, queue).await?;
+            let normal_texture = load_texture([path, "/", &m.normal_texture].concat().as_str(), true, device, queue).await?;
 
             materials.push(model::RawMaterial::new(
                 device,
@@ -290,8 +290,7 @@ pub async fn load_obj_model(
                         m.mesh.normals[i * 3 + 2],
                     ],
                     // We'll calculate these later
-                    tangent: [0.0; 3],
-                    bitangent: [0.0; 3],
+                    tangent: [0.0; 4],
                 })
                 .collect::<Vec<_>>();
 
@@ -330,24 +329,17 @@ pub async fn load_obj_model(
                 // Luckily, the place I found this equation provided
                 // the solution!
                 let r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
-                let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
-                // We flip the bitangent to enable right-handed normal
-                // maps with wgpu texture coordinate system
-                let bitangent = (delta_pos2 * delta_uv1.x - delta_pos1 * delta_uv2.x) * -r;
+                let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y);
+
+                let tangent = cgmath::Vector4::new(tangent.x, tangent.y, tangent.z, r); // TODO: -r?
 
                 // We'll use the same tangent/bitangent for each vertex in the triangle
                 vertices[c[0] as usize].tangent =
-                    (tangent + cgmath::Vector3::from(vertices[c[0] as usize].tangent)).into();
+                    (tangent + cgmath::Vector4::from(vertices[c[0] as usize].tangent)).into();
                 vertices[c[1] as usize].tangent =
-                    (tangent + cgmath::Vector3::from(vertices[c[1] as usize].tangent)).into();
+                    (tangent + cgmath::Vector4::from(vertices[c[1] as usize].tangent)).into();
                 vertices[c[2] as usize].tangent =
-                    (tangent + cgmath::Vector3::from(vertices[c[2] as usize].tangent)).into();
-                vertices[c[0] as usize].bitangent =
-                    (bitangent + cgmath::Vector3::from(vertices[c[0] as usize].bitangent)).into();
-                vertices[c[1] as usize].bitangent =
-                    (bitangent + cgmath::Vector3::from(vertices[c[1] as usize].bitangent)).into();
-                vertices[c[2] as usize].bitangent =
-                    (bitangent + cgmath::Vector3::from(vertices[c[2] as usize].bitangent)).into();
+                    (tangent + cgmath::Vector4::from(vertices[c[2] as usize].tangent)).into();
 
                 // Used to average the tangents/bitangents
                 triangles_included[c[0] as usize] += 1;
@@ -359,8 +351,7 @@ pub async fn load_obj_model(
             for (i, n) in triangles_included.into_iter().enumerate() {
                 let denom = 1.0 / n as f32;
                 let mut v = &mut vertices[i];
-                v.tangent = (cgmath::Vector3::from(v.tangent) * denom).into();
-                v.bitangent = (cgmath::Vector3::from(v.bitangent) * denom).into();
+                v.tangent = (cgmath::Vector4::from(v.tangent) * denom).into();
             }
 
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

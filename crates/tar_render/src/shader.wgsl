@@ -16,10 +16,9 @@ var<uniform> light: Light;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
-    @location(1) tex_coords: vec2<f32>,
-    @location(2) normal: vec3<f32>,
-    @location(3) tangent: vec3<f32>,
-    @location(4) bitangent: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) tangent: vec4<f32>,
+    @location(3) tex_coords: vec2<f32>,
 }
 struct InstanceInput {
     @location(5) model_matrix_0: vec4<f32>,
@@ -58,8 +57,11 @@ fn vs_main(
 
     // Construct the tangent matrix
     let world_normal = normalize(normal_matrix * model.normal);
-    let world_tangent = normalize(normal_matrix * model.tangent);
-    let world_bitangent = normalize(normal_matrix * model.bitangent);
+    let world_tangent = normalize(normal_matrix * model.tangent.xyz);
+
+    let bitangent = cross(model.tangent.xyz, model.normal) * model.tangent.w;
+
+    let world_bitangent = normalize(normal_matrix * bitangent);
     let tangent_matrix = transpose(mat3x3<f32>(
         world_tangent,
         world_bitangent,
