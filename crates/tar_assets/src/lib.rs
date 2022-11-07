@@ -50,6 +50,34 @@ pub enum ImportError {
     #[error("There has to be a parent directory")]
     MissingParentDirectory,
 }
+
+#[derive(Error, Debug)]
+pub enum ExportError {
+    #[error("io Error")]
+    Io {
+        #[from]
+        source: std::io::Error,
+    },
+    #[error("Rust MessagePack encode error")]
+    RpmEncode {
+        #[from]
+        source: rmp_serde::encode::Error,
+    },
+    #[error("Rust MessagePack decode error")]
+    RpmDecode {
+        #[from]
+        source: rmp_serde::decode::Error,
+    },
+    
+    #[error("Image Error")]
+    Image {
+        #[from]
+        source: image::ImageError
+    },
+    #[error("A path is required when loading images from Model struct")]
+    MissingPath,
+}
+
 pub struct AssetRef {
     name: String,
     fs_id: u32,
