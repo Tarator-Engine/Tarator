@@ -11,12 +11,12 @@ use image::{
 
 use serde::{Serialize, Deserialize};
 
-use crate::ExportError;
+use crate::{ExportError, AssetRef, ImportError};
 
 type ProjPath = String;
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// Model to be saved and loaded to and from disk
 pub struct Model {
     pub name: String,
@@ -25,7 +25,7 @@ pub struct Model {
     pub material: Material,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// Contains a position, normal and texture coordinates vectors.
 pub struct Vertex {
     /// Position
@@ -44,7 +44,7 @@ pub struct Vertex {
     pub tex_coords: [f32; 2],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// Contains material properties of models.
 pub struct Material {
     /// Parameter values that define the metallic-roughness material model from
@@ -61,7 +61,7 @@ pub struct Material {
     pub emissive: Emissive,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// A set of parameter values that are used to define the metallic-roughness
 /// material model from Physically-Based Rendering (PBR) methodology.
 pub struct PbrMaterial {
@@ -93,7 +93,7 @@ pub struct PbrMaterial {
     pub roughness_factor: f32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// Defines the normal texture of a material.
 pub struct NormalMap {
     /// A tangent space normal map.
@@ -113,7 +113,7 @@ pub struct NormalMap {
     pub factor: f32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// Defines the occlusion texture of a material.
 pub struct Occlusion {
     /// The `occlusion_texture` refers to a texture that defines areas of the
@@ -125,7 +125,7 @@ pub struct Occlusion {
     pub factor: f32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// The emissive color of the material.
 pub struct Emissive {
     /// The `emissive_texture` refers to a texture that may be used to illuminate parts of the
@@ -137,7 +137,7 @@ pub struct Emissive {
     pub factor: [f32; 3],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 /// A reference to an Rgb image
 pub struct ImageRef {
     /// Name of an image
@@ -149,8 +149,11 @@ pub struct ImageRef {
 type RgbImageRef = ImageRef;
 type GrayImageRef = ImageRef;
 type RgbaImageRef = ImageRef;
-/// saves a model to the the path specified in target (relative to base directory) or the base directory
-pub fn save_model(model: Model, images: HashMap<String, DynamicImage>, target: Option<ProjPath>)-> Result<(), ExportError> {
+
+
+/// saves a model and its images to the the path specified in target (relative to base directory) or the base directory
+/// 
+pub async fn save_model(model: Model, images: HashMap<String, DynamicImage>, target: Option<ProjPath>)-> Result<AssetRef, ExportError> {
     let buf = rmp_serde::to_vec(&model)?;
     let path = if let Some(p) = target {
         get_abs_path(p)?
@@ -159,17 +162,23 @@ pub fn save_model(model: Model, images: HashMap<String, DynamicImage>, target: O
         get_abs_path(model.name)?
     };
 
-    std::fs::write(path, buf);
+    std::fs::write(path.clone(), buf)?;
 
-    Ok(())
+    for image in images {
+        image.1.save(get_abs_path(image.0)?)?;
+    }
+
+    // unwrap here is justified as there would have been an error earlier if the path was invalid
+    Ok(AssetRef { name: path, fs_id: 0 })
 }
 
-
-fn get_abs_path(local_path: ProjPath) -> std::io::Result<&'static std::path::Path> {
-    Ok(Path::new(&Path::new(&std::env::current_dir()?).join(local_path)))
+/// gets the absolute path from a relative path in the project directory
+pub fn get_abs_path(local_path: ProjPath) -> Result<String, ExportError> {
+    // unwrap_justified would have errored earlier if there was an error
+    Ok(Path::new(&std::env::current_dir()?).join(local_path).to_str().unwrap().to_owned())
 }
 
-
+/// loads a model from the project path
 pub fn load_model(path: ProjPath) -> Result<(Model, HashMap<String, DynamicImage>), ExportError> {
     let model = rmp_serde::from_slice(std::fs::read(path)?.as_slice())?;
 
@@ -178,35 +187,37 @@ pub fn load_model(path: ProjPath) -> Result<(Model, HashMap<String, DynamicImage
     Ok((model, images))
 }
 
+/// loads the images form a model
 pub fn load_images_from_model(model: &Model) -> Result<HashMap<String, DynamicImage>, ExportError> {
     let mut images = HashMap::new();
 
     let material = &model.material;
     let pbr = &material.pbr;
-    if let Some(bt) = pbr.base_color_texture {
-        images.insert(bt.name, load_local_image(bt.location)?);
+    if let Some(bt) = &pbr.base_color_texture {
+        images.insert(bt.name.clone(), load_local_image(bt.location.clone())?);
     }
-    if let Some(i) = pbr.metallic_texture {
-        images.insert(i.name, load_local_image(i.location)?);
+    if let Some(i) = &pbr.metallic_texture {
+        images.insert(i.name.clone(), load_local_image(i.location.clone())?);
     }
-    if let Some(i) = pbr.roughness_texture {
-        images.insert(i.name, load_local_image(i.location)?);
-    }
-
-    if let Some(normal) = material.normal {
-        let i = normal.texture;
-        images.insert(i.name, load_local_image(i.location)?);
+    if let Some(i) = &pbr.roughness_texture {
+        images.insert(i.name.clone(), load_local_image(i.location.clone())?);
     }
 
-    let emissive = material.emissive;
-    if let Some(i) = emissive.texture {
-        images.insert(i.name, load_local_image(i.location)?);
+    if let Some(normal) = &material.normal {
+        let i = &normal.texture;
+        images.insert(i.name.clone(), load_local_image(i.location.clone())?);
+    }
+
+    let emissive = &material.emissive;
+    if let Some(i) = &emissive.texture {
+        images.insert(i.name.clone(), load_local_image(i.location.clone())?);
     }
 
 
     Ok(images)
 }
 
+/// loads a local image
 pub fn load_local_image(local_path: Option<String>) -> Result<DynamicImage, ExportError> {
     let path = get_abs_path(local_path.ok_or(ExportError::MissingPath)?)?;
 
