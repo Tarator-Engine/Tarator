@@ -15,7 +15,7 @@ rmp-serde = "1.1.1"
 cgmath = "0.18"
 assets_manager = {version="0.8.4", features = ["msgpack", "jpeg", "png", "gltf"]}
 wgpu = { version = "0.14"}
-easy-gltf = "0.1"
+easy-gltf = {version = "0.1", git = "https://github.com/slackers123/easy-gltf.git", features = ["names", "extras"]}
 
 [dependencies.image]
 version = "0.24"

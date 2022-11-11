@@ -2,6 +2,8 @@ use serde::{Serialize, Deserialize};
 
 use uuid::Uuid;
 
+use crate::Vec3Slice;
+
 /// Model to be saved and loaded to and from disk
 pub struct RawModel {
     pub id: Uuid,
@@ -58,15 +60,14 @@ pub struct StoreModel {
     pub meshes: Vec<StoreMesh>,
     pub materials: Vec<StoreMaterial>,
     pub instances: Vec<StoreInstance>,
-    pub instance_num: u32,
+    pub instance_num: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoreMesh {
-    pub vertecies: Vec<StoreVertex>,
-    pub indecies: Vec<u32>,
-    pub num_indecies: u32,
-    pub material: u32,
+    pub vertices: Vec<StoreVertex>,
+    pub indices: Vec<usize>,
+    pub material: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,27 +81,27 @@ pub struct StoreVertex {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoreMaterial {
     /// diffuse texture of a normal: this is also sometimes called base color
-    pub diffuse_tex: std::path::PathBuf,
+    pub diffuse_tex: Option<std::path::PathBuf>,
 
     /// normal texture of a material.
-    pub normal_tex: std::path::PathBuf,
+    pub normal_tex: Option<std::path::PathBuf>,
 
     /// metallicness texture of a material.
-    pub metallic_tex: std::path::PathBuf,
+    pub metallic_tex: Option<std::path::PathBuf>,
 
     /// roughness texture of a material
-    pub roughness_tex: std::path::PathBuf,
+    pub roughness_tex: Option<std::path::PathBuf>,
 
     /// Occlusion Texture of a material
-    pub occlusion_tex: std::path::PathBuf,
+    pub occlusion_tex: Option<std::path::PathBuf>,
 
     /// The emissive color of the material.
-    pub emissive_tex: std::path::PathBuf,
+    pub emissive_tex: Option<std::path::PathBuf>,
 
     /// The `base_color_factor` contains scaling factors for the red, green,
     /// blue and alpha component of the color. If no texture is used, these
     /// values will define the color of the whole object in **RGB** color space.
-    pub base_color_factor: [f32; 4],
+    pub diffuse_factor: [f32; 4],
 
     /// `metallic_factor` is multiply to the `metallic_texture` value. If no
     /// texture is given, then the factor define the metalness for the whole
@@ -134,4 +135,13 @@ pub struct StoreInstance {
 pub struct Instance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
+}
+
+impl From<Instance> for StoreInstance {
+    fn from(i: Instance) -> Self {
+        StoreInstance { 
+            position: i.position.as_slice(), 
+            rotation: [i.rotation.v.x, i.rotation.v.y, i.rotation.v.z, i.rotation.s],
+        }
+    }
 }
