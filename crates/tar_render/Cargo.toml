@@ -20,8 +20,12 @@ instant = "0.1.12"
 eframe = {version="0.19.0", features=["wgpu"]}
 egui = "0.19"
 thiserror = "1.0"
-easy-gltf = "0.1"
 gltf = "1.0"
+
+[dependencies.easy-gltf]
+version="0.1.5"
+git="https://github.com/slackers123/easy-gltf.git"
+features=["names", "extras"]
 
 [dependencies.image]
 version = "0.24.4"

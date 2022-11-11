@@ -8,14 +8,23 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 thiserror = "1.0"
-tobj = { version = "3.2.3", features = ["async"]}
-easy-gltf = "0.1"
-gltf = "1.0"
 cfg-if = "1"
+gltf = "1"
 serde = { version = "1.0", features = ["derive"] }
 rmp-serde = "1.1.1"
+cgmath = "0.18"
+assets_manager = {version="0.8.4", features = ["msgpack", "jpeg", "png", "gltf"]}
+wgpu = { version = "0.14"}
 
 [dependencies.image]
 version = "0.24"
 default-features = false
 features = ["png", "jpeg"]
+
+[dependencies.uuid]
+version = "1.2.1"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "serde",
+]
