@@ -1,9 +1,3 @@
-use std::collections::HashMap;
-use std::path::Path;
-use std::{io::{BufReader, Cursor}};
-
-use image::DynamicImage;
-
 #[macro_use]
 extern crate thiserror;
 
@@ -74,6 +68,8 @@ pub enum ImportError {
     UnsupportedFileExtension(String),
     #[error("There has to be a parent directory")]
     MissingParentDirectory,
+    #[error("There have to be tangents, normals, and texture coordinates for all vertices")]
+    MissingValues,
 
     #[error("Error during saving of the resulting model")]
     ExportError {
@@ -109,6 +105,39 @@ pub enum ExportError {
     MissingPath,
 }
 
-fn get_asset_cache() -> Result<assets_manager::AssetCache, std::io::Error> {
-    assets_manager::AssetCache::new("assets")
+pub struct FSID {
+    pub id: uuid::Uuid,
+    pub name: String,
+}
+
+pub fn import_gltf(path: std::path::PathBuf, instances: Vec<model::Instance>) -> Result<Vec<FSID>, ImportError> {
+    let scenes = easy_gltf::load(path).map_err(|e| ImportError::Gltf { source: e })?;
+
+    let fs_ids = vec![];
+
+    for scene in scenes {
+        for model in scene.models {
+            
+            let vertecies = model.vertices();
+
+            let vertecies: Vec<model::StoreVertex> = vertecies.iter().map(|v| {
+                model::StoreVertex {
+                    position: v.position.as_slice(),
+                    normal: v.normal.as_slice(),
+                    tangent: v.tangent.as_slice(),
+                    tex_coords: v.tex_coords.as_slice(),
+                }
+            }).collect();
+
+            let indices =  model.indices().ok_or(ImportError::NoIndexBuffer)?;
+
+            if !(model.has_normals() && model.has_tangents() && model.has_tex_coords()) {
+                return Err(ImportError::MissingValues);
+            }
+
+            todo!("Import the rest of the model");
+        }
+    }
+
+    Ok(fs_ids)
 }
