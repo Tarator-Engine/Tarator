@@ -3,7 +3,6 @@ use std::{io::{BufReader, Cursor}};
 use cfg_if::cfg_if;
 use eframe::wgpu::{util::DeviceExt};
 use eframe::wgpu;
-use egui::vec2;
 use thiserror::Error;
 
 trait Vec3Slice<T> {
@@ -51,7 +50,7 @@ pub enum ImportError {
     #[error("There has to be a Base map")]
     NoBaseMap,
 }
-use crate::{model::{self, RawMesh}, texture};
+use crate::{model::{self}, texture};
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {
@@ -291,6 +290,7 @@ pub async fn load_obj_model(
                     ],
                     // We'll calculate these later
                     tangent: [0.0; 4],
+                    zero: 0.0,
                 })
                 .collect::<Vec<_>>();
 
@@ -329,7 +329,7 @@ pub async fn load_obj_model(
                 // Luckily, the place I found this equation provided
                 // the solution!
                 let r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
-                let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y);
+                let tangent = delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y;
 
                 let tangent = cgmath::Vector4::new(tangent.x, tangent.y, tangent.z, r); // TODO: -r?
 

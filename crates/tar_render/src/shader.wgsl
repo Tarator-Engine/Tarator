@@ -19,6 +19,7 @@ struct VertexInput {
     @location(1) normal: vec3<f32>,
     @location(2) tangent: vec4<f32>,
     @location(3) tex_coords: vec2<f32>,
+    @location(4) zero: f32,
 }
 struct InstanceInput {
     @location(5) model_matrix_0: vec4<f32>,

@@ -14,6 +14,7 @@ pub struct ModelVertex {
     pub normal: [f32; 3],
     pub tangent: [f32; 4],
     pub tex_coords: [f32; 2],
+    pub zero: f32,
 }
 
 impl Vertex for ModelVertex {
@@ -45,6 +46,12 @@ impl Vertex for ModelVertex {
                 wgpu::VertexAttribute {
                     offset: mem::size_of::<[f32; 10]>() as wgpu::BufferAddress, // offset of position(3) + normal(3) + tangent(4)
                     shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                // zero
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress, // offset of position(3) + normal(3) + tangent(4)
+                    shader_location: 4,
                     format: wgpu::VertexFormat::Float32x2,
                 },
             ],

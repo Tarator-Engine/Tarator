@@ -3,3 +3,4 @@ target/
 crates/*/target/
 crates/*/Cargo.lock/
 .github/
+assets/
