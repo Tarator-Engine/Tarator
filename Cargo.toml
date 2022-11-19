@@ -6,4 +6,5 @@ edition="2021"
 resolver="2"
 members = [
   "crates/*",
+  "crates/tar_ecs/macros"
 ]
