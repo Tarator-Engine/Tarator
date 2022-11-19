@@ -1,32 +1,36 @@
 use std::{sync::Arc, path::Path};
 
+use bytemuck::{Pod, Zeroable};
 use cgmath::{Vector4, Vector3, Vector2, Zero};
 
 use crate::{material::Material, shader::{PbrShader, ShaderFlags}, scene::ImportData, Error, Result, root::Root, WgpuInfo};
 
-#[derive(Debug)]
+use wgpu::util::DeviceExt;
+
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
 pub struct Vertex {
-    pub position: Vector3<f32>,
-    pub normal: Vector3<f32>,
-    pub tangent: Vector4<f32>,
-    pub tex_coord_0: Vector2<f32>,
-    pub tex_coord_1: Vector2<f32>,
-    pub color_0: Vector4<f32>,
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub tangent: [f32; 4],
+    pub tex_coord_0: [f32; 2],
+    pub tex_coord_1: [f32; 2],
+    pub color_0: [f32; 4],
     pub joints_0: [u16; 4],
-    pub weights_0: Vector4<f32>,
+    pub weights_0: [f32; 4],
 }
 
 impl Default for Vertex {
     fn default() -> Self {
         Vertex {
-            position: Vector3::zero(),
-            normal: Vector3::zero(),
-            tangent: Vector4::zero(),
-            tex_coord_0: Vector2::zero(),
-            tex_coord_1: Vector2::zero(),
-            color_0: Vector4::zero(),
+            position: [0.0; 3],
+            normal: [0.0; 3],
+            tangent: [0.0; 4],
+            tex_coord_0: [0.0; 2],
+            tex_coord_1: [0.0; 2],
+            color_0: [0.0; 4],
             joints_0: [0; 4],
-            weights_0: Vector4::zero(),
+            weights_0: [0.0; 4],
         }
     }
 }
@@ -39,8 +43,8 @@ pub struct Primitive {
     pub indices: Option<wgpu::Buffer>,
     pub num_indices: u32,
 
-    material: Arc<Material>,
-    pbr_shader: Arc<PbrShader>,
+    pub material: Arc<Material>,
+    pub pbr_shader: Arc<PbrShader>,
 }
 
 impl Primitive {
@@ -85,7 +89,7 @@ impl Primitive {
             .into_iter()
             .map(|position| {
                 Vertex {
-                    position: Vector3::from(position),
+                    position,
                     ..Vertex::default()
                 }
             }).collect();
@@ -94,7 +98,7 @@ impl Primitive {
 
         if let Some(normals) = reader.read_normals() {
             for (i, normal) in normals.enumerate() {
-                vertices[i].normal = Vector3::from(normal);
+                vertices[i].normal = normal;
             }
             shader_flags |= ShaderFlags::HAS_NORMALS;
         }
@@ -104,7 +108,7 @@ impl Primitive {
 
         if let Some(tangents) = reader.read_tangents() {
             for (i, tangent) in tangents.enumerate() {
-                vertices[i].tangent = Vector4::from(tangent);
+                vertices[i].tangent = tangent;
             }
             shader_flags |= ShaderFlags::HAS_TANGENTS;
         }
@@ -123,8 +127,8 @@ impl Primitive {
             }
             for (i, tex_coord) in tex_coords.into_f32().enumerate() {
                 match tex_coord_set {
-                    0 => vertices[i].tex_coord_0 = Vector2::from(tex_coord),
-                    1 => vertices[i].tex_coord_1 = Vector2::from(tex_coord),
+                    0 => vertices[i].tex_coord_0 = tex_coord,
+                    1 => vertices[i].tex_coord_1 = tex_coord,
                     _ => unreachable!()
                 }
             }
@@ -181,7 +185,7 @@ impl Primitive {
         }
 
         if material.is_none() { // no else due to borrow checker madness
-            let mat = Arc::new(Material::from_gltf(&g_material, root, imp, base_path));
+            let mat = Arc::new(Material::from_gltf(&g_material, root, imp, base_path, w_info)?);
             root.materials.push(Arc::clone(&mat));
             material = Some(mat);
         };
@@ -206,6 +210,21 @@ impl Primitive {
     }
 
     fn setup_primitive(&mut self, vertices: &[Vertex], indices: Option<Vec<u32>>, w_info: &WgpuInfo) {
-        todo!("set up buffers")
+
+        self.vertices = Some(
+            w_info.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("vertex buffer"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            })
+        );
+
+        if let Some(indices) = indices {
+            self.indices = Some(w_info.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("index buffer"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+        }
     }
 }

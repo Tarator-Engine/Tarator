@@ -3,7 +3,7 @@ use std::{sync::Arc, path::Path};
 use cgmath::{Vector4, Vector3};
 use rayon::prelude::IntoParallelRefIterator;
 
-use crate::{texture::Texture, root::Root, scene::ImportData, shader::ShaderFlags};
+use crate::{texture::Texture, root::Root, scene::ImportData, shader::ShaderFlags, Result, WgpuInfo};
 
 pub struct Material {
     pub index: Option<usize>,
@@ -34,8 +34,9 @@ impl Material {
         g_material: &gltf::material::Material<'_>,
         root: &mut Root,
         imp: &ImportData,
-        base_path: &Path
-    ) -> Material {
+        base_path: &Path,
+        w_info: &WgpuInfo,
+    ) -> Result<Material> {
         let pbr = g_material.pbr_metallic_roughness();
 
         let mut material = Material {
@@ -65,28 +66,28 @@ impl Material {
 
         if let Some(color_info) = pbr.base_color_texture() {
             material.base_color_texture = Some(
-                load_texture(&color_info.texture(), color_info.tex_coord(), root, imp, base_path));
+                load_texture(&color_info.texture(), color_info.tex_coord(), root, imp, base_path, w_info)?);
         }
         if let Some(mr_info) = pbr.metallic_roughness_texture() {
             material.metallic_roughness_texture = Some(
-                load_texture(&mr_info.texture(), mr_info.tex_coord(), root, imp, base_path));
+                load_texture(&mr_info.texture(), mr_info.tex_coord(), root, imp, base_path, w_info)?);
         }
         if let Some(normal_texture) = g_material.normal_texture() {
             material.normal_texture = Some(
-                load_texture(&normal_texture.texture(), normal_texture.tex_coord(), root, imp, base_path));
+                load_texture(&normal_texture.texture(), normal_texture.tex_coord(), root, imp, base_path, w_info)?);
             material.normal_scale = Some(normal_texture.scale());
         }
         if let Some(occ_texture) = g_material.occlusion_texture() {
             material.occlusion_texture = Some(
-                load_texture(&occ_texture.texture(), occ_texture.tex_coord(), root, imp, base_path));
+                load_texture(&occ_texture.texture(), occ_texture.tex_coord(), root, imp, base_path, w_info)?);
             material.occlusion_strength = occ_texture.strength();
         }
         if let Some(em_info) = g_material.emissive_texture() {
             material.emissive_texture = Some(
-                load_texture(&em_info.texture(), em_info.tex_coord(), root, imp, base_path));
+                load_texture(&em_info.texture(), em_info.tex_coord(), root, imp, base_path, w_info)?);
         }
 
-        material
+        Ok(material)
     }
 
     pub fn shader_flags(&self) -> ShaderFlags {
@@ -116,13 +117,14 @@ fn load_texture(
     tex_coord: u32,
     root: &mut Root,
     imp: &ImportData,
-    base_path: &Path) -> Arc<Texture>
-{
+    base_path: &Path,
+    w_info: &WgpuInfo,
+) -> Result<Arc<Texture>> {
     if let Some(tex) = root.textures.iter().find(|tex| (***tex).index == g_texture.index()) {
-        return Arc::clone(tex)
+        return Ok(Arc::clone(tex))
     }
 
-    let texture = Arc::new(Texture::from_gltf(g_texture, tex_coord, imp, base_path));
+    let texture = Arc::new(Texture::from_gltf(g_texture, tex_coord, imp, base_path, w_info)?);
     root.textures.push(Arc::clone(&texture));
-    texture
+    Ok(texture)
 }
