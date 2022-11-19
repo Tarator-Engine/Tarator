@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+tar_utils = {path = "../tar_utils"}
 thiserror = "1.0"
 cfg-if = "1"
 gltf = "1"
@@ -14,8 +15,8 @@ serde = { version = "1.0", features = ["derive"] }
 rmp-serde = "1.1.1"
 cgmath = "0.18"
 wgpu = { version = "0.14"}
-easy-gltf = {version = "0.1", git = "https://github.com/slackers123/easy-gltf.git", features = ["names", "extras"]}
-three-d-asset = {version="0.4", features=["gltf", "image", "png"]}
+# easy-gltf = {version = "0.1", git = "https://github.com/slackers123/easy-gltf.git", features = ["names", "extras"]}
+# three-d-asset = {version="0.4", features=["gltf", "image", "png"]}
 chrono = {version="0.4", features=["serde", "clock"]}
 bytemuck = { version = "1.12.1", features = [ "derive" ] }
 rayon = "1.5"
