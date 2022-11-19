@@ -4,7 +4,7 @@ use crate::{
     Result, 
     Error,
     root::Root,
-    node::Node,
+    node::Node, WgpuInfo,
 };
 use tar_utils::*;
 use cgmath::SquareMatrix;
@@ -21,7 +21,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new(source: &str) -> Result<Self> {
+    pub fn new(source: &str, w_info: WgpuInfo) -> Result<Self> {
         let start_time = start_timer();
         if source.starts_with("http") {
             // TODO: implement http(s) loading
@@ -34,8 +34,8 @@ impl Scene {
         let start_time = relog_timing("Imported glTF in ", start_time);
 
         let base_path = Path::new(source);
-        let mut root = Root::from_gltf(&imp, base_path);
-        let nodes = Self::nodes_from_gltf(&imp.doc.scenes(), &mut root);
+        let mut root = Root::from_gltf(&imp, base_path, w_info)?;
+        let nodes = Self::nodes_from_gltf(imp.doc.scenes(), &mut root);
 
         log_timing(&format!("Loaded {} nodes, {} meshes in ",
             imp.doc.nodes().count(), imp.doc.meshes().len()), start_time);
@@ -46,10 +46,10 @@ impl Scene {
         })
     }
 
-    pub fn nodes_from_gltf(g_scenes: &gltf::iter::Scenes, root: &mut Root) -> Vec<usize> {
+    pub fn nodes_from_gltf(g_scenes: gltf::iter::Scenes, root: &mut Root) -> Vec<usize> {
         let mut nodes = vec![];
 
-        for scene in *g_scenes {
+        for scene in g_scenes {
             let mut ns = scene.nodes()
                 .map(|g_node| g_node.index())
                 .collect();

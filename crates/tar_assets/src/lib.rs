@@ -1,8 +1,11 @@
 // use std::hash::Hash;
-use std::{path::PathBuf, collections::HashMap};
+use std::{path::PathBuf, collections::HashMap, sync::Arc};
 
 #[macro_use]
 extern crate thiserror;
+
+#[macro_use]
+extern crate bitflags;
 
 // #[macro_use]
 // extern crate cfg_if;
@@ -20,12 +23,13 @@ mod scene;
 mod node;
 mod root;
 mod primitive;
+mod mesh;
+mod texture;
+mod material;
+mod shader;
 
 // use model::*;
 use uuid::Uuid;
-use wgpu::util::DeviceExt;
-
-use rayon::prelude::*;
 
 trait Vec2Slice<T> {
     fn as_slice(self) -> [T; 2];
@@ -98,9 +102,18 @@ pub enum Error {
     InvalidImage,
     #[error("The feature '{0}' is not yet supported")]
     NotSupported(String),
+    #[error("The provided meshes do not contain position data")]
+    NoPositions,
+    #[error("The provided meshes do not contain normal data")]
+    NoNormals,
 }
 
 type Result<T> = std::result::Result<T, Error>;
+
+pub struct WgpuInfo {
+    device: Arc<wgpu::Device>,
+    queue: Arc<wgpu::Queue>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AssetCache {
