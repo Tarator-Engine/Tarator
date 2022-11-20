@@ -27,6 +27,7 @@ mod mesh;
 mod texture;
 mod material;
 mod shader;
+mod uniform;
 
 // use model::*;
 use uuid::Uuid;

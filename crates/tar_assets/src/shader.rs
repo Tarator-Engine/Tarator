@@ -1,4 +1,6 @@
-use crate::WgpuInfo;
+use wgpu::Device;
+
+use crate::{WgpuInfo, uniform::Uniform};
 
 bitflags! {
     /// Flags matching the defines in the PBR shader
@@ -31,11 +33,20 @@ impl ShaderFlags {
 }
 
 pub struct Shader {
-    pub id: u32,
+    pub module: wgpu::ShaderModule,
 }
 impl Shader {
-    pub fn from_source(shader_code: &str, defines: &[String]) -> Self {
-        todo!("wgpu shader uniform loading")
+    pub fn from_source(shader_code: &str, defines: &[String], w_info: &WgpuInfo) -> Self {
+        let shader = wgpu::ShaderModuleDescriptor {
+            label: Some("pbr shader"),
+            source: wgpu::ShaderSource::Wgsl(shader_code.into()),
+        };
+
+        let module = w_info.device.create_shader_module(shader);
+
+        Self {
+            module
+        }
     }
 }
 
@@ -43,17 +54,26 @@ impl Shader {
 pub struct PbrShader {
     pub shader: Shader,
     pub flags: ShaderFlags,
+    pub uniforms: PbrUniforms,
 }
 
 impl PbrShader {
     pub fn new(flags: ShaderFlags, w_info: &WgpuInfo) -> Self {
         let mut shader = Shader::from_source(
             include_str!("shaders/pbr.wgsl"),
-            &flags.as_strings());
+            &flags.as_strings(),
+            w_info);
 
         Self {
             shader,
             flags
         }
     }
+}
+
+pub struct PbrUniforms {
+    pub u_MPVMatrix: Uniform<[[f32; 4]; 4]>,
+    pub u_ModelMatrix: Uniform<[[f32; 4]; 4]>,
+    pub u_Camera
+
 }
