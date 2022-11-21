@@ -4,20 +4,19 @@ use wgpu::util::DeviceExt;
 use crate::WgpuInfo;
 
 pub struct Uniform<T: NoUninit> {
-    buff: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
+    pub buff: wgpu::Buffer,
     data: T,
 }
 
 impl<T: NoUninit> Uniform<T> {
-    pub fn new(data: T, bind_group: wgpu::BindGroup, usage: String, w_info: &WgpuInfo) -> Self {
+    pub fn new(data: T, usage: String, w_info: &WgpuInfo) -> Self {
         let buff = w_info.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some((usage+"buffer").as_str()),
             contents: bytemuck::cast_slice(&[data]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let mut uni = Self { buff, bind_group, data };
+        let mut uni = Self { buff, data };
 
         uni.write_buffer(w_info);
         uni

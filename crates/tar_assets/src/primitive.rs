@@ -35,6 +35,22 @@ impl Default for Vertex {
     }
 }
 
+impl Vertex {
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        todo!()
+    }
+}
+
+
+pub struct Instance {
+
+}
+
+impl Instance {
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        todo!()
+    }
+}
 
 pub struct Primitive {
     pub vertices: Option<wgpu::Buffer>,
