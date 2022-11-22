@@ -7,53 +7,41 @@ fn main() {
 mod test {
     use tar_ecs::prelude::*;
 
-    #[derive(Component, Default, Debug)]
+    #[derive(Component, Debug)]
     struct Transform {
         pub position: [f32; 3],
         pub rotation: [f32; 3],
         pub scale: [f32; 3],
     }
 
-    #[derive(Component, Default, Debug)]
-    struct Color {
-        pub color: [u32; 4]
-    }
+    #[derive(Component, Debug, Clone, Copy)]
+    struct Veloctiy(f32, f32, f32);
 
-    #[derive(Component, Default, Debug)]
-    struct Mesh {
-        pub mesh: &'static [f32],
-    }
-
-
-    pub fn _main() -> Result<(), &'static str> {
+    pub fn _main() -> Result<(), String> {
         
         let mut world = World::new();
         
         // init the components on the world
-        world.component_set::<Transform>();
-        world.component_set::<Color>();
-        world.component_set::<Mesh>();
+        world.component_set::<Transform>()?;
+        world.component_set::<Veloctiy>()?;
 
         // entity composition 1
-        let e1 = world.entity_new();
-        world.entity_set::<Transform>(e1)?;
-        world.entity_set::<Color>(e1)?;
-        world.entity_set::<Mesh>(e1)?;
-
-        // entity composition 2
-        let e2 = world.entity_new();
-        world.entity_new();
-        world.entity_set::<Transform>(e2)?;
-        world.entity_set::<Color>(e2)?;
-
+        let entity = world.entity_new()?;
+        world.entity_set::<Transform>(entity)?;
+        let mut velocity = *world.entity_set::<Veloctiy>(entity)?;
+        velocity.0 = -0.3;
+        velocity.1 = -0.1;
+        velocity.2 = 0.1;
 
         // do some printing
-        for _ in 0..9999 {
-            let transform = world.entity_get_mut::<Transform>(e1)?;
-            transform.scale = [transform.scale[0] + 0.5, transform.scale[1] + 0.7, transform.scale[2] + 0.9];
-            world.entity_set::<Transform>(e2)?;
-            world.entity_unset::<Transform>(e2)?;
+        for _ in 0..3 {
+            world.entity_operate::<Transform>(entity, |transform| {
+                transform.position = [transform.position[0] + velocity.0, transform.position[1] + velocity.1, transform.position[2] + velocity.2];
+                println!("{:#?}", transform);
+            })?;
         }
+
+        world.entity_destroy(entity)?;
 
         Ok(())
     }

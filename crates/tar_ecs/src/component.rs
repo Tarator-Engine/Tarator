@@ -18,16 +18,16 @@ impl ComponentPool {
             pool: unsafe{TypePool::new::<C>(MAXENTITIES)}
         }
     }
-    pub fn get<C: Component>(&self, index: usize) -> Result<&C, &'static str> {
-        if index > self.pool.len() { return Err("Out of bounds!"); }
+    pub fn get<C: Component>(&self, index: usize) -> Result<&C, String> {
+        if index > self.pool.len() { return Err(format!("index({}) is out of bounds!", index)); }
         Ok(unsafe{self.pool.get::<C>(index)})
     }
-    pub fn get_mut<C: Component>(&self, index: usize) -> Result<&mut C, &'static str> {
-        if index > self.pool.len() { return Err("Out of bounds!"); }
+    pub fn get_mut<C: Component>(&self, index: usize) -> Result<&mut C, String> {
+        if index > self.pool.len() { return Err(format!("index({}) is out of bounds!", index)); }
         Ok(unsafe{self.pool.get_mut::<C>(index)})
     }
-    pub fn clear<C: Component>(&self, index: usize) -> Result<(), &'static str> {
-        if index > self.pool.len() { return Err("Out of bounds!"); }
+    pub fn clear<C: Component>(&self, index: usize) -> Result<(), String> {
+        if index > self.pool.len() { return Err(format!(" index({}) id out of bounds!", index)); }
         Ok(unsafe{self.pool.clear::<C>(index)})
     }
     pub fn as_slice<C: Component>(&self) -> &[C] {
@@ -37,3 +37,4 @@ impl ComponentPool {
         unsafe{self.pool.as_slice_mut::<C>()}
     }
 }
+

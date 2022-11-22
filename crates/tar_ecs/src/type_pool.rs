@@ -48,3 +48,4 @@ impl Drop for TypePool {
         unsafe { System.dealloc(self.data, self.layout) }
     }
 }
+
