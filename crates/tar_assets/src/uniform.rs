@@ -18,17 +18,17 @@ impl<T: NoUninit> Uniform<T> {
 
         let mut uni = Self { buff, data };
 
-        uni.write_buffer(w_info);
+        uni.write_buffer(&w_info.queue);
         uni
     }
 
-    pub fn update(&mut self, data: T, w_info: &WgpuInfo) {
+    pub fn update(&mut self, data: T, queue: &wgpu::Queue) {
         self.data = data;
-        self.write_buffer(w_info);
+        self.write_buffer(queue);
     }
 
-    fn write_buffer(&mut self, w_info: &WgpuInfo) {
-        w_info.queue.write_buffer(
+    fn write_buffer(&mut self, queue: &wgpu::Queue) {
+        queue.write_buffer(
             &self.buff,
             0, 
             bytemuck::cast_slice(&[self.data]),

@@ -1,0 +1,13 @@
+[package]
+name = "tar_preprocess"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# proc-macro = true
+
+[dependencies]
+wgpu = { version = "0.14"}
+syn = "1.0"
+quote = "1.0"
+bytemuck = { version = "1.12.1", features = [ "derive" ] }

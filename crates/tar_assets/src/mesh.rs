@@ -1,5 +1,8 @@
 use std::path::Path;
 
+use cgmath::{Matrix4, Vector3};
+use gltf::camera;
+
 use crate::{primitive::Primitive, root::Root, scene::ImportData, Result, WgpuInfo};
 
 pub struct Mesh {
@@ -29,5 +32,11 @@ impl Mesh {
             primitives, 
             name: g_mesh.name().map(|s| s.into())
         })
+    }
+
+    pub fn draw(&self, model_matrix: &Matrix4<f32>, mvp_matrix: &Matrix4<f32>, camera_position: &Vector3<f32>) {
+        for primitive in &self.primitives {
+            primitive.draw(model_matrix, mvp_matrix, camera_position)
+        }
     }
 }

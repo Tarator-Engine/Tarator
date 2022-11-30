@@ -4,7 +4,7 @@ use crate::{
     Result, 
     Error,
     root::Root,
-    node::Node, WgpuInfo,
+    node::Node, WgpuInfo, CameraParams,
 };
 use tar_utils::*;
 use cgmath::SquareMatrix;
@@ -63,5 +63,15 @@ impl Scene {
         }
 
         nodes
+    }
+
+    // TODO: flatten the call hirarchy (global Vec<Primitives>)
+    pub fn draw(&mut self, root: &mut Root, cam_params: &CameraParams) {
+        // TODO!: for correct alpha blending, sort by material alpha mode and
+        // render opaque objects first.
+        for node_id in &self.nodes {
+            let node = root.unsafe_get_node_mut(*node_id);
+            node.draw(root, cam_params);
+        }
     }
 }

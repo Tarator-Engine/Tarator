@@ -8,6 +8,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 tar_utils = {path = "../tar_utils"}
+# tar_preprocess = {path = "../tar_preprocess"}
+wgsl_preprocessor = {git = "https://github.com/slackers123/wgsl_preprocessor.git", rev="11ac0d2"}
 thiserror = "1.0"
 cfg-if = "1"
 gltf = "1"

@@ -27,3 +27,8 @@ MaterialInput:
     occlusion_strength: f32,
     emissive_factor: vec3<f32>
     alpha_cutoff: f32,
+
+
+bind groups:
+0 => textures
+1 => ShaderParams

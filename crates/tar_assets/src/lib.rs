@@ -7,6 +7,7 @@ extern crate thiserror;
 #[macro_use]
 extern crate bitflags;
 
+
 // #[macro_use]
 // extern crate cfg_if;
 
@@ -29,6 +30,7 @@ mod material;
 mod shader;
 mod uniform;
 
+use cgmath::{Vector3, Matrix4};
 // use model::*;
 use uuid::Uuid;
 
@@ -116,6 +118,7 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct WgpuInfo {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    surface_format: wgpu::TextureFormat,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -130,8 +133,19 @@ const CACHE_NAME: &'static str = "cache.rmp";
 
 pub type FSID = uuid::Uuid;
 
-pub async fn import_gltf(path: &str, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Result<Scene> {
-    Scene::new(path, WgpuInfo { device, queue })
+#[derive(Debug)]
+pub struct CameraParams {
+    pub position: Vector3<f32>,
+    pub view_matrix: Matrix4<f32>,
+    pub projection_matrix: Matrix4<f32>,
+}
+
+pub fn run() {
+    
+}
+
+pub async fn import_gltf(path: &str, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>, surface_format: wgpu::TextureFormat) -> Result<Scene> {
+    Scene::new(path, WgpuInfo { device, queue, surface_format })
 }
 
 pub async fn update_cache(id: Uuid, location: PathBuf) -> Result<()> {

@@ -1,9 +1,9 @@
 use std::{sync::Arc, path::Path};
 
 use bytemuck::{Pod, Zeroable};
-use cgmath::{Vector4, Vector3, Vector2, Zero};
+use cgmath::{Vector4, Vector3, Vector2, Zero, Matrix4};
 
-use crate::{material::Material, shader::{PbrShader, ShaderFlags}, scene::ImportData, Error, Result, root::Root, WgpuInfo};
+use crate::{material::Material, shader::{PbrShader, ShaderFlags, MaterialInput}, scene::ImportData, Error, Result, root::Root, WgpuInfo, Vec4Slice, Vec3Slice};
 
 use wgpu::util::DeviceExt;
 
@@ -16,7 +16,7 @@ pub struct Vertex {
     pub tex_coord_0: [f32; 2],
     pub tex_coord_1: [f32; 2],
     pub color_0: [f32; 4],
-    pub joints_0: [u16; 4],
+    pub joints_0: [u32; 4],
     pub weights_0: [f32; 4],
 }
 
@@ -167,7 +167,7 @@ impl Primitive {
 
         if let Some(joints) = reader.read_joints(0) {
             for (i, joint) in joints.into_u16().enumerate() {
-                vertices[i].joints_0 = joint;
+                vertices[i].joints_0 = [joint[0]as u32, joint[1]as u32, joint[2]as u32, joint[3]as u32, ];
             }
         }
         if reader.read_joints(1).is_some() {
@@ -215,7 +215,17 @@ impl Primitive {
             }
             else {
                 new_shader = true;
-                PbrShader::new(shader_flags, w_info).into()
+                Arc::new(PbrShader::new(shader_flags,
+                    MaterialInput {
+                        base_color_factor: material.base_color_factor.as_slice(),
+                        metallic_factor: material.metallic_factor,
+                        roughness_factor: material.roughness_factor,
+                        normal_scale: material.normal_scale.unwrap_or(1.0),
+                        occlusion_strength: material.occlusion_strength,
+                        emissive_factor: material.emissive_factor.as_slice(),
+                        alpha_cutoff: material.alpha_cutoff.unwrap_or(1.0),
+                    }, 
+                    w_info)?)
             };
         
         if new_shader {
@@ -242,5 +252,11 @@ impl Primitive {
                 usage: wgpu::BufferUsages::INDEX,
             }));
         }
+    }
+
+    pub fn draw(&self, model_matrix: &Matrix4<f32>, mvp_matrix: &Matrix4<f32>, camera_position: &Vector3<f32>) {
+        // TODO!: determine if shader+material already active to reduce work...
+
+        todo!("draw mesh")
     }
 }

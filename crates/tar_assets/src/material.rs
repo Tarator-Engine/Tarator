@@ -1,7 +1,6 @@
 use std::{sync::Arc, path::Path};
 
 use cgmath::{Vector4, Vector3};
-use rayon::prelude::IntoParallelRefIterator;
 
 use crate::{texture::Texture, root::Root, scene::ImportData, shader::ShaderFlags, Result, WgpuInfo};
 

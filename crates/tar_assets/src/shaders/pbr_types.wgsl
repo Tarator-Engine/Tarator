@@ -1,5 +1,3 @@
-#define_import_path tar_pbr::pbr_types
-
 struct MaterialInput {
     base_color_factor: vec4<f32>
     metallic_factor: f32,

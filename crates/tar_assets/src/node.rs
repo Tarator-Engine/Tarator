@@ -2,7 +2,7 @@ use std::{sync::Arc, path::Path};
 
 use cgmath::{Quaternion, Vector3, Matrix4, SquareMatrix};
 
-use crate::{mesh::Mesh, scene::ImportData, WgpuInfo, root::Root, Result};
+use crate::{mesh::Mesh, scene::ImportData, WgpuInfo, root::Root, Result, CameraParams};
 
 pub struct Node {
     pub index: usize,
@@ -72,6 +72,18 @@ impl Node {
         for node_id in &self.children {
             let node = root.unsafe_get_node_mut(*node_id);
             node.update_transform(root, &self.final_transform);
+        }
+    }
+
+    pub fn draw(&mut self, root: &mut Root, cam_params: &CameraParams) {
+        if let Some(ref mesh) = self.mesh {
+            let mvp_matrix = cam_params.projection_matrix * cam_params.view_matrix * self.final_transform;
+
+            (*mesh).draw(&self.final_transform, &mvp_matrix, &cam_params.position);
+        }
+        for node_id in &self.children {
+            let node = root.unsafe_get_node_mut(*node_id);
+            node.draw(root, cam_params);
         }
     }
 
