@@ -4,6 +4,7 @@ pub(crate) trait EntityIdTrait {
     fn versioned_invalid(version: EntityVersion) -> Self;
     fn index(self) -> EntityIndex;
     fn version(self) -> EntityVersion;
+    fn is_valid(self) -> bool;
 }
 
 pub(crate) type EntityIndex = u32;
@@ -31,22 +32,9 @@ impl EntityIdTrait for EntityId {
     fn version(self) -> EntityVersion {
         self as EntityVersion 
     }
-}
-
-
-#[derive(Clone, Copy, Debug)]
-pub struct Entity {
-    id: EntityId
-}
-
-impl Entity {
     #[inline]
-    pub(crate) fn new(id: EntityId) -> Self {
-        Self { id }
-    }
-    #[inline]
-    pub(crate) fn id(&self) -> EntityId {
-        self.id
+    fn is_valid(self) -> bool {
+        (self >> 32) != Self::invalid()
     }
 }
 

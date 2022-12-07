@@ -26,22 +26,31 @@ mod test {
         world.component_set::<Veloctiy>()?;
 
         // entity composition 1
-        let entity = world.entity_new()?;
-        world.entity_set::<Transform>(entity)?;
-        let mut velocity = *world.entity_set::<Veloctiy>(entity)?;
-        velocity.0 = -0.3;
-        velocity.1 = -0.1;
-        velocity.2 = 0.1;
-
-        // do some printing
-        for _ in 0..3 {
-            world.entity_operate::<Transform>(entity, |transform| {
-                transform.position = [transform.position[0] + velocity.0, transform.position[1] + velocity.1, transform.position[2] + velocity.2];
-                println!("{:#?}", transform);
-            })?;
+        for _ in 0..20 {
+            let entity = world.entity_new()?;
+            world.entity_set::<Transform>(entity)?;
+            let velocity = world.entity_set::<Veloctiy>(entity)?;
+            velocity.0 = -0.3;
+            velocity.1 = -0.1;
+            velocity.2 = 0.1;
+        }
+        // another entity for checking the ones above
+        {
+            let entity = world.entity_new()?;
+            // uncomment to check the for loop for functionality
+            // world.entity_set::<Veloctiy>(entity)?;
+            let transform = world.entity_set::<Transform>(entity)?;
+            transform.scale = [420.0, 420.0, 420.0];
         }
 
-        world.entity_destroy(entity)?;
+        let view = world.view().wish::<Transform>().wish::<Veloctiy>().get()?;
+        for entity in view {
+            world.entity_operate::<Transform>(entity, |transform| {
+                let pos = transform.position;
+                println!("{:#?}", transform);
+                transform.position = [pos[0] + 2.0, pos[1] + 2.0, pos[2] + 2.0];
+            })?;
+        }
 
         Ok(())
     }

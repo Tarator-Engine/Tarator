@@ -3,11 +3,14 @@ use crate::{ MAXENTITIES, type_pool::TypePool };
 
 pub type ComponentId = usize;
 
+/// implement by using #[derive(Component)]
 pub trait Component: Send + Sync {
     fn id() -> ComponentId;
 }
 
 
+/// Safe wrapper around TypePool. Stores one type of components.
+/// TODO Track cleared components and sort data
 pub struct ComponentPool {
     pool: TypePool
 }
