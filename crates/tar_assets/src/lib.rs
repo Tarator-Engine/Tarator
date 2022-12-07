@@ -154,6 +154,7 @@ pub async fn update_cache(id: Uuid, location: PathBuf) -> Result<()> {
     
     let mut cache = get_cache().await?;
 
+    println!("updating cache");
     cache.cache.insert(id, location.clone());
     cache.orig_name.insert(location.file_name().ok_or(Error::NoFileExtension)?.to_str().unwrap().to_owned(), id);
     cache.last_update = chrono::offset::Utc::now();

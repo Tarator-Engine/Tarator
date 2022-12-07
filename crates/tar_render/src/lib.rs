@@ -3,8 +3,11 @@ pub mod model;
 pub mod resources;
 pub mod texture;
 
+use std::sync::Arc;
+
 use camera::CameraUniform;
 use cgmath::prelude::*;
+use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -12,10 +15,10 @@ use winit::{
 };
 
 // use eframe::egui_wgpu;
-use eframe::{
-    wgpu,
-    wgpu::util::DeviceExt,
-};
+// use eframe::{
+//     wgpu,
+//     wgpu::util::DeviceExt,
+// };
 
 // use std::{sync::Arc};
 
@@ -168,7 +171,7 @@ impl NativeRenderer {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
-            //alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
         };
 
         surface.configure(&device, &config);
@@ -323,24 +326,27 @@ impl NativeRenderer {
         //     )
         //};
 
-        Self {
-            surface,
-            device,
-            queue,
-            render_pipeline,
-            light_render_pipeline,
-            cameras: vec![],
-            models: vec![],
-            lights: vec![],
-            size,
-            config,
-            texture_bind_group_layout,
-            active_camera: 0,
-            depth_texture,
-            light_bind_group_layout,
-            mouse_pressed: false,
-            camera_bind_group_layout,
-        }
+        pollster::block_on(tar_assets::import_gltf("C:/Users/slackers/Desktop/box/Box.gltf", Arc::new(device), Arc::new(queue), config.format)).unwrap();
+
+        // Self {
+        //     surface,
+        //     device,
+        //     queue,
+        //     render_pipeline,
+        //     light_render_pipeline,
+        //     cameras: vec![],
+        //     models: vec![],
+        //     lights: vec![],
+        //     size,
+        //     config,
+        //     texture_bind_group_layout,
+        //     active_camera: 0,
+        //     depth_texture,
+        //     light_bind_group_layout,
+        //     mouse_pressed: false,
+        //     camera_bind_group_layout,
+        // }
+        todo!("return")
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -452,18 +458,7 @@ impl NativeRenderer {
                         contents: bytemuck::cast_slice(&instance_data),
                         usage: wgpu::BufferUsages::VERTEX,
                     });
-            
-                let obj_model = pollster::block_on(resources::load_model(
-                    p,
-                    &self.device,
-                    &self.queue,
-                    &self.texture_bind_group_layout,
-                    instance_buffer,
-                    i.len() as u32,
-                ))
-                .unwrap();
-
-                self.models.push(obj_model);
+                todo!()
             }
 
             _ => todo!("implement rest"),

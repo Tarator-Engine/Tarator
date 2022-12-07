@@ -50,15 +50,15 @@ impl WGSLType for MaterialInput {
     fn string_definition(&self) -> String {
         format!(
             "
-            {}(
-                vec4<f32>({:?}),
-                {},
-                {},
-                {},
-                {},
-                vec3<f32>({:?}),
-                {},
-            )
+let material = {}(
+    vec4<f32>({:?}),
+    {},
+    {},
+    {},
+    {},
+    vec3<f32>({:?}),
+    {}
+);
             ",
             Self::type_name(),
             self.base_color_factor,
@@ -68,7 +68,7 @@ impl WGSLType for MaterialInput {
             self.occlusion_strength,
             self.emissive_factor,
             self.alpha_cutoff,
-        )
+        ).replace(&['[', ']'], "")
     }
 }
 
@@ -78,12 +78,14 @@ pub struct Shader {
 impl Shader {
     pub fn from_path(path: &str, layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)], defines: &[String], mat_in: MaterialInput, w_info: &WgpuInfo) -> Result<Self> {
 
-        let mut binding = wgsl_preprocessor::ShaderBuilder::new(path).map_err(|e| crate::Error::NoFileExtension)?;
-            
+        println!("importing shader {path}");
+        let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
+        
         let shader = binding.bind_groups_from_layouts(layouts)
-            .parse_defines(defines)
-            .put_constant("material", mat_in)
-            .build();
+            .put_constant("material_definition", mat_in);
+        println!("shader code: {}", shader.source_string);
+        
+        let shader = shader.build();
 
         let module = w_info.device.create_shader_module(shader);
 
@@ -106,7 +108,7 @@ impl PbrShader {
         let per_frame = (PerFrameUniforms::bind_group_layout(), PerFrameUniforms::names());
         let per_frame_bind_group = w_info.device.create_bind_group_layout(&per_frame.0);
         let shader = Shader::from_path(
-            "shaders/static_pbr.wgsl",
+            "C:/Users/slackers/rust/Tarator/crates/tar_assets/src/shaders/static_pbr.wgsl",
             &[per_frame],
             &flags.as_strings(),
             mat_in,

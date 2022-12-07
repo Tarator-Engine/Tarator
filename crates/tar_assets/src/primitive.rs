@@ -128,9 +128,6 @@ impl Primitive {
             }
             shader_flags |= ShaderFlags::HAS_TANGENTS;
         }
-        else {
-            return Err(Error::NotSupported("tangent calculation".to_owned()))
-        }
 
         let mut tex_coord_set = 0;
         while let Some(tex_coords) = reader.read_tex_coords(tex_coord_set) {
@@ -190,8 +187,6 @@ impl Primitive {
             .map(|read_indices| {
                 read_indices.into_u32().collect::<Vec<_>>()
             });
-
-        todo!("make sure {:?} is the default", g_primitive.mode());
 
         let g_material = g_primitive.material();
 

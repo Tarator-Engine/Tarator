@@ -1,8 +1,7 @@
 use std::{io::{BufReader, Cursor}};
 
 use cfg_if::cfg_if;
-use eframe::wgpu::{util::DeviceExt};
-use eframe::wgpu;
+use wgpu::util::DeviceExt;
 use thiserror::Error;
 
 trait Vec3Slice<T> {

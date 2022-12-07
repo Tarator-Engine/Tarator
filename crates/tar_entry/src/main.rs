@@ -1,3 +1,3 @@
 fn main() {
-    tar_assets::run();
+    pollster::block_on(tar_render::run());
 }

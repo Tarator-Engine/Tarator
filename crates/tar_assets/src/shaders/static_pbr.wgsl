@@ -1,10 +1,20 @@
-//!include pbr_types.wgsl
+// include pbr_types.wgsl
+struct MaterialInput {
+    base_color_factor: vec4<f32>,
+    metallic_factor: f32,
+    roughness_factor: f32,
+    normal_scale: f32,
+    occlusion_strength: f32,
+    emissive_factor: vec3<f32>,
+    alpha_cutoff: f32,
+}
 
-//!define material
+// ignore this it is implemented really weirdly in the wgsl_preprocessor crate
+material_definition
 
 // textures
 // @group(0) @binding(0)
-// var<uniform> material: MaterialInput;
+// var<uniform> mat: MaterialInput;
 // @group(0) @binding(1)
 // var base_color_tex: texture_2d<f32>;
 // @group(0) @binding(2)
@@ -89,9 +99,9 @@ struct VertexOutput {
     @location(2) v_Color: vec4<f32>,
     //!ifdef HAS_NORMALS 
     //!ifdef HAS_TANGENTS
-    @location(3) v_TBN,
+    @location(3) v_TBN: mat3x3<f32>,
     //!else
-    @location(3) v_Normal,
+    @location(3) v_Normal: vec3<f32>,
     //!endif
     //!endif
     @location(4) v_Position: vec3<f32>,
@@ -119,12 +129,12 @@ fn vs_main(
 
     //!ifdef HAS_NORMALS
         //!ifdef HAS_TANGENTS
-            let normalW = normalize(vec3<f32>(model_matrix * vec4<f32>(model.normal.xyz, 0.0)));
-            let tangentW = normalize(vec3<f32>(model_matrix * vec4<f32>(model.tangent.xyz, 0.0)));
+            let normalW = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
+            let tangentW = normalize((model_matrix * vec4<f32>(model.tangent.xyz, 0.0)).xyz);
             let bitangentW = cross(normalW, tangentW) * model.tangent.w;
             out.v_TBN = mat3x3<f32>(tangentW, bitangentW, normalW);
         //!endif
-        out.v_Normal = normalize(vec3<f32>(model_matrix * vec4<f32>(model.normal.xyz, 0.0)));
+        out.v_Normal = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
     //!endif
 
 
@@ -136,7 +146,7 @@ fn vs_main(
     out.v_UV_1 = vec2<f32>(0.0, 0.0);
     //!endif
 
-    out.gl_Position = u_MPVMatrix * vec4<f32>(model.position);
+    out.gl_Position = u_mpv_matrix * vec4<f32>(model.position, 1.0);
 
     return out;
 }
@@ -315,7 +325,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let diffuse_color = base_color.rgb * (vec3<f32>(1.0) - f0);
 
-    let diffuse_color: vec3<f32> = vec3<f32>(base_color * (1.0 - metallic));
+    let diffuse_color: vec3<f32> = (base_color * (1.0 - metallic)).xyz;
 
     let specular_color = mix(f0, base_color.rgb, metallic);
 
@@ -332,12 +342,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     pbr_info.v_Position = in.gl_Position.xyz;
     pbr_info.v_UV_0 = in.v_UV_0;
     pbr_info.v_UV_1 = in.v_UV_1;
+    //!ifdef HAS_NORMALS
+    //!ifdef HAS_TANGENTS
     pbr_info.v_TBN = in.v_TBN;
+    //!else
     pbr_info.v_Normal = in.v_Normal;
+    //!endif
+    //!endif
+
 
     let n = getNormal(pbr_info);                        // normal at surface point
-    let v = normalize(u_Camera - in.gl_Position.xyz);   // Vector from surface point to camera
-    let l = normalize(u_LightDirection);                // Vector from surface point to light
+    let v = normalize(u_camera - in.gl_Position.xyz);   // Vector from surface point to camera
+    let l = normalize(u_light_direction);                // Vector from surface point to light
     let h = normalize(l+v);                             // Half vector between both l and v
     let reflection = -normalize(reflect(v, n));
 
@@ -368,10 +384,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Calculation of analytical lighting contribution
     let diffuse_contrib = (1.0 - F) * diffuse(pbr_info);
     let spec_contrib = F * G * D / (4.0 * NdotL * NdotV);
-    let color = NdotL * u_LightColor * (diffuse_contrib + spec_contrib);
+    let color = NdotL * u_light_color * (diffuse_contrib + spec_contrib);
 
     // Add simple ambient light
-    let color = color + (u_AmbientLightColor * u_AmbientLightIntensity * base_color.rgb);
+    let color = color + (u_ambient_light_color * u_ambient_light_intensity * base_color.rgb);
 
     //!ifdef HAS_OCCLUSIONMAP
         let ao = textureSample(occlusion_tex, occlusion_sampler, in.v_UV_0).r;
@@ -383,9 +399,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let color = color + emissive;
     //!endif
 
-    var alpha = mix(1.0, base_color.a, u_AlphaBlend);
-    if u_AlphaCutoff > 0.0 {
-        alpha = step(u_AlphaCutoff, base_color.a);
+    var alpha = mix(1.0, base_color.a, u_alpha_blend);
+    if u_alpha_cutoff > 0.0 {
+        alpha = step(u_alpha_cutoff, base_color.a);
     }
 
     if alpha == 0.0 {
