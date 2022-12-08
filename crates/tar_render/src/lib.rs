@@ -52,8 +52,8 @@ pub enum Idf {
 /// The Renderer used in the final exported project
 pub struct NativeRenderer {
     pub surface: wgpu::Surface,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
     pub config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     pub render_pipeline: wgpu::RenderPipeline,
@@ -326,27 +326,28 @@ impl NativeRenderer {
         //     )
         //};
 
-        pollster::block_on(tar_assets::import_gltf("C:/Users/slackers/Desktop/box/Box.gltf", Arc::new(device), Arc::new(queue), config.format)).unwrap();
 
-        // Self {
-        //     surface,
-        //     device,
-        //     queue,
-        //     render_pipeline,
-        //     light_render_pipeline,
-        //     cameras: vec![],
-        //     models: vec![],
-        //     lights: vec![],
-        //     size,
-        //     config,
-        //     texture_bind_group_layout,
-        //     active_camera: 0,
-        //     depth_texture,
-        //     light_bind_group_layout,
-        //     mouse_pressed: false,
-        //     camera_bind_group_layout,
-        // }
-        todo!("return")
+        // println!("{:?}", std::env::current_dir());
+        // pollster::block_on(tar_assets::import_gltf("res/Box/Box.gltf", Arc::new(device), Arc::new(queue), config.format)).unwrap();
+
+        Self {
+            surface,
+            device: Arc::new(device),
+            queue: Arc::new(queue),
+            render_pipeline,
+            light_render_pipeline,
+            cameras: vec![],
+            models: vec![],
+            lights: vec![],
+            size,
+            config,
+            texture_bind_group_layout,
+            active_camera: 0,
+            depth_texture,
+            light_bind_group_layout,
+            mouse_pressed: false,
+            camera_bind_group_layout,
+        }
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -375,7 +376,7 @@ impl NativeRenderer {
         }
     }
 
-    fn add_object(&mut self, obj: GameObject) {
+    async fn add_object(&mut self, obj: GameObject<'static>) -> tar_assets::Result<()> {
         match obj {
             GameObject::Camera(cam) => {
                 let camera = cam.cam;
@@ -458,11 +459,14 @@ impl NativeRenderer {
                         contents: bytemuck::cast_slice(&instance_data),
                         usage: wgpu::BufferUsages::VERTEX,
                     });
-                todo!()
+
+                tar_assets::import_gltf(p, self.device.clone(), self.queue.clone(), self.config.format).await?;
             }
 
             _ => todo!("implement rest"),
         }
+
+        Ok(())
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -679,15 +683,15 @@ pub async fn run() {
         })
         .collect::<Vec<_>>();
 
-    renderer.add_object(GameObject::ModelPath("C:/Users/slackers/rust/Tarator/crates/tar_render/res/cube.obj", instances));
+    renderer.add_object(GameObject::ModelPath("res/Box/Box.gltf", instances)).await.unwrap();
 
-    renderer.add_object(GameObject::Camera(camera));
+    renderer.add_object(GameObject::Camera(camera)).await.unwrap();
     renderer.select_camera(Idf::N(0));
 
     renderer.add_object(GameObject::Light(Light {
         pos: [2.0, 2.0, 2.0],
         color: [1.0, 1.0, 1.0],
-    }));
+    })).await.unwrap();
 
     let mut last_render_time = instant::Instant::now();
     event_loop.run(move |event, _, control_flow| {

@@ -113,7 +113,7 @@ pub enum Error {
     NoNormals,
 }
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub struct WgpuInfo {
     device: Arc<wgpu::Device>,

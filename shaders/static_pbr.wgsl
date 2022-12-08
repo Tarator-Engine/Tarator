@@ -1,16 +1,7 @@
-// include pbr_types.wgsl
-struct MaterialInput {
-    base_color_factor: vec4<f32>,
-    metallic_factor: f32,
-    roughness_factor: f32,
-    normal_scale: f32,
-    occlusion_strength: f32,
-    emissive_factor: vec3<f32>,
-    alpha_cutoff: f32,
-}
+//!include pbr_types.wgsl
 
 // ignore this it is implemented really weirdly in the wgsl_preprocessor crate
-material_definition
+// material_definition
 
 // textures
 // @group(0) @binding(0)
@@ -73,7 +64,7 @@ material_definition
 // let HAS_OCCLUSIONMAP: u32      = 512u;
 // let USE_TEX_LOD: u32           = 1024u;
 
-
+// these have to match with the definitions in primitive.rs
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -81,6 +72,8 @@ struct VertexInput {
     @location(3) tex_coord_0: vec2<f32>,
     @location(4) tex_coord_1: vec2<f32>,
     @location(5) color_0: vec4<f32>,
+    @location(6) joints_0: vec4<f32>,
+    @location(7) weights_0: vec4<f32>,
 }
 struct InstanceInput {
     @location(8) model_matrix_0: vec4<f32>,
@@ -240,7 +233,7 @@ fn getNormal(info: PBRInfo, ) -> vec3<f32>
     //!ifdef HAS_NORMALMAP 
         // TODO: replace constant v_UV with array
         let n = textureSample(normal_tex, normal_sampler, info.v_UV_0).xyz;
-        let n = normalize(tbn * ((2.0 * n - 1.0) * vec3<f32>(material.normal_scale, material.normal_scale, 1.0)));
+        let n = normalize(tbn * ((2.0 * n - 1.0) * vec3<f32>(material_normal_scale, material_normal_scale, 1.0)));
     //!else
         let n = normalize(tbn[2].xyz);
     //!endif
@@ -296,8 +289,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
-    var perceptualRoughness = material.roughness_factor;
-    var metallic = material.metallic_factor;
+    var perceptualRoughness = material_roughness_factor;
+    var metallic = material_metallic_factor;
 
 //!ifdef HAS_METALROUGHNESSMAP
     // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
@@ -314,9 +307,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // convert to material roughness by squaring the perceptual roughness [2].
     let alphaRoughness = perceptualRoughness * perceptualRoughness;
     //!ifdef HAS_BASECOLORMAP
-    let base_color = textureSample(base_color_tex, base_color_sampler, in.v_UV_0) * material.base_color_factor;
+    let base_color = textureSample(base_color_tex, base_color_sampler, in.v_UV_0) * material_base_color_factor;
     //!else
-    let base_color = material.base_color_factor;
+    let base_color = material_base_color_factor;
     //!endif
 
     let base_color = base_color * in.v_Color;
@@ -391,11 +384,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     //!ifdef HAS_OCCLUSIONMAP
         let ao = textureSample(occlusion_tex, occlusion_sampler, in.v_UV_0).r;
-        let color = mix(color, color * ao, material.occlusion_strength);
+        let color = mix(color, color * ao, material_occlusion_strength);
     //!endif
 
     //!ifdef HAS_EMISSIVEMAP
-        let emissive = textureSample(emissive_tex, emissive_sampler, in.v_UV_0).rgb * material.emissive_factor;
+        let emissive = textureSample(emissive_tex, emissive_sampler, in.v_UV_0).rgb * material_emissive_factor;
         let color = color + emissive;
     //!endif
 

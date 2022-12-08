@@ -8,17 +8,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 tar_utils = {path = "../tar_utils"}
-# tar_preprocess = {path = "../tar_preprocess"}
-wgsl_preprocessor = {git = "https://github.com/slackers123/wgsl_preprocessor.git"}
+wgsl_preprocessor = {git = "https://github.com/slackers123/wgsl_preprocessor", rev="f1a2c12", features=["array_vectors"]}
 thiserror = "1.0"
 cfg-if = "1"
 gltf = "1"
 serde = { version = "1.0", features = ["derive"] }
 rmp-serde = "1.1.1"
 cgmath = "0.18"
-wgpu = "0.*"
-# easy-gltf = {version = "0.1", git = "https://github.com/slackers123/easy-gltf.git", features = ["names", "extras"]}
-# three-d-asset = {version="0.4", features=["gltf", "image", "png"]}
+wgpu = "0.14.*"
 chrono = {version="0.4", features=["serde", "clock"]}
 bytemuck = { version = "1.12.1", features = [ "derive" ] }
 rayon = "1.5"

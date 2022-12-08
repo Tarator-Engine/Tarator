@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use wgsl_preprocessor::WGSLType;
 
 use crate::{WgpuInfo, primitive::{Vertex, Instance}, Result, uniform::Uniform};
@@ -80,9 +82,16 @@ impl Shader {
 
         println!("importing shader {path}");
         let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
-        
+
         let shader = binding.bind_groups_from_layouts(layouts)
-            .put_constant("material_definition", mat_in);
+            .put_constant("material_base_color_factor", mat_in.base_color_factor)
+            .put_constant("material_metallic_factor", mat_in.metallic_factor)
+            .put_constant("material_roughness_factor", mat_in.roughness_factor)
+            .put_constant("material_normal_scale", mat_in.normal_scale)
+            .put_constant("material_occlusion_strength", mat_in.occlusion_strength)
+            .put_constant("material_emissive_factor", mat_in.emissive_factor)
+            .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
+
         println!("shader code: {}", shader.source_string);
         
         let shader = shader.build();
@@ -108,7 +117,7 @@ impl PbrShader {
         let per_frame = (PerFrameUniforms::bind_group_layout(), PerFrameUniforms::names());
         let per_frame_bind_group = w_info.device.create_bind_group_layout(&per_frame.0);
         let shader = Shader::from_path(
-            "C:/Users/slackers/rust/Tarator/crates/tar_assets/src/shaders/static_pbr.wgsl",
+            "shaders/static_pbr.wgsl",
             &[per_frame],
             &flags.as_strings(),
             mat_in,
