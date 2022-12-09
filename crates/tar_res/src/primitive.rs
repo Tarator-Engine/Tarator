@@ -3,7 +3,7 @@ use std::{sync::Arc, path::Path};
 use bytemuck::{Pod, Zeroable};
 use cgmath::{Vector4, Vector3, Vector2, Zero, Matrix4};
 
-use crate::{material::Material, shader::{PbrShader, ShaderFlags, MaterialInput}, scene::ImportData, Error, Result, root::Root, WgpuInfo, Vec4Slice, Vec3Slice};
+use crate::{material::PbrMaterial, shader::{PbrShader, ShaderFlags, MaterialInput}, scene::ImportData, Error, Result, root::Root, WgpuInfo, Vec4Slice, Vec3Slice};
 
 use wgpu::util::DeviceExt;
 
@@ -162,15 +162,14 @@ pub struct Primitive {
     pub indices: Option<wgpu::Buffer>,
     pub num_indices: u32,
 
-    pub material: Arc<Material>,
-    pub pbr_shader: Arc<PbrShader>,
+    pub material: usize,
 }
 
 impl Primitive {
     pub fn new(
         vertices: &[Vertex],
         indices: Option<Vec<u32>>,
-        material: Arc<Material>,
+        material: Arc<PbrMaterial>,
         shader: Arc<PbrShader>,
         w_info: &WgpuInfo
     ) -> Result<Self> {
@@ -299,7 +298,7 @@ impl Primitive {
         }
 
         if material.is_none() { // no else due to borrow checker madness
-            let mat = Arc::new(Material::from_gltf(&g_material, root, imp, base_path, w_info)?);
+            let mat = Arc::new(PbrMaterial::from_gltf(&g_material, root, imp, base_path, w_info)?);
             root.materials.push(Arc::clone(&mat));
             material = Some(mat);
         };

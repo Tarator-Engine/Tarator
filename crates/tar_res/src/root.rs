@@ -4,14 +4,14 @@ use std::path::Path;
 
 use crate::primitive::Primitive;
 use crate::{Result, WgpuInfo};
-use crate::{node::Node, mesh::Mesh, texture::Texture, material::Material, shader::{PbrShader, ShaderFlags}, scene::ImportData};
+use crate::{node::Node, mesh::Mesh, texture::Texture, material::PbrMaterial, shader::{PbrShader, ShaderFlags}, scene::ImportData};
 
 #[derive(Default)]
 pub struct Root {
     pub nodes: Vec<Node>,
     pub meshes: Vec<Arc<Mesh>>,
     pub primitives: Vec<Arc<Primitive>>,
-    pub materials: Vec<Arc<Material>>,
+    pub materials: Vec<Arc<PbrMaterial>>,
     pub textures: Vec<Arc<Texture>>,
 }
 impl Root {

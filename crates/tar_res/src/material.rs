@@ -4,7 +4,7 @@ use cgmath::{Vector4, Vector3};
 
 use crate::{texture::Texture, root::Root, scene::ImportData, shader::ShaderFlags, Result, WgpuInfo};
 
-pub struct Material {
+pub struct PbrMaterial {
     pub index: Option<usize>,
     pub name: Option<String>,
 
@@ -28,17 +28,17 @@ pub struct Material {
     pub double_sided: bool,
 }
 
-impl Material {
+impl PbrMaterial {
     pub fn from_gltf(
         g_material: &gltf::material::Material<'_>,
         root: &mut Root,
         imp: &ImportData,
         base_path: &Path,
         w_info: &WgpuInfo,
-    ) -> Result<Material> {
+    ) -> Result<PbrMaterial> {
         let pbr = g_material.pbr_metallic_roughness();
 
-        let mut material = Material {
+        let mut material = PbrMaterial {
             index: g_material.index(),
             name: g_material.name().map(|s| s.into()),
             base_color_factor: pbr.base_color_factor().into(),

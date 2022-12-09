@@ -3,6 +3,9 @@
 use std::time::Instant;
 
 /// returns an instant with the current time (the timer)
+/// 
+/// # Returns
+/// - Instant of current time
 pub fn start_timer() -> Instant {
     Instant::now()
 }

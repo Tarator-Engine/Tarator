@@ -7,7 +7,7 @@ use crate::{primitive::Primitive, root::Root, scene::ImportData, Result, WgpuInf
 
 pub struct Mesh {
     pub index: usize,
-    pub primitives: Vec<Primitive>,
+    pub primitives: Vec<usize>,
     // TODO: weights
     // pub weights: Vec<?>
     pub name: Option<String>,

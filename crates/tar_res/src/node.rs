@@ -7,7 +7,7 @@ use crate::{mesh::Mesh, scene::ImportData, WgpuInfo, root::Root, Result, CameraP
 pub struct Node {
     pub index: usize,
     pub children: Vec<usize>,
-    pub mesh: Option<Arc<Mesh>>,
+    pub mesh: Option<usize>,
     pub rotation: Quaternion<f32>,
     pub scale: Vector3<f32>,
     // TODO: weights
