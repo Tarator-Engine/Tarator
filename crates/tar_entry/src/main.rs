@@ -43,8 +43,7 @@ mod test {
             transform.scale = [420.0, 420.0, 420.0];
         }
 
-        let view = world.view().wish::<Transform>().wish::<Veloctiy>().get()?;
-        for entity in view {
+        for entity in world.view::<(Transform, Veloctiy)>()? {
             world.entity_operate::<Transform>(entity, |transform| {
                 let pos = transform.position;
                 println!("{:#?}", transform);

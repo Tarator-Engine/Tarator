@@ -5,9 +5,12 @@ use crate::{
         description::*,
         entity_id::*
     },
-    component::*,
+    component::{
+        *,
+        pool::ComponentPool,
+        tuple::ComponentTuple
+    }
 };
-
 
 
 /// Stores and exposes operations on [entities](Entity) and [components](Component).
@@ -24,7 +27,6 @@ pub struct World {
 }
 
 impl World {
-
     /// Creates a new, empty world
     pub fn new() -> Self {
         Self {
@@ -150,31 +152,16 @@ impl World {
         Ok(func(component))
     }
 
-    pub fn view<'a>(&'a mut self) -> WorldViewBuilder<'a> {
-        WorldViewBuilder::new(self)
-    }
-}
-
-
-
-pub struct WorldViewBuilder<'a> {
-    cids: Vec<ComponentId>,
-    world: &'a mut World
-}
-
-impl<'a> WorldViewBuilder<'a> {
-    pub(crate) fn new(world: &'a mut World) -> Self {
-        Self {
-            cids: Vec::new(),
-            world
+    pub fn view<C: ComponentTuple>(&mut self) -> Result<WorldView, String> {
+        
+        let mut mask = ComponentMask::new(); 
+        for cid in C::get_ids() {
+            if !mask.insert(cid) {
+                return Err(format!("Component({}) already viewed!", cid));
+            }
         }
-    }
-    pub fn wish<C: Component>(mut self) -> Self {
-        self.cids.push(C::id());
-        self
-    }
-    pub fn get(self) -> Result<WorldView, String> {
-        WorldView::new(self.world, self.cids)
+
+        Ok(WorldView::new(self, mask))
     }
 }
 
@@ -186,20 +173,13 @@ pub struct WorldView {
 }
 
 impl WorldView {
-    pub(crate) fn new(world: &mut World, cids: Vec<ComponentId>) -> Result<WorldView, String> {
+    pub(crate) fn new(world: &mut World, mask: ComponentMask) -> WorldView {
 
-        let mut mask = ComponentMask::new();
-        for cid in cids {
-            if !mask.insert(cid) {
-                return Err(format!("Can not create WorldView with multiple Component({})", cid));
-            }
-        }
-
-        Ok(Self {
+        Self {
             entities: world.entities.get_vec_clone(),
             mask,
             index: 0
-        })
+        }
     }
 
     fn is_index_valid(&self) -> bool {
