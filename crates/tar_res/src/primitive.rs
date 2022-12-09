@@ -355,13 +355,13 @@ impl Primitive {
     pub fn draw(&self, render_pass: &mut wgpu::RenderPass, model_matrix: &Matrix4<f32>, mvp_matrix: &Matrix4<f32>, camera_position: &Vector3<f32>) {
         // TODO!: determine if shader+material already active to reduce work...
 
-        // render_pass.set_pipeline(&self.pbr_shader.pipeline);
-        // render_pass.set_vertex_buffer(0, self.vertices.unwrap().slice(..));
-        // render_pass.set_index_buffer(self.indices.unwrap().slice(..), wgpu::IndexFormat::Uint32);
-        // render_pass.set_bind_group(0, &self.pbr_shader.uniforms.bind_group.unwrap(), &[]);
-        // //TODO!: texture and camera bind_groups
-        // //TODO!: correct instances
-        // render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+        render_pass.set_pipeline(&self.pbr_shader.pipeline);
+        render_pass.set_vertex_buffer(0, self.vertices.unwrap().slice(..));
+        render_pass.set_index_buffer(self.indices.unwrap().slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_bind_group(0, &self.pbr_shader.uniforms.bind_group.unwrap(), &[]);
+        //TODO!: texture and camera bind_groups
+        //TODO!: correct instances
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
 
     }
 }

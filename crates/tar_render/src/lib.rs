@@ -683,7 +683,7 @@ pub async fn run() {
         })
         .collect::<Vec<_>>();
 
-    renderer.add_object(GameObject::ModelPath("res/Box/Box.gltf", instances)).await.unwrap();
+    renderer.add_object(GameObject::ModelPath("/home/slackers/Desktop/FlightHelmet/FlightHelmet.gltf", instances)).await.unwrap();
 
     renderer.add_object(GameObject::Camera(camera)).await.unwrap();
     renderer.select_camera(Idf::N(0));

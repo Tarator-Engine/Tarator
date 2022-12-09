@@ -1,3 +1,5 @@
+//! This crate provides useful functions to the whole Tarator Engine
+
 use std::time::Instant;
 
 /// returns an instant with the current time (the timer)
@@ -8,11 +10,11 @@ pub fn start_timer() -> Instant {
 /// logs the elapsed time since the given instant and a message
 /// additionally it returns a new instant
 pub fn relog_timing(msg: &str, last: Instant) -> Instant {
-    println!("{msg}{last:?}");
+    println!("{msg}{:?}", last.elapsed());
     start_timer()
 }
 
 /// logs the elapsed time since the given instant and a message
 pub fn log_timing(msg: &str, last: Instant) {
-    println!("{msg}{last:?}");
+    println!("{msg}{:?}", last.elapsed());
 }

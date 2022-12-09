@@ -23,7 +23,6 @@ pub struct Scene {
 impl Scene {
     pub fn new(source: &str, w_info: WgpuInfo) -> Result<Self> {
         let start_time = start_timer();
-        println!("started importing {source:?}");
         if source.starts_with("http") {
             // TODO: implement http(s) loading
             return Err(Error::NotSupported("http loading".to_owned()))

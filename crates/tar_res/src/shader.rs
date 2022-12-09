@@ -80,6 +80,7 @@ pub struct Shader {
 impl Shader {
     pub fn from_path(path: &str, layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)], defines: &[String], mat_in: MaterialInput, w_info: &WgpuInfo) -> Result<Self> {
 
+        println!("importing shader {path}");
         let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
 
         let shader = binding.bind_groups_from_layouts(layouts)
@@ -90,6 +91,8 @@ impl Shader {
             .put_constant("material_occlusion_strength", mat_in.occlusion_strength)
             .put_constant("material_emissive_factor", mat_in.emissive_factor)
             .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
+
+        println!("shader code: {}", shader.source_string);
         
         let shader = shader.build();
 
