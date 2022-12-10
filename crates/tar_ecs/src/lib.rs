@@ -10,6 +10,6 @@ pub mod prelude {
 }
 
 
-const MAXENTITIES: usize = 64;
+const MAXENTITIES: usize = 256;
 const MAXCOMPONENTS: usize = 16;
 

@@ -1,7 +1,6 @@
 use super::entity_id::*;
-use crate::prelude::ComponentId;
+use crate::component::*;
 
-pub(crate) type ComponentMask = std::collections::HashSet<ComponentId>;
 
 #[derive(Clone)]
 pub(crate) struct Desc {

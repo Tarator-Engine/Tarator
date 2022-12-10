@@ -1,3 +1,6 @@
+mod view;
+
+use view::EntityView;
 use crate::{
     *,
     entity::{
@@ -26,6 +29,7 @@ pub struct World {
     components: Vec<ComponentPool>
 }
 
+// World Implementations
 impl World {
     /// Creates a new, empty world
     pub fn new() -> Self {
@@ -35,21 +39,26 @@ impl World {
             components: Vec::with_capacity(MAXCOMPONENTS)
         }
     }
+}
 
+// Component Implementations
+impl World {
     /// Initializes a component on the world. Has to be done before any components get set on an
     /// entity. Returns [Err] if the [Component] is already set.
     pub fn component_set<C: Component>(&mut self) -> Result<(), String> {
         let cid = C::id();
 
-        match self.components.get(cid) {
-            Some(_) => Err(format!("Component({}) already set!", cid)),
-            None => {
-                self.components.insert(cid, ComponentPool::new::<C>());
-                Ok(())
-            }
+        if let Some(_) = self.components.get(cid) {
+            Err(format!("Component({}) already set!", cid))
+        } else {
+            self.components.insert(cid, ComponentPool::new::<C>());
+            Ok(())
         }
     }
+}
 
+// Entity Implementations
+impl World {
     /// Returns a new [Entity]
     pub fn entity_new(&mut self) -> Result<Entity, String> {
         if !self.free_entities.is_empty() {
@@ -88,21 +97,16 @@ impl World {
 
     /// Sets a [Component] on an [Entity] and returns a mutable reference to said [Component]. If
     /// the [Component] is not initialized on the world or already set on the [Entity], it will return [Err].
-    pub fn entity_set<C: Component>(&mut self, entity: Entity) -> Result<&mut C, String> {
-        let cid = C::id();
+    pub fn entity_set<C: ComponentTuple>(&mut self, entity: Entity) -> Result<(), String> {
         let eid = entity.id();
-
-        let Some(pool) = self.components.get(cid) else {
-            return Err(format!("Component({}) not set on world!", cid));
-        };
-
         let entity = self.entities.get_mut(eid.index() as usize)?;
-
-        if !entity.mask.insert(cid) {
-            return Err(format!("Component({}) already set on Entity({})!", cid, eid));
+        for cid in C::get_ids() {
+            if !entity.mask.insert(cid) {
+                return Err(format!("Component({}) already set on Entity({})!", cid, eid));
+            }
         }
         
-        pool.get_mut::<C>(eid.index() as usize)
+        Ok(())
     }
 
 
@@ -152,7 +156,8 @@ impl World {
         Ok(func(component))
     }
 
-    pub fn view<C: ComponentTuple>(&mut self) -> Result<WorldView, String> {
+
+    pub fn entity_view<C: ComponentTuple>(&mut self) -> Result<EntityView, String> {
         
         let mut mask = ComponentMask::new(); 
         for cid in C::get_ids() {
@@ -161,56 +166,7 @@ impl World {
             }
         }
 
-        Ok(WorldView::new(self, mask))
-    }
-}
-
-
-pub struct WorldView {
-    entities: Vec<Desc>,
-    mask: ComponentMask,
-    index: EntityIndex
-}
-
-impl WorldView {
-    pub(crate) fn new(world: &mut World, mask: ComponentMask) -> WorldView {
-
-        Self {
-            entities: world.entities.get_vec_clone(),
-            mask,
-            index: 0
-        }
-    }
-
-    fn is_index_valid(&self) -> bool {
-        let Some(entity) = self.entities.get(self.index as usize) else {
-            return false;
-        };
-
-        //     Is EntityId valid      and    all components    or  masks match
-        EntityId::is_valid(entity.id) && self.mask.is_empty() || self.mask == entity.mask
-    }
-}
-
-impl Iterator for WorldView {
-    type Item = Entity;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.entities.len() as u32 {
-            return None;
-        }
-
-        // while entities do not match the view, check next
-        while !self.is_index_valid() && self.index < self.entities.len() as u32 {
-            self.index += 1; 
-        }
-
-        let Some(entity) = self.entities.get(self.index as usize) else {
-            return None;
-        };
-        self.index += 1; 
-
-        Some(Entity::new(entity.id))
+        Ok(EntityView::new(self, mask))
     }
 }
 
