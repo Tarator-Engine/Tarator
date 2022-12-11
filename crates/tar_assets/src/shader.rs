@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use wgsl_preprocessor::WGSLType;
 
-use crate::{WgpuInfo, primitive::{Vertex, Instance}, Result, uniform::Uniform};
+use crate::{
+    primitive::{Instance, Vertex},
+    uniform::Uniform,
+    Result, WgpuInfo,
+};
 
 bitflags! {
     /// Flags matching the defines in the PBR shader
@@ -31,7 +35,7 @@ impl ShaderFlags {
             .filter(|i| self.bits & i != 0)
             .map(|i| format!("{:?}", ShaderFlags::from_bits_truncate(i)))
             .collect()
-    }   
+    }
 }
 
 pub struct MaterialInput {
@@ -70,7 +74,8 @@ let material = {}(
             self.occlusion_strength,
             self.emissive_factor,
             self.alpha_cutoff,
-        ).replace(&['[', ']'], "")
+        )
+        .replace(&['[', ']'], "")
     }
 }
 
@@ -78,11 +83,17 @@ pub struct Shader {
     pub module: wgpu::ShaderModule,
 }
 impl Shader {
-    pub fn from_path(path: &str, layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)], defines: &[String], mat_in: MaterialInput, w_info: &WgpuInfo) -> Result<Self> {
-
+    pub fn from_path(
+        path: &str,
+        layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)],
+        defines: &[String],
+        mat_in: MaterialInput,
+        w_info: &WgpuInfo,
+    ) -> Result<Self> {
         let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
 
-        let shader = binding.bind_groups_from_layouts(layouts)
+        let shader = binding
+            .bind_groups_from_layouts(layouts)
             .put_constant("material_base_color_factor", mat_in.base_color_factor)
             .put_constant("material_metallic_factor", mat_in.metallic_factor)
             .put_constant("material_roughness_factor", mat_in.roughness_factor)
@@ -90,17 +101,14 @@ impl Shader {
             .put_constant("material_occlusion_strength", mat_in.occlusion_strength)
             .put_constant("material_emissive_factor", mat_in.emissive_factor)
             .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
-        
+
         let shader = shader.build();
 
         let module = w_info.device.create_shader_module(shader);
 
-        Ok(Self {
-            module
-        })
+        Ok(Self { module })
     }
 }
-
 
 pub struct PbrShader {
     pub shader: Shader,
@@ -111,32 +119,38 @@ pub struct PbrShader {
 
 impl PbrShader {
     pub fn new(flags: ShaderFlags, mat_in: MaterialInput, w_info: &WgpuInfo) -> Result<Self> {
-        let per_frame = (PerFrameUniforms::bind_group_layout(), PerFrameUniforms::names());
+        let per_frame = (
+            PerFrameUniforms::bind_group_layout(),
+            PerFrameUniforms::names(),
+        );
         let per_frame_bind_group = w_info.device.create_bind_group_layout(&per_frame.0);
         let shader = Shader::from_path(
             "shaders/static_pbr.wgsl",
             &[per_frame],
             &flags.as_strings(),
             mat_in,
-            w_info)?;
-        
+            w_info,
+        )?;
+
         let uniforms = PerFrameUniforms::new(PerFrameData::new(), &per_frame_bind_group, w_info);
 
-        let pipeline_layout = w_info.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Shader Render Pipline Layout"),
-            bind_group_layouts: &[
-                &per_frame_bind_group
-            ],
-            push_constant_ranges: &[]
-        });
-        let pipeline = 
-            w_info.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline_layout =
+            w_info
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Shader Render Pipline Layout"),
+                    bind_group_layouts: &[&per_frame_bind_group],
+                    push_constant_ranges: &[],
+                });
+        let pipeline = w_info
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(&format!("{:?}", shader.module)),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader.module,
                     entry_point: "vs_main",
-                    buffers: &[Vertex::desc(), Instance::desc()]
+                    buffers: &[Vertex::desc(), Instance::desc()],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader.module,
@@ -192,9 +206,7 @@ pub trait BindGroup {
     fn names() -> Vec<(String, String)>;
 }
 
-pub struct PerStaticMaterialData {
-    
-}
+pub struct PerStaticMaterialData {}
 
 pub struct PerFrameUniforms {
     u_mpv_matrix: Uniform<[[f32; 4]; 4]>,
@@ -231,14 +243,14 @@ impl PerFrameData {
     pub fn new() -> Self {
         Self {
             u_mpv_matrix: [[0.0; 4]; 4],
-            u_model_matrix: [[0.0; 4]; 4], 
-            u_camera: [0.0; 3], 
-            u_light_direction: [0.0; 3], 
-            u_light_color: [0.0; 3], 
-            u_ambient_light_color: [0.0; 3], 
-            u_ambient_light_intensity: 0.0, 
-            u_alpha_blend: 0.0, 
-            u_alpha_cutoff: 0.0 
+            u_model_matrix: [[0.0; 4]; 4],
+            u_camera: [0.0; 3],
+            u_light_direction: [0.0; 3],
+            u_light_color: [0.0; 3],
+            u_ambient_light_color: [0.0; 3],
+            u_ambient_light_intensity: 0.0,
+            u_alpha_blend: 0.0,
+            u_alpha_cutoff: 0.0,
         }
     }
 }
@@ -246,15 +258,27 @@ impl PerFrameData {
 impl BindGroup for PerFrameUniforms {
     type Data = PerFrameData;
     fn new(data: PerFrameData, layout: &wgpu::BindGroupLayout, w_info: &WgpuInfo) -> Self {
-        let mut uni = PerFrameUniforms { 
-            u_mpv_matrix: Uniform::new(data.u_mpv_matrix, "u_mpv_matrix".into(), w_info), 
-            u_model_matrix: Uniform::new(data.u_model_matrix, "u_model_matrix".into(), w_info), 
-            u_camera: Uniform::new(data.u_camera, "u_camera".into(), w_info), 
-            u_light_direction: Uniform::new(data.u_light_direction, "u_light_direction".into(), w_info), 
-            u_light_color: Uniform::new(data.u_light_color, "u_light_color".into(), w_info), 
-            u_ambient_light_color: Uniform::new(data.u_ambient_light_color, "u_ambient_light_color".into(), w_info), 
-            u_ambient_light_intensity: Uniform::new(data.u_ambient_light_intensity, "u_ambient_light_intensity".into(), w_info), 
-            u_alpha_blend: Uniform::new(data.u_alpha_blend, "u_alpha_blend".into(), w_info), 
+        let mut uni = PerFrameUniforms {
+            u_mpv_matrix: Uniform::new(data.u_mpv_matrix, "u_mpv_matrix".into(), w_info),
+            u_model_matrix: Uniform::new(data.u_model_matrix, "u_model_matrix".into(), w_info),
+            u_camera: Uniform::new(data.u_camera, "u_camera".into(), w_info),
+            u_light_direction: Uniform::new(
+                data.u_light_direction,
+                "u_light_direction".into(),
+                w_info,
+            ),
+            u_light_color: Uniform::new(data.u_light_color, "u_light_color".into(), w_info),
+            u_ambient_light_color: Uniform::new(
+                data.u_ambient_light_color,
+                "u_ambient_light_color".into(),
+                w_info,
+            ),
+            u_ambient_light_intensity: Uniform::new(
+                data.u_ambient_light_intensity,
+                "u_ambient_light_intensity".into(),
+                w_info,
+            ),
+            u_alpha_blend: Uniform::new(data.u_alpha_blend, "u_alpha_blend".into(), w_info),
             u_alpha_cutoff: Uniform::new(data.u_alpha_cutoff, "u_alpha_cutoff".into(), w_info),
             bind_group: None,
         };
@@ -299,9 +323,9 @@ impl BindGroup for PerFrameUniforms {
                     binding: 8,
                     resource: uni.u_alpha_cutoff.buff.as_entire_binding(),
                 },
-            ]
+            ],
         }));
-        
+
         uni
     }
 
@@ -321,109 +345,109 @@ impl BindGroup for PerFrameUniforms {
 
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static> {
         use wgpu::ShaderStages;
-        wgpu::BindGroupLayoutDescriptor { 
+        wgpu::BindGroupLayoutDescriptor {
             label: Some("Per Frame Data"),
             entries: &[
                 // u_mpv_matrix: mat4x4<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_model_matrix: mat4x4<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_camera: vec3<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_light_direction: vec3<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_light_color: vec3<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_ambient_light_color: vec3<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 5,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_ambient_light_intensity: vec3<f32>
                 wgpu::BindGroupLayoutEntry {
                     binding: 6,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_alpha_blend: f32
                 wgpu::BindGroupLayoutEntry {
                     binding: 7,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 // u_alpha_cutoff: f32
                 wgpu::BindGroupLayoutEntry {
                     binding: 8,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
-            ]
+            ],
         }
     }
 }
@@ -437,7 +461,7 @@ impl BindGroup for PerFrameUniforms {
 
 //     pub u_LightDirection: Uniform<[f32; 3]>,
 //     pub u_LightColor: Uniform<[f32; 3]>,
-    
+
 //     pub u_AmbientLightColor: Uniform<[f32; 3]>,
 //     pub u_AmbientLightIntensity: Uniform<f32>,
 
@@ -455,7 +479,7 @@ impl BindGroup for PerFrameUniforms {
 
 //     pub u_LightDirection: [f32; 3],
 //     pub u_LightColor: [f32; 3],
-    
+
 //     pub u_AmbientLightColor: [f32; 3],
 //     pub u_AmbientLightIntensity: f32,
 
@@ -470,13 +494,13 @@ impl BindGroup for PerFrameUniforms {
 //         let u_MPVMatrix = Uniform::new(info.u_MPVMatrix, "u_MPVMatrix".into(), w_info);
 //         let u_ModelMatrix = Uniform::new(info.u_ModelMatrix, "u_ModelMatrix".into(), w_info);
 //         let u_Camera = Uniform::new(info.u_Camera, "u_Camera".into(), w_info);
-        
+
 //         let u_LightDirection = Uniform::new(info.u_LightDirection, "u_LightDirection".into(), w_info);
 //         let u_LightColor = Uniform::new(info.u_LightColor, "u_LightColor".into(), w_info);
-        
+
 //         let u_AmbientLightColor = Uniform::new(info.u_AmbientLightColor, "u_AmbientLightColor".into(), w_info);
 //         let u_AmbientLightIntensity = Uniform::new(info.u_AmbientLightIntensity, "u_AmbientLightIntensity".into(), w_info);
-        
+
 //         let u_AlphaBlend = Uniform::new(info.u_AlphaBlend, "u_AlphaBlend".into(), w_info);
 //         let u_AlphaCutoff = Uniform::new(info.u_AlphaCutoff, "u_AlphaCutoff".into(), w_info);
 
@@ -558,7 +582,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 0,
 //                     visibility: wgpu::ShaderStages::VERTEX,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -569,7 +593,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 1,
 //                     visibility: wgpu::ShaderStages::VERTEX,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -580,7 +604,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 2,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -591,7 +615,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 3,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -602,7 +626,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 4,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -613,7 +637,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 5,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -624,7 +648,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 6,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -635,7 +659,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 7,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -646,7 +670,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 8,
 //                     visibility: wgpu::ShaderStages::FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,
@@ -657,7 +681,7 @@ impl BindGroup for PerFrameUniforms {
 //                 wgpu::BindGroupLayoutEntry {
 //                     binding: 9,
 //                     visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-//                     ty: wgpu::BindingType::Buffer { 
+//                     ty: wgpu::BindingType::Buffer {
 //                         ty: wgpu::BufferBindingType::Uniform,
 //                         has_dynamic_offset: false,
 //                         min_binding_size: None,

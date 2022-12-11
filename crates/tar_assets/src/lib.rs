@@ -15,8 +15,9 @@ mod texture;
 mod material;
 mod shader;
 mod uniform;
+mode object;
 
-use cgmath::{Vector3, Matrix4};
+use cgmath::{Matrix4, Vector3};
 use uuid::Uuid;
 
 use crate::scene::Scene;
@@ -50,6 +51,12 @@ impl<T> Vec4Slice<T> for cgmath::Vector4<T> {
         [self.x, self.y, self.z, self.w]
     }
 }
+
+pub type Vec1 = cgmath::Vector1<f32>;
+pub type Vec2 = cgmath::Vector2<f32>;
+pub type Vec3 = cgmath::Vector3<f32>;
+pub type Vec4 = cgmath::Vector4<f32>;
+pub type Quat = cgmath::Quaternion<f32>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -119,23 +126,40 @@ pub struct CameraParams {
     pub projection_matrix: Matrix4<f32>,
 }
 
-pub fn run() {
-    
-}
+pub fn run() {}
 
-pub async fn import_gltf(path: &str, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>, surface_format: wgpu::TextureFormat) -> Result<Scene> {
-    Scene::new(path, WgpuInfo { device, queue, surface_format })
+pub async fn import_gltf(
+    path: &str,
+    device: Arc<wgpu::Device>,
+    queue: Arc<wgpu::Queue>,
+    surface_format: wgpu::TextureFormat,
+) -> Result<Scene> {
+    Scene::new(
+        path,
+        WgpuInfo {
+            device,
+            queue,
+            surface_format,
+        },
+    )
 }
 
 pub async fn update_cache(id: Uuid, location: PathBuf) -> Result<()> {
-
     let path = PathBuf::from(ASSET_PATH).join(CACHE_NAME);
-    
+
     let mut cache = get_cache().await?;
 
     println!("updating cache");
     cache.cache.insert(id, location.clone());
-    cache.orig_name.insert(location.file_name().ok_or(Error::NoFileExtension)?.to_str().unwrap().to_owned(), id);
+    cache.orig_name.insert(
+        location
+            .file_name()
+            .ok_or(Error::NoFileExtension)?
+            .to_str()
+            .unwrap()
+            .to_owned(),
+        id,
+    );
     cache.last_update = chrono::offset::Utc::now();
 
     std::fs::write(path, rmp_serde::to_vec(&cache)?)?;
@@ -145,8 +169,7 @@ pub async fn update_cache(id: Uuid, location: PathBuf) -> Result<()> {
 
 pub async fn get_cache() -> Result<AssetCache> {
     let path = PathBuf::from(ASSET_PATH).join(CACHE_NAME);
-    rmp_serde::from_slice(std::fs::read(path)?.as_slice())
-        .map_err(|e| Error::RmpD {e})
+    rmp_serde::from_slice(std::fs::read(path)?.as_slice()).map_err(|e| Error::RmpD { e })
 }
 
 pub fn format_model_name(model_id: uuid::Uuid) -> String {

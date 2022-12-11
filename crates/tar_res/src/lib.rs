@@ -1,4 +1,4 @@
-use std::{path::PathBuf, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[macro_use]
 extern crate thiserror;
@@ -6,20 +6,19 @@ extern crate thiserror;
 #[macro_use]
 extern crate bitflags;
 
-mod scene;
-mod node;
-mod root;
-mod primitive;
-mod mesh;
-mod texture;
 mod material;
+mod mesh;
+mod node;
+mod primitive;
+mod root;
+mod scene;
 mod shader;
+mod texture;
 mod uniform;
 
-use cgmath::{Vector3, Matrix4};
+use cgmath::{Matrix4, Vector3};
+use node::Node;
 use uuid::Uuid;
-
-use crate::scene::Scene;
 
 trait Vec2Slice<T> {
     fn as_slice(self) -> [T; 2];
@@ -78,6 +77,11 @@ pub enum Error {
         #[from]
         e: gltf::Error,
     },
+    #[error("Mutex Error {e}")]
+    NodeMutex {
+        #[from]
+        e: std::sync::PoisonError<std::sync::MutexGuard<'static, Node>>,
+    },
     #[error("The given Id does not exist")]
     NonExistentID,
     #[error("The given path does not have a file extension")]
@@ -90,9 +94,18 @@ pub enum Error {
     NoPositions,
     #[error("The provided meshes do not contain normal data")]
     NoNormals,
+    #[error("Failed to aquire lock on node mutex")]
+    LockFailed,
+    #[error("The requested material does not exist")]
+    NonExistentMaterial,
+    #[error("The requested shader does not exist")]
+    NonExistentShader,
+    #[error("The requested primitive does not exist")]
+    NonExistentPrimitive,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+// pub type NodeResult<'a, T> = std::result::Result<T>;
 
 pub struct WgpuInfo {
     device: Arc<wgpu::Device>,
@@ -120,13 +133,20 @@ pub struct CameraParams {
 }
 
 pub async fn update_cache(id: Uuid, location: PathBuf) -> Result<()> {
-
     let path = PathBuf::from(ASSET_PATH).join(CACHE_NAME);
-    
+
     let mut cache = get_cache().await?;
 
     cache.cache.insert(id, location.clone());
-    cache.orig_name.insert(location.file_name().ok_or(Error::NoFileExtension)?.to_str().unwrap().to_owned(), id);
+    cache.orig_name.insert(
+        location
+            .file_name()
+            .ok_or(Error::NoFileExtension)?
+            .to_str()
+            .unwrap()
+            .to_owned(),
+        id,
+    );
     cache.last_update = chrono::offset::Utc::now();
 
     std::fs::write(path, rmp_serde::to_vec(&cache)?)?;
@@ -136,8 +156,7 @@ pub async fn update_cache(id: Uuid, location: PathBuf) -> Result<()> {
 
 pub async fn get_cache() -> Result<AssetCache> {
     let path = PathBuf::from(ASSET_PATH).join(CACHE_NAME);
-    rmp_serde::from_slice(std::fs::read(path)?.as_slice())
-        .map_err(|e| Error::RmpD {e})
+    rmp_serde::from_slice(std::fs::read(path)?.as_slice()).map_err(|e| Error::RmpD { e })
 }
 
 pub fn format_model_name(model_id: uuid::Uuid) -> String {

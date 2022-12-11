@@ -1,13 +1,13 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use cgmath::{Matrix4, Vector3};
 use wgpu::RenderPass;
 
-use crate::{primitive::Primitive, root::Root, scene::ImportData, Result, WgpuInfo};
+use crate::{primitive::Primitive, root::Root, scene::ImportData, Error, Result, WgpuInfo};
 
 pub struct Mesh {
     pub index: usize,
-    pub primitives: Vec<usize>,
+    pub primitives: Vec<Primitive>,
     // TODO: weights
     // pub weights: Vec<?>
     pub name: Option<String>,
@@ -21,22 +21,39 @@ impl Mesh {
         base_path: &Path,
         w_info: &WgpuInfo,
     ) -> Result<Mesh> {
-        let mut primitives: Vec<Primitive> = vec![];
-        for (i, g_prim) in g_mesh.primitives().enumerate(){
-            primitives.push(Primitive::from_gltf(&g_prim, i, g_mesh.index(), root, imp, base_path, w_info)?);
+        let mut primitives: Vec<usize> = vec![];
+        for (i, g_prim) in g_mesh.primitives().enumerate() {
+            let mesh = Arc::new(Primitive::from_gltf(
+                &g_prim,
+                i,
+                g_mesh.index(),
+                root,
+                imp,
+                base_path,
+                w_info,
+            )?);
+            root.primitives.push(mesh);
+            primitives.push(root.primitives.len() - 1);
         }
-                   
 
-        Ok(Mesh { 
-            index: g_mesh.index(), 
-            primitives, 
-            name: g_mesh.name().map(|s| s.into())
+        Ok(Mesh {
+            index: g_mesh.index(),
+            primitives,
+            name: g_mesh.name().map(|s| s.into()),
         })
     }
 
-    pub fn draw(&self, render_pass: &mut RenderPass, model_matrix: &Matrix4<f32>, mvp_matrix: &Matrix4<f32>, camera_position: &Vector3<f32>) {
+    pub fn draw(
+        &self,
+        root: &Root,
+        render_pass: &mut RenderPass,
+        model_matrix: &Matrix4<f32>,
+        mvp_matrix: &Matrix4<f32>,
+        camera_position: &Vector3<f32>,
+    ) -> Result<()> {
         for primitive in &self.primitives {
-            primitive.draw(render_pass, model_matrix, mvp_matrix, camera_position)
+            primitive.draw(root, render_pass, model_matrix, mvp_matrix, camera_position)?
         }
+        Ok(())
     }
 }

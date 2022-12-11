@@ -326,7 +326,6 @@ impl NativeRenderer {
         //     )
         //};
 
-
         // println!("{:?}", std::env::current_dir());
         // pollster::block_on(tar_assets::import_gltf("res/Box/Box.gltf", Arc::new(device), Arc::new(queue), config.format)).unwrap();
 
@@ -448,19 +447,22 @@ impl NativeRenderer {
             }
 
             GameObject::ModelPath(p, i) => {
-                let instance_data = i
-                    .iter()
-                    .map(model::Instance::to_raw)
-                    .collect::<Vec<_>>();
-                let instance_buffer = self
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Instance Buffer"),
-                        contents: bytemuck::cast_slice(&instance_data),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
+                let instance_data = i.iter().map(model::Instance::to_raw).collect::<Vec<_>>();
+                let instance_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Instance Buffer"),
+                            contents: bytemuck::cast_slice(&instance_data),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
-                tar_assets::import_gltf(p, self.device.clone(), self.queue.clone(), self.config.format).await?;
+                tar_assets::import_gltf(
+                    p,
+                    self.device.clone(),
+                    self.queue.clone(),
+                    self.config.format,
+                )
+                .await?;
             }
 
             _ => todo!("implement rest"),
@@ -549,16 +551,26 @@ fn input(renderer: &mut NativeRenderer, event: &WindowEvent) -> bool {
                     ..
                 },
             ..
-        } =>  {
+        } => {
             let ret = renderer.cameras[renderer.active_camera as usize]
-            .controller
-            .process_keyboard(*key, *state);
+                .controller
+                .process_keyboard(*key, *state);
 
             if *key == VirtualKeyCode::P {
-                renderer.add_object(GameObject::ModelPath("cube.obj", vec![model::Instance {position: cgmath::Vector3 { x: renderer.models.len() as f32 * 2.0, y: 0.0, z: 0.0 }, rotation: cgmath::Quaternion::new(0.0, 0.0, 0.0, 0.0)}]));
+                renderer.add_object(GameObject::ModelPath(
+                    "cube.obj",
+                    vec![model::Instance {
+                        position: cgmath::Vector3 {
+                            x: renderer.models.len() as f32 * 2.0,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                        rotation: cgmath::Quaternion::new(0.0, 0.0, 0.0, 0.0),
+                    }],
+                ));
             }
             ret
-        },
+        }
         WindowEvent::MouseWheel { delta, .. } => {
             renderer.cameras[renderer.active_camera as usize]
                 .controller
@@ -603,7 +615,6 @@ fn update(renderer: &mut NativeRenderer, dt: std::time::Duration) {
         bytemuck::cast_slice(&[renderer.lights[0].uniform]),
     );
 }
-
 
 pub async fn run() {
     cfg_if::cfg_if! {
@@ -683,15 +694,24 @@ pub async fn run() {
         })
         .collect::<Vec<_>>();
 
-    renderer.add_object(GameObject::ModelPath("res/Box/Box.gltf", instances)).await.unwrap();
+    renderer
+        .add_object(GameObject::ModelPath("res/Box/Box.gltf", instances))
+        .await
+        .unwrap();
 
-    renderer.add_object(GameObject::Camera(camera)).await.unwrap();
+    renderer
+        .add_object(GameObject::Camera(camera))
+        .await
+        .unwrap();
     renderer.select_camera(Idf::N(0));
 
-    renderer.add_object(GameObject::Light(Light {
-        pos: [2.0, 2.0, 2.0],
-        color: [1.0, 1.0, 1.0],
-    })).await.unwrap();
+    renderer
+        .add_object(GameObject::Light(Light {
+            pos: [2.0, 2.0, 2.0],
+            color: [1.0, 1.0, 1.0],
+        }))
+        .await
+        .unwrap();
 
     let mut last_render_time = instant::Instant::now();
     event_loop.run(move |event, _, control_flow| {

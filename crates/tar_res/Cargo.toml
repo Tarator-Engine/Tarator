@@ -10,7 +10,7 @@ tar_utils = {path = "../tar_utils"}
 thiserror = "1.0"
 cfg-if = "1"
 gltf = "1"
-cgmath = "0.18"
+cgmath = {version = "0.18", features = ["serde"]}
 wgpu = "0.14.*"
 bytemuck = { version = "1.12.1", features = [ "derive" ] }
 bitflags = "1.3"
