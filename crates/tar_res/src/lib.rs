@@ -13,8 +13,10 @@ mod primitive;
 mod root;
 mod scene;
 mod shader;
+mod store;
 mod texture;
 mod uniform;
+mod vertex;
 
 use cgmath::{Matrix4, Vector3};
 use node::Node;
@@ -49,6 +51,12 @@ impl<T> Vec4Slice<T> for cgmath::Vector4<T> {
         [self.x, self.y, self.z, self.w]
     }
 }
+
+pub type Vec1 = cgmath::Vector1<f32>;
+pub type Vec2 = cgmath::Vector2<f32>;
+pub type Vec3 = cgmath::Vector3<f32>;
+pub type Vec4 = cgmath::Vector4<f32>;
+pub type Quat = cgmath::Quaternion<f32>;
 
 #[derive(Error, Debug)]
 pub enum Error {

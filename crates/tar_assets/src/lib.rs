@@ -1,4 +1,4 @@
-use std::{path::PathBuf, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[macro_use]
 extern crate thiserror;
@@ -6,16 +6,16 @@ extern crate thiserror;
 #[macro_use]
 extern crate bitflags;
 
-mod scene;
-mod node;
-mod root;
-mod primitive;
-mod mesh;
-mod texture;
 mod material;
+mod mesh;
+mod node;
+mod object;
+mod primitive;
+mod root;
+mod scene;
 mod shader;
+mod texture;
 mod uniform;
-mode object;
 
 use cgmath::{Matrix4, Vector3};
 use uuid::Uuid;

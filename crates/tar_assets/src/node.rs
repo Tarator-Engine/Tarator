@@ -22,6 +22,7 @@ pub struct Node {
 impl Node {
     pub fn from_gltf(
         g_node: &gltf::Node<'_>,
+        nodes: &mut Node,
         meshes: &mut Vec<Mesh>,
         imp: &ImportData,
         base_path: &Path,

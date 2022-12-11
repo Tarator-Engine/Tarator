@@ -1,12 +1,7 @@
-use std::collections::HashMap;
-
 use wgsl_preprocessor::WGSLType;
 
 use crate::{
     material::{BindGroup, PerFrameUniforms},
-    primitive::{Instance, Vertex},
-    root::Root,
-    uniform::Uniform,
     Result, WgpuInfo,
 };
 

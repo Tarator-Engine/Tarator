@@ -3,12 +3,13 @@ use std::{path::Path, sync::Arc};
 use cgmath::{Vector3, Vector4};
 
 use crate::{
-    primitive::{Instance, Vertex},
+    primitive::Instance,
     root::Root,
     scene::ImportData,
     shader::{self, MaterialInput, PbrShader, ShaderFlags},
     texture::Texture,
     uniform::Uniform,
+    vertex::Vertex,
     Error, Result, Vec3Slice, Vec4Slice, WgpuInfo,
 };
 
@@ -186,33 +187,6 @@ impl PbrMaterial {
         w_info: &WgpuInfo,
     ) -> Result<PbrMaterial> {
         let pbr = g_material.pbr_metallic_roughness();
-
-        // let mut material = PbrMaterial {
-        //     index: g_material.index(),
-        //     name: g_material.name().map(|s| s.into()),
-        //     base_color_factor: pbr.base_color_factor().into(),
-        //     // TODO: perhaps RC only the underlying image? no, also opengl id...
-        //     base_color_texture: None,
-        //     metallic_factor: pbr.metallic_factor(),
-        //     roughness_factor: pbr.roughness_factor(),
-        //     metallic_roughness_texture: None,
-
-        //     normal_texture: None,
-        //     normal_scale: None,
-
-        //     occlusion_texture: None,
-        //     occlusion_strength: 0.0,
-
-        //     emissive_factor: g_material.emissive_factor().into(),
-        //     emissive_texture: None,
-
-        //     alpha_cutoff: g_material.alpha_cutoff(),
-        //     alpha_mode: g_material.alpha_mode(),
-
-        //     double_sided: g_material.double_sided(),
-
-        //     pbr_shader: None,
-        // };
 
         let mut base_color_texture = None;
         if let Some(color_info) = pbr.base_color_texture() {
