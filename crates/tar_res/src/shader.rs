@@ -1,9 +1,9 @@
-// use wgsl_preprocessor::WGSLType;
+use wgsl_preprocessor::WGSLType;
 
-// use crate::{
-//     material::{BindGroup, PerFrameUniforms},
-//     Result, WgpuInfo,
-// };
+use crate::{
+    material::{BindGroup, PerFrameUniforms},
+    Result, WgpuInfo,
+};
 
 bitflags! {
     /// Flags matching the defines in the PBR shader
@@ -35,162 +35,104 @@ impl ShaderFlags {
     }
 }
 
-// pub struct MaterialInput {
-//     pub base_color_factor: [f32; 4],
-//     pub metallic_factor: f32,
-//     pub roughness_factor: f32,
-//     pub normal_scale: f32,
-//     pub occlusion_strength: f32,
-//     pub emissive_factor: [f32; 3],
-//     pub alpha_cutoff: f32,
-// }
+pub struct MaterialInput {
+    pub base_color_factor: [f32; 4],
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub normal_scale: f32,
+    pub occlusion_strength: f32,
+    pub emissive_factor: [f32; 3],
+    pub alpha_cutoff: f32,
+}
 
-// impl WGSLType for MaterialInput {
-//     fn type_name() -> String {
-//         "MaterialInput".into()
-//     }
+impl WGSLType for MaterialInput {
+    fn type_name() -> String {
+        "MaterialInput".into()
+    }
 
-//     fn string_definition(&self) -> String {
-//         format!(
-//             "
-// let material = {}(
-//     vec4<f32>({:?}),
-//     {},
-//     {},
-//     {},
-//     {},
-//     vec3<f32>({:?}),
-//     {}
-// );
-//             ",
-//             Self::type_name(),
-//             self.base_color_factor,
-//             self.metallic_factor,
-//             self.roughness_factor,
-//             self.normal_scale,
-//             self.occlusion_strength,
-//             self.emissive_factor,
-//             self.alpha_cutoff,
-//         )
-//         .replace(&['[', ']'], "")
-//     }
-// }
+    fn string_definition(&self) -> String {
+        format!(
+            "
+let material = {}(
+    vec4<f32>({:?}),
+    {},
+    {},
+    {},
+    {},
+    vec3<f32>({:?}),
+    {}
+);
+            ",
+            Self::type_name(),
+            self.base_color_factor,
+            self.metallic_factor,
+            self.roughness_factor,
+            self.normal_scale,
+            self.occlusion_strength,
+            self.emissive_factor,
+            self.alpha_cutoff,
+        )
+        .replace(&['[', ']'], "")
+    }
+}
 
-// pub struct Shader {
-//     pub module: wgpu::ShaderModule,
-// }
-// impl Shader {
-//     pub fn from_path(
-//         path: &str,
-//         layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)],
-//         defines: &[String],
-//         mat_in: MaterialInput,
-//         w_info: &WgpuInfo,
-//     ) -> Result<Self> {
-//         println!("importing shader {path}");
-//         let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
+pub struct Shader {
+    pub module: wgpu::ShaderModule,
+}
+impl Shader {
+    pub fn from_path(
+        path: &str,
+        layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)],
+        defines: &[String],
+        mat_in: MaterialInput,
+        w_info: &WgpuInfo,
+    ) -> Result<Self> {
+        println!("importing shader {path}");
+        let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
 
-//         let shader = binding
-//             .bind_groups_from_layouts(layouts)
-//             .put_constant("material_base_color_factor", mat_in.base_color_factor)
-//             .put_constant("material_metallic_factor", mat_in.metallic_factor)
-//             .put_constant("material_roughness_factor", mat_in.roughness_factor)
-//             .put_constant("material_normal_scale", mat_in.normal_scale)
-//             .put_constant("material_occlusion_strength", mat_in.occlusion_strength)
-//             .put_constant("material_emissive_factor", mat_in.emissive_factor)
-//             .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
+        let shader = binding
+            .bind_groups_from_layouts(layouts)
+            .put_constant("material_base_color_factor", mat_in.base_color_factor)
+            .put_constant("material_metallic_factor", mat_in.metallic_factor)
+            .put_constant("material_roughness_factor", mat_in.roughness_factor)
+            .put_constant("material_normal_scale", mat_in.normal_scale)
+            .put_constant("material_occlusion_strength", mat_in.occlusion_strength)
+            .put_constant("material_emissive_factor", mat_in.emissive_factor)
+            .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
 
-//         println!("shader code: {}", shader.source_string);
+        println!("shader code: {}", shader.source_string);
 
-//         let shader = shader.build();
+        let shader = shader.build();
 
-//         let module = w_info.device.create_shader_module(shader);
+        let module = w_info.device.create_shader_module(shader);
 
-//         Ok(Self { module })
-//     }
-// }
+        Ok(Self { module })
+    }
+}
 
-// pub struct PbrShader {
-//     pub shader: Shader,
-//     pub flags: ShaderFlags,
-// }
+pub struct PbrShader {
+    pub shader: Shader,
+    pub flags: ShaderFlags,
+}
 
-// impl PbrShader {
-//     pub fn new(flags: ShaderFlags, mat_in: MaterialInput, w_info: &WgpuInfo) -> Result<Self> {
-//         let per_frame = (
-//             PerFrameUniforms::bind_group_layout(),
-//             PerFrameUniforms::names(),
-//         );
-//         // let per_frame_bind_group = w_info.device.create_bind_group_layout(&per_frame.0);
-//         let shader = Shader::from_path(
-//             "shaders/static_pbr.wgsl",
-//             &[per_frame],
-//             &flags.as_strings(),
-//             mat_in,
-//             w_info,
-//         )?;
+impl PbrShader {
+    pub fn new(flags: ShaderFlags, mat_in: MaterialInput, w_info: &WgpuInfo) -> Result<Self> {
+        let per_frame = (
+            PerFrameUniforms::bind_group_layout(),
+            PerFrameUniforms::names(),
+        );
+        // let per_frame_bind_group = w_info.device.create_bind_group_layout(&per_frame.0);
+        let shader = Shader::from_path(
+            "shaders/static_pbr.wgsl",
+            &[per_frame],
+            &flags.as_strings(),
+            mat_in,
+            w_info,
+        )?;
 
-//         // let uniforms = PerFrameUniforms::new(PerFrameData::new(), &per_frame_bind_group, w_info);
-
-//         // let pipeline_layout =
-//         //     w_info
-//         //         .device
-//         //         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-//         //             label: Some("Shader Render Pipline Layout"),
-//         //             bind_group_layouts: &[&per_frame_bind_group],
-//         //             push_constant_ranges: &[],
-//         //         });
-//         // let pipeline = w_info
-//         //     .device
-//         //     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-//         //         label: Some(&format!("{:?}", shader.module)),
-//         //         layout: Some(&pipeline_layout),
-//         //         vertex: wgpu::VertexState {
-//         //             module: &shader.module,
-//         //             entry_point: "vs_main",
-//         //             buffers: &[Vertex::desc(), Instance::desc()],
-//         //         },
-//         //         fragment: Some(wgpu::FragmentState {
-//         //             module: &shader.module,
-//         //             entry_point: "fs_main",
-//         //             targets: &[Some(wgpu::ColorTargetState {
-//         //                 format: w_info.surface_format,
-//         //                 blend: Some(wgpu::BlendState {
-//         //                     alpha: wgpu::BlendComponent::REPLACE,
-//         //                     color: wgpu::BlendComponent::REPLACE,
-//         //                 }),
-//         //                 write_mask: wgpu::ColorWrites::ALL,
-//         //             })],
-//         //         }),
-//         //         primitive: wgpu::PrimitiveState {
-//         //             topology: wgpu::PrimitiveTopology::TriangleList,
-//         //             strip_index_format: None,
-//         //             front_face: wgpu::FrontFace::Ccw,
-//         //             cull_mode: Some(wgpu::Face::Back),
-//         //             polygon_mode: wgpu::PolygonMode::Fill,
-//         //             unclipped_depth: false,
-//         //             conservative: false,
-//         //         },
-//         //         depth_stencil: Some(wgpu::DepthStencilState {
-//         //             format: wgpu::TextureFormat::Depth32Float,
-//         //             depth_compare: wgpu::CompareFunction::Less,
-//         //             stencil: wgpu::StencilState::default(),
-//         //             bias: wgpu::DepthBiasState::default(),
-//         //             depth_write_enabled: true,
-//         //         }),
-//         //         multisample: wgpu::MultisampleState {
-//         //             count: 1,
-//         //             mask: !0,
-//         //             alpha_to_coverage_enabled: false,
-//         //         },
-//         //         // If the pipeline will be used with a multiview render pass, this
-//         //         // indicates how many array layers the attachments will have.
-//         //         multiview: None,
-//         //     });
-
-//         Ok(Self { shader, flags })
-//     }
-// }
+        Ok(Self { shader, flags })
+    }
+}
 
 // /// NOTE: this has to match the shader
 // pub struct PbrUniforms {

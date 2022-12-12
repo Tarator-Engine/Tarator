@@ -1,35 +1,31 @@
-use std::{path::Path, sync::Arc};
-
 use cgmath::{Vector3, Vector4};
 
 use crate::{
     primitive::Instance,
-    root::Root,
-    scene::ImportData,
-    shader::{self, MaterialInput, PbrShader, ShaderFlags},
+    shader::{MaterialInput, PbrShader, ShaderFlags},
     texture::Texture,
     uniform::Uniform,
     vertex::Vertex,
-    Error, Result, Vec3Slice, Vec4Slice, WgpuInfo,
+    Result, Vec3Slice, Vec4Slice, WgpuInfo,
 };
 
 pub struct PbrMaterial {
     pub index: Option<usize>,
-    pub name: Option<String>,
+    pub name: String,
 
     pub base_color_factor: Vector4<f32>,
-    pub base_color_texture: Option<usize>,
+    pub base_color_texture: Option<Texture>,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-    pub metallic_roughness_texture: Option<usize>,
+    pub metallic_roughness_texture: Option<Texture>,
 
-    pub normal_texture: Option<usize>,
+    pub normal_texture: Option<Texture>,
     pub normal_scale: Option<f32>,
 
-    pub occlusion_texture: Option<usize>,
+    pub occlusion_texture: Option<Texture>,
     pub occlusion_strength: f32,
     pub emissive_factor: Vector3<f32>,
-    pub emissive_texture: Option<usize>,
+    pub emissive_texture: Option<Texture>,
 
     pub alpha_cutoff: Option<f32>,
     pub alpha_mode: gltf::material::AlphaMode,
@@ -45,21 +41,21 @@ pub struct PbrMaterial {
 impl PbrMaterial {
     pub fn new(
         index: Option<usize>,
-        name: Option<String>,
+        name: String,
 
         base_color_factor: Vector4<f32>,
-        base_color_texture: Option<usize>,
+        base_color_texture: Option<Texture>,
         metallic_factor: f32,
         roughness_factor: f32,
-        metallic_roughness_texture: Option<usize>,
+        metallic_roughness_texture: Option<Texture>,
 
-        normal_texture: Option<usize>,
+        normal_texture: Option<Texture>,
         normal_scale: Option<f32>,
 
-        occlusion_texture: Option<usize>,
+        occlusion_texture: Option<Texture>,
         occlusion_strength: f32,
         emissive_factor: Vector3<f32>,
-        emissive_texture: Option<usize>,
+        emissive_texture: Option<Texture>,
 
         alpha_cutoff: Option<f32>,
         alpha_mode: gltf::material::AlphaMode,
@@ -178,99 +174,6 @@ impl PbrMaterial {
         })
     }
 
-    pub fn from_gltf(
-        g_material: &gltf::material::Material<'_>,
-        root: &mut Root,
-        imp: &ImportData,
-        shader_flags: ShaderFlags,
-        base_path: &Path,
-        w_info: &WgpuInfo,
-    ) -> Result<PbrMaterial> {
-        let pbr = g_material.pbr_metallic_roughness();
-
-        let mut base_color_texture = None;
-        if let Some(color_info) = pbr.base_color_texture() {
-            base_color_texture = Some(load_texture(
-                &color_info.texture(),
-                color_info.tex_coord(),
-                root,
-                imp,
-                base_path,
-                w_info,
-            )?);
-        }
-
-        let mut metallic_roughness_texture = None;
-        if let Some(mr_info) = pbr.metallic_roughness_texture() {
-            metallic_roughness_texture = Some(load_texture(
-                &mr_info.texture(),
-                mr_info.tex_coord(),
-                root,
-                imp,
-                base_path,
-                w_info,
-            )?);
-        }
-        let mut normal_texture = None;
-        let mut normal_scale = None;
-        if let Some(norm_tex) = g_material.normal_texture() {
-            normal_texture = Some(load_texture(
-                &norm_tex.texture(),
-                norm_tex.tex_coord(),
-                root,
-                imp,
-                base_path,
-                w_info,
-            )?);
-            normal_scale = Some(norm_tex.scale());
-        }
-        let mut occlusion_texture = None;
-        let mut occlusion_strength = 0.0;
-        if let Some(occ_texture) = g_material.occlusion_texture() {
-            occlusion_texture = Some(load_texture(
-                &occ_texture.texture(),
-                occ_texture.tex_coord(),
-                root,
-                imp,
-                base_path,
-                w_info,
-            )?);
-            occlusion_strength = occ_texture.strength();
-        }
-        let mut emissive_texture = None;
-        if let Some(em_info) = g_material.emissive_texture() {
-            emissive_texture = Some(load_texture(
-                &em_info.texture(),
-                em_info.tex_coord(),
-                root,
-                imp,
-                base_path,
-                w_info,
-            )?);
-        }
-
-        Self::new(
-            g_material.index(),
-            g_material.name().map(|s| s.into()),
-            pbr.base_color_factor().into(),
-            base_color_texture,
-            pbr.metallic_factor(),
-            pbr.roughness_factor(),
-            metallic_roughness_texture,
-            normal_texture,
-            normal_scale,
-            occlusion_texture,
-            occlusion_strength,
-            g_material.emissive_factor().into(),
-            emissive_texture,
-            g_material.alpha_cutoff(),
-            g_material.alpha_mode(),
-            g_material.double_sided(),
-            shader_flags,
-            w_info,
-        )
-    }
-
     pub fn shader_flags(
         base_color_texture: bool,
         normal_texture: bool,
@@ -297,37 +200,17 @@ impl PbrMaterial {
         flags
     }
 
-    pub fn set_render_pass(&self, root: &Root, render_pass: &mut wgpu::RenderPass) {
+    pub fn set_render_pass<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
         render_pass.set_pipeline(&self.pipeline);
     }
 
-    pub fn set_bind_groups(&self, render_pass: &mut wgpu::RenderPass, start: u32) {
-        render_pass.set_bind_group(start, &self.per_frame_uniforms.bind_group.unwrap(), &[]);
+    pub fn set_bind_groups<'a, 'b>(
+        &'a self,
+        render_pass: &'b mut wgpu::RenderPass<'a>,
+        start: u32,
+    ) {
+        render_pass.set_bind_group(start, &self.per_frame_uniforms.bind_group, &[]);
     }
-}
-
-fn load_texture(
-    g_texture: &gltf::texture::Texture<'_>,
-    tex_coord: u32,
-    root: &mut Root,
-    imp: &ImportData,
-    base_path: &Path,
-    w_info: &WgpuInfo,
-) -> Result<usize> {
-    if let Some(tex) = root
-        .textures
-        .iter()
-        .enumerate()
-        .find(|(_, tex)| (***tex).index == g_texture.index())
-    {
-        return Ok(tex.0);
-    }
-
-    let texture = Arc::new(Texture::from_gltf(
-        g_texture, tex_coord, imp, base_path, w_info,
-    )?);
-    root.textures.push(texture);
-    Ok(root.textures.len() - 1)
 }
 
 pub trait BindGroup {
@@ -351,7 +234,7 @@ pub struct PerFrameUniforms {
     u_alpha_blend: Uniform<f32>,
     u_alpha_cutoff: Uniform<f32>,
 
-    pub bind_group: Option<wgpu::BindGroup>,
+    pub bind_group: wgpu::BindGroup,
 }
 pub struct PerFrameData {
     pub u_mpv_matrix: [[f32; 4]; 4],
@@ -387,75 +270,80 @@ impl PerFrameData {
 impl BindGroup for PerFrameUniforms {
     type Data = PerFrameData;
     fn new(data: PerFrameData, layout: &wgpu::BindGroupLayout, w_info: &WgpuInfo) -> Self {
-        let mut uni = PerFrameUniforms {
-            u_mpv_matrix: Uniform::new(data.u_mpv_matrix, "u_mpv_matrix".into(), w_info),
-            u_model_matrix: Uniform::new(data.u_model_matrix, "u_model_matrix".into(), w_info),
-            u_camera: Uniform::new(data.u_camera, "u_camera".into(), w_info),
-            u_light_direction: Uniform::new(
-                data.u_light_direction,
-                "u_light_direction".into(),
-                w_info,
-            ),
-            u_light_color: Uniform::new(data.u_light_color, "u_light_color".into(), w_info),
-            u_ambient_light_color: Uniform::new(
-                data.u_ambient_light_color,
-                "u_ambient_light_color".into(),
-                w_info,
-            ),
-            u_ambient_light_intensity: Uniform::new(
-                data.u_ambient_light_intensity,
-                "u_ambient_light_intensity".into(),
-                w_info,
-            ),
-            u_alpha_blend: Uniform::new(data.u_alpha_blend, "u_alpha_blend".into(), w_info),
-            u_alpha_cutoff: Uniform::new(data.u_alpha_cutoff, "u_alpha_cutoff".into(), w_info),
-            bind_group: None,
-        };
+        let u_mpv_matrix = Uniform::new(data.u_mpv_matrix, "u_mpv_matrix".into(), w_info);
+        let u_model_matrix = Uniform::new(data.u_model_matrix, "u_model_matrix".into(), w_info);
+        let u_camera = Uniform::new(data.u_camera, "u_camera".into(), w_info);
+        let u_light_direction =
+            Uniform::new(data.u_light_direction, "u_light_direction".into(), w_info);
+        let u_light_color = Uniform::new(data.u_light_color, "u_light_color".into(), w_info);
+        let u_ambient_light_color = Uniform::new(
+            data.u_ambient_light_color,
+            "u_ambient_light_color".into(),
+            w_info,
+        );
+        let u_ambient_light_intensity = Uniform::new(
+            data.u_ambient_light_intensity,
+            "u_ambient_light_intensity".into(),
+            w_info,
+        );
+        let u_alpha_blend = Uniform::new(data.u_alpha_blend, "u_alpha_blend".into(), w_info);
+        let u_alpha_cutoff = Uniform::new(data.u_alpha_cutoff, "u_alpha_cutoff".into(), w_info);
 
-        uni.bind_group = Some(w_info.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = w_info.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("per frame bind group"),
             layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uni.u_mpv_matrix.buff.as_entire_binding(),
+                    resource: u_mpv_matrix.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: uni.u_model_matrix.buff.as_entire_binding(),
+                    resource: u_model_matrix.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: uni.u_camera.buff.as_entire_binding(),
+                    resource: u_camera.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: uni.u_light_direction.buff.as_entire_binding(),
+                    resource: u_light_direction.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: uni.u_light_color.buff.as_entire_binding(),
+                    resource: u_light_color.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: uni.u_ambient_light_color.buff.as_entire_binding(),
+                    resource: u_ambient_light_color.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
-                    resource: uni.u_ambient_light_intensity.buff.as_entire_binding(),
+                    resource: u_ambient_light_intensity.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
-                    resource: uni.u_alpha_blend.buff.as_entire_binding(),
+                    resource: u_alpha_blend.buff.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 8,
-                    resource: uni.u_alpha_cutoff.buff.as_entire_binding(),
+                    resource: u_alpha_cutoff.buff.as_entire_binding(),
                 },
             ],
-        }));
+        });
 
-        uni
+        Self {
+            u_mpv_matrix,
+            u_model_matrix,
+            u_camera,
+            u_light_direction,
+            u_light_color,
+            u_ambient_light_color,
+            u_ambient_light_intensity,
+            u_alpha_blend,
+            u_alpha_cutoff,
+            bind_group,
+        }
     }
 
     fn names() -> Vec<(String, String)> {

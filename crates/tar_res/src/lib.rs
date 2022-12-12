@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::{self, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[macro_use]
 extern crate thiserror;
@@ -10,16 +6,17 @@ extern crate thiserror;
 #[macro_use]
 extern crate bitflags;
 
-// mod material;
-// mod mesh;
-// mod node;
-// mod primitive;
-// mod root;
+mod builder;
+mod material;
+mod mesh;
+mod node;
+mod object;
+mod primitive;
 mod scene;
 mod shader;
 mod store;
-// mod texture;
-// mod uniform;
+mod texture;
+mod uniform;
 mod vertex;
 
 use cgmath::{Matrix4, Vector3};
