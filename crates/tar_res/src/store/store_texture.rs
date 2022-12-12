@@ -1,11 +1,22 @@
+use std::fmt::Debug;
 use std::path::Path;
 
 use gltf::image::Source;
 use serde::{Deserialize, Serialize};
 
-use crate::{scene::ImportData, Error, Result};
+use crate::{scene::ImportData, Error, Result, ASSET_PATH};
 
 use image::ImageFormat;
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub enum TextureType {
+    base_color,
+    metallic_roughness,
+    normal,
+    occlusion,
+    emissive,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoreTexture {
@@ -16,9 +27,11 @@ pub struct StoreTexture {
 impl StoreTexture {
     pub fn from_gltf(
         g_texture: &gltf::Texture<'_>,
-        tex_coord: u32,
         imp: &ImportData,
         base_path: &Path,
+        tex_ty: TextureType,
+        object_name: &String,
+        material_name: &String,
     ) -> Result<Self> {
         let buffers = &imp.buffers;
 
@@ -100,10 +113,23 @@ impl StoreTexture {
                 }
             }
         }?;
-        let path = format!("res_int/{}", g_texture.name());
+        let dir = format!("{ASSET_PATH}{object_name}/");
+        let path = format!(
+            "{dir}{}-{}-{}.png",
+            material_name,
+            g_texture.name().map(|s| s.into()).unwrap_or("texture"),
+            format!("{tex_ty:?}")
+        );
 
-        img.save(path);
+        println!("saving to {}", path);
 
-        todo!()
+        std::fs::create_dir_all(dir)?;
+
+        img.save(path.clone())?;
+
+        Ok(Self {
+            index: g_texture.index(),
+            path,
+        })
     }
 }

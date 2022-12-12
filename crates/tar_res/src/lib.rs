@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::{self, PathBuf},
+    sync::Arc,
+};
 
 #[macro_use]
 extern crate thiserror;
@@ -6,20 +10,20 @@ extern crate thiserror;
 #[macro_use]
 extern crate bitflags;
 
-mod material;
-mod mesh;
-mod node;
-mod primitive;
-mod root;
+// mod material;
+// mod mesh;
+// mod node;
+// mod primitive;
+// mod root;
 mod scene;
 mod shader;
 mod store;
-mod texture;
-mod uniform;
+// mod texture;
+// mod uniform;
 mod vertex;
 
 use cgmath::{Matrix4, Vector3};
-use node::Node;
+use store::store_object::StoreObject;
 use uuid::Uuid;
 
 trait Vec2Slice<T> {
@@ -57,6 +61,9 @@ pub type Vec2 = cgmath::Vector2<f32>;
 pub type Vec3 = cgmath::Vector3<f32>;
 pub type Vec4 = cgmath::Vector4<f32>;
 pub type Quat = cgmath::Quaternion<f32>;
+pub type Mat2 = cgmath::Matrix2<f32>;
+pub type Mat3 = cgmath::Matrix3<f32>;
+pub type Mat4 = cgmath::Matrix4<f32>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -85,11 +92,6 @@ pub enum Error {
         #[from]
         e: gltf::Error,
     },
-    #[error("Mutex Error {e}")]
-    NodeMutex {
-        #[from]
-        e: std::sync::PoisonError<std::sync::MutexGuard<'static, Node>>,
-    },
     #[error("The given Id does not exist")]
     NonExistentID,
     #[error("The given path does not have a file extension")]
@@ -110,10 +112,21 @@ pub enum Error {
     NonExistentShader,
     #[error("The requested primitive does not exist")]
     NonExistentPrimitive,
+    #[error("You have to provide a name or a name must be included")]
+    NameMissing,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 // pub type NodeResult<'a, T> = std::result::Result<T>;
+
+pub fn import_gltf(path: &str, name: &str) -> Result<String> {
+    let object = StoreObject::from_gltf(path, name)?;
+
+    let data = rmp_serde::to_vec(&object)?;
+    let path = format!("{ASSET_PATH}{name}.rmp");
+    std::fs::write(path.clone(), data)?;
+    Ok(path)
+}
 
 pub struct WgpuInfo {
     device: Arc<wgpu::Device>,

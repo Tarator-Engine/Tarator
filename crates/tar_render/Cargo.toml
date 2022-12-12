@@ -21,7 +21,7 @@ instant = "0.1.12"
 egui = "0.19"
 thiserror = "1.0"
 gltf = "1.0"
-tar_assets = {path="../tar_assets"}
+# tar_assets = {path="../tar_assets"}
 
 [dependencies.image]
 version = "0.24.4"

@@ -1,6 +1,7 @@
 use bytemuck::{Pod, Zeroable};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Vertex {
     pub position: [f32; 3],

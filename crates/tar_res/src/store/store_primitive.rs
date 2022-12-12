@@ -1,12 +1,16 @@
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{scene::ImportData, shader::ShaderFlags, vertex::Vertex, Error, Result};
 
-use super::store_material::StoreMaterial;
+use super::{store_material::StoreMaterial, store_texture::StoreTexture};
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StorePrimitive {
     pub vertices: Vec<Vertex>,
     pub indices: Option<Vec<u32>>,
+    pub material: usize,
 }
 
 impl StorePrimitive {
@@ -17,6 +21,8 @@ impl StorePrimitive {
         imp: &ImportData,
         base_path: &Path,
         materials: &mut Vec<StoreMaterial>,
+        textures: &mut Vec<StoreTexture>,
+        object_name: &String,
     ) -> Result<Self> {
         let buffers = &imp.buffers;
         let reader = g_primitive.reader(|buffer| Some(&buffers[buffer.index()]));
@@ -117,21 +123,26 @@ impl StorePrimitive {
 
         let g_material = g_primitive.material();
 
-        // no reuse of material so this can be removed
-        // let mut material = None;
-        // if let Some(mat) = materials
-        //     .iter()
-        //     .enumerate()
-        //     .find(|(_, m)| (***m).index == g_material.index())
-        // {
-        //     material = mat.0.into()
-        // }
-
-        // no else due to borrow checker madness
-        let mat = StoreMaterial::from_gltf(&g_material, imp, shader_flags, base_path)?;
+        let material_name = g_material
+            .name()
+            .map(|s| s.into())
+            .unwrap_or(object_name.clone() + "-material");
+        let mat = StoreMaterial::from_gltf(
+            &g_material,
+            textures,
+            imp,
+            shader_flags,
+            base_path,
+            object_name,
+            &material_name,
+        )?;
         materials.push(mat);
         let material = materials.len() - 1;
 
-        Ok(Self { vertices, indices })
+        Ok(Self {
+            vertices,
+            indices,
+            material,
+        })
     }
 }
