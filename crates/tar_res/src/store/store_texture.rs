@@ -121,7 +121,7 @@ impl StoreTexture {
             format!("{tex_ty:?}")
         );
 
-        println!("saving to {}", path);
+        // println!("saving to {}", path);
 
         std::fs::create_dir_all(dir)?;
 

@@ -3,23 +3,23 @@ use std::num::NonZeroU32;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    material::{BindGroup, PbrMaterial, PerFrameData, PerFrameUniforms},
+    material::{BindGroup, PbrMaterial, PerFrameData, PerFrameUniforms, PerMaterialUniforms},
     mesh::Mesh,
     node::Node,
     object::Object,
     primitive::{Instance, Primitive},
     shader::{MaterialInput, PbrShader},
-    store::{
-        store_mesh::StoreMesh, store_node::StoreNode, store_object::StoreObject,
-        store_primitive::StorePrimitive,
-    },
+    store::{store_node::StoreNode, store_object::StoreObject, store_primitive::StorePrimitive},
     texture::Texture,
     vertex::Vertex,
     Error, Result, WgpuInfo,
 };
 
 pub fn build(source: String, w_info: &WgpuInfo) -> Result<Object> {
+    let timer = tar_utils::start_timer();
     let object: StoreObject = rmp_serde::from_slice(&std::fs::read(source)?)?;
+
+    // println!("{:?}", object.nodes);
 
     let mut nodes = vec![];
     for node in &object.nodes {
@@ -28,10 +28,13 @@ pub fn build(source: String, w_info: &WgpuInfo) -> Result<Object> {
         }
     }
 
+    tar_utils::log_timing("loaded object in ", timer);
+
     Ok(Object { nodes })
 }
 
 fn build_node(node: &StoreNode, object: &StoreObject, w_info: &WgpuInfo) -> Result<Node> {
+    let timer = tar_utils::start_timer();
     let mut children = vec![];
     let child_ids = &node.children;
     for id in child_ids {
@@ -45,8 +48,11 @@ fn build_node(node: &StoreNode, object: &StoreObject, w_info: &WgpuInfo) -> Resu
             w_info,
         )?);
     }
+    // println!("new_mesh_m: {:?}", node.mesh);
 
     let mesh = build_mesh(&node.mesh, object, w_info)?;
+
+    tar_utils::log_timing("loaded node in ", timer);
 
     Ok(Node {
         index: node.index,
@@ -65,7 +71,9 @@ fn build_mesh(
     object: &StoreObject,
     w_info: &WgpuInfo,
 ) -> Result<Option<Mesh>> {
+    // println!("new_mesh {mesh:?}");
     if let Some(id) = mesh {
+        let timer = tar_utils::start_timer();
         let mesh = object
             .meshes
             .iter()
@@ -74,9 +82,12 @@ fn build_mesh(
 
         let prims = &mesh.primitives;
         let mut primitives = vec![];
+
         for prim in prims {
             primitives.push(build_primitive(prim, object, w_info)?);
         }
+
+        tar_utils::log_timing("loaded mesh in ", timer);
 
         Ok(Some(Mesh {
             index: mesh.index,
@@ -93,6 +104,7 @@ fn build_primitive(
     object: &StoreObject,
     w_info: &WgpuInfo,
 ) -> Result<Primitive> {
+    let timer = tar_utils::start_timer();
     let num_indices = prim.indices.as_ref().map(|i| i.len()).unwrap_or(0) as u32;
     let num_vertices = prim.vertices.len() as u32;
 
@@ -116,6 +128,8 @@ fn build_primitive(
         });
     let material = build_material(prim.material, object, w_info)?;
 
+    tar_utils::log_timing("loaded primitive in ", timer);
+
     Ok(Primitive {
         num_vertices,
         vertices,
@@ -126,11 +140,20 @@ fn build_primitive(
 }
 
 fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<PbrMaterial> {
+    let timer = tar_utils::start_timer();
     let mat = object
         .materials
         .iter()
         .find(|m| m.index == id)
         .ok_or(Error::NonExistentMaterial)?;
+
+    let per_material_uniforms = PerMaterialUniforms {
+        base_color_texture: build_texture(mat.base_color_texture, object, w_info)?,
+        metallic_roughness_texture: build_texture(mat.metallic_roughness_texture, object, w_info)?,
+        normal_texture: build_texture(mat.normal_texture, object, w_info)?,
+        occlusion_texture: build_texture(mat.occlusion_texture, object, w_info)?,
+        emissive_texture: build_texture(mat.emissive_texture, object, w_info)?,
+    };
 
     let shader_flags = PbrMaterial::shader_flags(
         mat.base_color_texture.is_some(),
@@ -138,6 +161,18 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
         mat.emissive_texture.is_some(),
         mat.metallic_roughness_texture.is_some(),
         mat.occlusion_texture.is_some(),
+    );
+
+    let per_frame = (
+        PerFrameUniforms::bind_group_layout(),
+        PerFrameUniforms::names(),
+    );
+    let per_material_entries = per_material_uniforms.entries();
+    let per_material_bind_group_layouts =
+        PerMaterialUniforms::bind_group_layout(&per_material_entries);
+    let per_material = (
+        per_material_bind_group_layouts.clone(),
+        per_material_uniforms.names(),
     );
 
     let pbr_shader = PbrShader::new(
@@ -151,12 +186,17 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
             emissive_factor: mat.emissive_factor.into(),
             alpha_cutoff: mat.alpha_cutoff.unwrap_or(1.0),
         },
+        &[per_frame, per_material],
         w_info,
     )?;
 
     let per_frame_bind_group = w_info
         .device
         .create_bind_group_layout(&PerFrameUniforms::bind_group_layout());
+
+    let per_material_bind_group = w_info
+        .device
+        .create_bind_group_layout(&per_material_bind_group_layouts);
 
     let per_frame_uniforms =
         PerFrameUniforms::new(PerFrameData::new(), &per_frame_bind_group, w_info);
@@ -165,7 +205,7 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Material pipeline layout"),
-            bind_group_layouts: &[&per_frame_bind_group],
+            bind_group_layouts: &[&per_frame_bind_group, &per_material_bind_group],
             push_constant_ranges: &[],
         });
 
@@ -217,25 +257,23 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
             multiview: None,
         });
 
+    tar_utils::log_timing("loaded material in ", timer);
+
     Ok(PbrMaterial {
         index: mat.index,
         name: mat.name.clone(),
-        base_color_texture: build_texture(mat.base_color_texture, object, w_info)?,
         base_color_factor: mat.base_color_factor,
         metallic_factor: mat.metallic_factor,
         roughness_factor: mat.roughness_factor,
-        metallic_roughness_texture: build_texture(mat.metallic_roughness_texture, object, w_info)?,
-        normal_texture: build_texture(mat.normal_texture, object, w_info)?,
         normal_scale: mat.normal_scale,
-        occlusion_texture: build_texture(mat.occlusion_texture, object, w_info)?,
         occlusion_strength: mat.occlusion_strength,
-        emissive_texture: build_texture(mat.emissive_texture, object, w_info)?,
         emissive_factor: mat.emissive_factor,
         alpha_cutoff: mat.alpha_cutoff,
         alpha_mode: mat.alpha_mode.into(),
         double_sided: mat.double_sided,
         pbr_shader,
         per_frame_uniforms,
+        per_material_uniforms,
         pipeline,
     })
 }
@@ -245,6 +283,7 @@ fn build_texture(
     object: &StoreObject,
     w_info: &WgpuInfo,
 ) -> Result<Option<Texture>> {
+    let timer = tar_utils::start_timer();
     if id.is_none() {
         return Ok(None);
     };
@@ -342,6 +381,8 @@ fn build_texture(
         mipmap_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
     });
+
+    tar_utils::log_timing("loaded texture in ", timer);
 
     Ok(Some(Texture {
         index: tex.index,

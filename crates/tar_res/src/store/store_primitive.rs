@@ -137,7 +137,7 @@ impl StorePrimitive {
             &material_name,
         )?;
         materials.push(mat);
-        let material = materials.len() - 1;
+        let material = g_material.index().unwrap_or(0);
 
         Ok(Self {
             vertices,

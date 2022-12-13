@@ -1,6 +1,7 @@
-use std::path::Path;
+use std::{ops::Index, path::Path};
 
 use cgmath::SquareMatrix;
+use rmp_serde::encode::ExtFieldSerializer;
 use serde::{Deserialize, Serialize};
 
 use crate::{scene::ImportData, Error, Mat4, Quat, Result, Vec3};
@@ -41,24 +42,27 @@ impl StoreNode {
 
         let name: String = name.into();
 
-        let mut mesh = None;
-        if let Some(g_mesh) = g_node.mesh() {
-            if let Some(m) = meshes.iter().find(|mesh| (**mesh).index == g_mesh.index()) {
-                mesh = Some(m.index);
-            }
-
-            if mesh.is_none() {
+        let mesh = if let Some(g_mesh) = g_node.mesh() {
+            let m = if let Some(m) = meshes.iter().find(|mesh| (**mesh).index == g_mesh.index()) {
+                Some(m.index)
+            } else {
                 let mesh_name = g_mesh
                     .name()
                     .map(|s| s.into())
                     .unwrap_or(name.clone() + "mesh");
+                let index = g_mesh.index();
 
                 meshes.push(StoreMesh::from_gltf(
                     &g_mesh, imp, base_path, materials, textures, &name, &mesh_name,
                 )?);
-                mesh = Some(meshes.len() - 1);
-            }
-        }
+                Some(index)
+            };
+            m
+        } else {
+            None
+        };
+
+        // println!("meshes: {meshes:?}");
 
         let children = g_node.children().map(|g_node| g_node.index()).collect();
 

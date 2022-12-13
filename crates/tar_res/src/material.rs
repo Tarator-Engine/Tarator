@@ -1,4 +1,5 @@
 use cgmath::{Vector3, Vector4};
+use wgpu::{BindGroupLayoutEntry, ShaderStages};
 
 use crate::{
     primitive::Instance,
@@ -14,18 +15,13 @@ pub struct PbrMaterial {
     pub name: Option<String>,
 
     pub base_color_factor: Vector4<f32>,
-    pub base_color_texture: Option<Texture>,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-    pub metallic_roughness_texture: Option<Texture>,
 
-    pub normal_texture: Option<Texture>,
     pub normal_scale: Option<f32>,
 
-    pub occlusion_texture: Option<Texture>,
     pub occlusion_strength: f32,
     pub emissive_factor: Vector3<f32>,
-    pub emissive_texture: Option<Texture>,
 
     pub alpha_cutoff: Option<f32>,
     pub alpha_mode: gltf::material::AlphaMode,
@@ -35,145 +31,11 @@ pub struct PbrMaterial {
     pub pbr_shader: PbrShader,
 
     pub per_frame_uniforms: PerFrameUniforms,
+    pub per_material_uniforms: PerMaterialUniforms,
     pub pipeline: wgpu::RenderPipeline,
 }
 
 impl PbrMaterial {
-    pub fn new(
-        index: usize,
-        name: Option<String>,
-
-        base_color_factor: Vector4<f32>,
-        base_color_texture: Option<Texture>,
-        metallic_factor: f32,
-        roughness_factor: f32,
-        metallic_roughness_texture: Option<Texture>,
-
-        normal_texture: Option<Texture>,
-        normal_scale: Option<f32>,
-
-        occlusion_texture: Option<Texture>,
-        occlusion_strength: f32,
-        emissive_factor: Vector3<f32>,
-        emissive_texture: Option<Texture>,
-
-        alpha_cutoff: Option<f32>,
-        alpha_mode: gltf::material::AlphaMode,
-
-        double_sided: bool,
-
-        shader_flags: ShaderFlags,
-        w_info: &WgpuInfo,
-    ) -> Result<Self> {
-        let shader_flags = Self::shader_flags(
-            base_color_texture.is_some(),
-            normal_texture.is_some(),
-            emissive_texture.is_some(),
-            metallic_roughness_texture.is_some(),
-            occlusion_texture.is_some(),
-        ) | shader_flags;
-
-        let pbr_shader = PbrShader::new(
-            shader_flags,
-            MaterialInput {
-                base_color_factor: base_color_factor.as_slice(),
-                metallic_factor: metallic_factor,
-                roughness_factor: roughness_factor,
-                normal_scale: normal_scale.unwrap_or(1.0),
-                occlusion_strength: occlusion_strength,
-                emissive_factor: emissive_factor.as_slice(),
-                alpha_cutoff: alpha_cutoff.unwrap_or(1.0),
-            },
-            w_info,
-        )?;
-
-        let per_frame_bind_group = w_info
-            .device
-            .create_bind_group_layout(&PerFrameUniforms::bind_group_layout());
-
-        let per_frame_uniforms =
-            PerFrameUniforms::new(PerFrameData::new(), &per_frame_bind_group, w_info);
-
-        let pipeline_layout =
-            w_info
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("Material pipeline layout"),
-                    bind_group_layouts: &[&per_frame_bind_group],
-                    push_constant_ranges: &[],
-                });
-
-        let pipeline = w_info
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(&format!("{:?}", pbr_shader.shader.module)),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &pbr_shader.shader.module,
-                    entry_point: "vs_main",
-                    buffers: &[Vertex::desc(), Instance::desc()],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &pbr_shader.shader.module,
-                    entry_point: "fs_main",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: w_info.surface_format,
-                        blend: Some(wgpu::BlendState {
-                            alpha: wgpu::BlendComponent::REPLACE,
-                            color: wgpu::BlendComponent::REPLACE,
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    unclipped_depth: false,
-                    conservative: false,
-                },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: wgpu::TextureFormat::Depth32Float,
-                    depth_compare: wgpu::CompareFunction::Less,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                    depth_write_enabled: true,
-                }),
-                multisample: wgpu::MultisampleState {
-                    count: 1,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
-                // If the pipeline will be used with a multiview render pass, this
-                // indicates how many array layers the attachments will have.
-                multiview: None,
-            });
-
-        Ok(Self {
-            index,
-            name,
-            base_color_factor,
-            base_color_texture,
-            metallic_factor,
-            roughness_factor,
-            metallic_roughness_texture,
-            normal_texture,
-            normal_scale,
-            occlusion_texture,
-            occlusion_strength,
-            emissive_factor,
-            emissive_texture,
-            alpha_cutoff,
-            alpha_mode,
-            double_sided,
-            pbr_shader,
-            per_frame_uniforms,
-            pipeline,
-        })
-    }
-
     pub fn shader_flags(
         base_color_texture: bool,
         normal_texture: bool,
@@ -218,6 +80,172 @@ pub trait BindGroup {
     fn new(data: Self::Data, layout: &wgpu::BindGroupLayout, w_info: &WgpuInfo) -> Self;
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static>;
     fn names() -> Vec<(String, String)>;
+}
+
+pub struct PerMaterialUniforms {
+    pub base_color_texture: Option<Texture>,
+    pub metallic_roughness_texture: Option<Texture>,
+    pub normal_texture: Option<Texture>,
+    pub occlusion_texture: Option<Texture>,
+    pub emissive_texture: Option<Texture>,
+}
+
+impl PerMaterialUniforms {
+    pub fn entries(&self) -> Vec<BindGroupLayoutEntry> {
+        let mut entries = vec![];
+        let mut binding = 0;
+        fn get_binding(binding: &mut u32) -> u32 {
+            *binding += 1;
+            return *binding - 1;
+        }
+        if self.base_color_texture.is_some() {
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+        }
+        if self.metallic_roughness_texture.is_some() {
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+        }
+
+        if self.normal_texture.is_some() {
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+        }
+        if self.occlusion_texture.is_some() {
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+        }
+        if self.emissive_texture.is_some() {
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: get_binding(&mut binding),
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: true,
+                },
+                count: None,
+            });
+        }
+        entries
+    }
+
+    pub fn bind_group_layout<'a>(
+        entries: &'a Vec<BindGroupLayoutEntry>,
+    ) -> wgpu::BindGroupLayoutDescriptor<'a> {
+        wgpu::BindGroupLayoutDescriptor {
+            label: Some("per material bind group layout"),
+            entries: entries.as_slice(),
+        }
+    }
+
+    pub fn names(&self) -> Vec<(String, String)> {
+        let mut names = vec![];
+        if self.base_color_texture.is_some() {
+            names.push(("base_color_tex".into(), "texture_2d<f32>".into()));
+            names.push(("base_color_sampler".into(), "sampler".into()));
+        }
+        if self.metallic_roughness_texture.is_some() {
+            names.push(("metallic_roughness_tex".into(), "texture_2d<f32>".into()));
+            names.push(("metallic_roughness_sampler".into(), "sampler".into()));
+        }
+        if self.normal_texture.is_some() {
+            names.push(("normal_tex".into(), "texture_2d<f32>".into()));
+            names.push(("normal_sampler".into(), "sampler".into()));
+        }
+        if self.occlusion_texture.is_some() {
+            names.push(("occlusion_tex".into(), "texture_2d<f32>".into()));
+            names.push(("occlusion_sampler".into(), "sampler".into()));
+        }
+        if self.emissive_texture.is_some() {
+            names.push(("emissive_tex".into(), "texture_2d<f32>".into()));
+            names.push(("emissive_sampler".into(), "sampler".into()));
+        }
+
+        names
+    }
 }
 
 pub struct PerFrameUniforms {
@@ -361,7 +389,6 @@ impl BindGroup for PerFrameUniforms {
     }
 
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static> {
-        use wgpu::ShaderStages;
         wgpu::BindGroupLayoutDescriptor {
             label: Some("Per Frame Data"),
             entries: &[

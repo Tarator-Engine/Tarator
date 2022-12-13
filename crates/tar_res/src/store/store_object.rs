@@ -60,7 +60,7 @@ impl StoreObject {
         }
         let mut children: Vec<usize> = vec![];
         for node in &mut nodes {
-            children.append(&mut node.children)
+            children.append(&mut node.children.clone())
         }
         for node in &mut nodes {
             if !children.contains(&node.index) {
