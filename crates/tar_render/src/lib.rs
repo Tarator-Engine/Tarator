@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use camera::CameraUniform;
 use cgmath::prelude::*;
+use tar_res::WgpuInfo;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -36,7 +37,7 @@ type UUID = u32;
 /// Renderer's add_object()
 pub enum GameObject<'a> {
     Model(model::Model),
-    ModelPath(&'a str, Vec<model::Instance>),
+    ModelPath(&'a str, String),
     RawModel(model::RawModel),
     Light(model::Light),
     Camera(camera::Camera),
@@ -375,101 +376,101 @@ impl NativeRenderer {
         }
     }
 
-    // async fn add_object(&mut self, obj: GameObject<'static>) -> tar_assets::Result<()> {
-    //     match obj {
-    //         GameObject::Camera(cam) => {
-    //             let camera = cam.cam;
-    //             let projection = cam.proj;
-    //             let cam_cont = cam.controller;
-    //             let mut camera_uniform = CameraUniform::new();
-    //             camera_uniform.update_view_proj(&camera, &projection);
+    async fn add_object(&mut self, obj: GameObject<'static>) -> tar_res::Result<()> {
+        match obj {
+            GameObject::Camera(cam) => {
+                let camera = cam.cam;
+                let projection = cam.proj;
+                let cam_cont = cam.controller;
+                let mut camera_uniform = CameraUniform::new();
+                camera_uniform.update_view_proj(&camera, &projection);
 
-    //             let camera_buffer =
-    //                 self.device
-    //                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-    //                         label: Some("Camera Buffer"),
-    //                         contents: bytemuck::cast_slice(&[camera_uniform]),
-    //                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    //                     });
+                let camera_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Camera Buffer"),
+                            contents: bytemuck::cast_slice(&[camera_uniform]),
+                            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        });
 
-    //             let camera_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-    //                 layout: &self.camera_bind_group_layout,
-    //                 entries: &[wgpu::BindGroupEntry {
-    //                     binding: 0,
-    //                     resource: camera_buffer.as_entire_binding(),
-    //                 }],
-    //                 label: Some("Camera Bind Group"),
-    //             });
+                let camera_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.camera_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: camera_buffer.as_entire_binding(),
+                    }],
+                    label: Some("Camera Bind Group"),
+                });
 
-    //             self.cameras.push(camera::RawCamera {
-    //                 cam: camera,
-    //                 proj: projection,
-    //                 controller: cam_cont,
-    //                 uniform: camera_uniform,
-    //                 buffer: camera_buffer,
-    //                 bind_group: camera_bind_group,
-    //             });
-    //         }
+                self.cameras.push(camera::RawCamera {
+                    cam: camera,
+                    proj: projection,
+                    controller: cam_cont,
+                    uniform: camera_uniform,
+                    buffer: camera_buffer,
+                    bind_group: camera_bind_group,
+                });
+            }
 
-    //         GameObject::RawModel(rm) => {
-    //             self.models.push(rm);
-    //         }
+            GameObject::RawModel(rm) => {
+                self.models.push(rm);
+            }
 
-    //         GameObject::Light(l) => {
-    //             let uniform = model::RawLightUniform {
-    //                 position: l.pos,
-    //                 _padding: 0,
-    //                 color: l.color,
-    //                 _padding2: 0,
-    //             };
+            GameObject::Light(l) => {
+                let uniform = model::RawLightUniform {
+                    position: l.pos,
+                    _padding: 0,
+                    color: l.color,
+                    _padding2: 0,
+                };
 
-    //             let buffer = self
-    //                 .device
-    //                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-    //                     label: Some("Light VB"),
-    //                     contents: bytemuck::cast_slice(&[uniform]),
-    //                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    //                 });
-    //             let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-    //                 layout: &self.light_bind_group_layout,
-    //                 entries: &[wgpu::BindGroupEntry {
-    //                     binding: 0,
-    //                     resource: buffer.as_entire_binding(),
-    //                 }],
-    //                 label: None,
-    //             });
+                let buffer = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Light VB"),
+                        contents: bytemuck::cast_slice(&[uniform]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.light_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    }],
+                    label: None,
+                });
 
-    //             self.lights.push(model::RawLight {
-    //                 uniform,
-    //                 buffer,
-    //                 bind_group,
-    //             })
-    //         }
+                self.lights.push(model::RawLight {
+                    uniform,
+                    buffer,
+                    bind_group,
+                })
+            }
 
-    //         GameObject::ModelPath(p, i) => {
-    //             let instance_data = i.iter().map(model::Instance::to_raw).collect::<Vec<_>>();
-    //             let instance_buffer =
-    //                 self.device
-    //                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-    //                         label: Some("Instance Buffer"),
-    //                         contents: bytemuck::cast_slice(&instance_data),
-    //                         usage: wgpu::BufferUsages::VERTEX,
-    //                     });
+            GameObject::ModelPath(p, name) => {
+                // let instance_data = i.iter().map(model::Instance::to_raw).collect::<Vec<_>>();
+                // let instance_buffer =
+                //     self.device
+                //         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                //             label: Some("Instance Buffer"),
+                //             contents: bytemuck::cast_slice(&instance_data),
+                //             usage: wgpu::BufferUsages::VERTEX,
+                //         });
 
-    //             tar_assets::import_gltf(
-    //                 p,
-    //                 self.device.clone(),
-    //                 self.queue.clone(),
-    //                 self.config.format,
-    //             )
-    //             .await?;
-    //         }
+                let path = tar_res::import_gltf(p, &name)?;
+                let w_info = WgpuInfo {
+                    device: self.device.clone(),
+                    queue: self.queue.clone(),
+                    surface_format: self.config.format,
+                };
+                let object = tar_res::load_object(path, &w_info)?;
+            }
 
-    //         _ => todo!("implement rest"),
-    //     }
+            _ => todo!("implement rest"),
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
@@ -694,10 +695,10 @@ pub async fn run() {
         })
         .collect::<Vec<_>>();
 
-    // renderer
-    //     .add_object(GameObject::ModelPath("res/Box/Box.gltf", instances))
-    //     .await
-    //     .unwrap();
+    renderer
+        .add_object(GameObject::ModelPath("res/Box/Box.gltf", "test".into()))
+        .await
+        .unwrap();
 
     // renderer
     //     .add_object(GameObject::Camera(camera))

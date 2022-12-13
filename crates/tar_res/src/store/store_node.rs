@@ -21,6 +21,7 @@ pub struct StoreNode {
     // TODO: camera importing
     // pub camera: Option<Camera>,
     pub final_transform: Mat4,
+    pub root_node: bool,
 }
 
 impl StoreNode {
@@ -32,6 +33,7 @@ impl StoreNode {
         imp: &ImportData,
         base_path: &Path,
         name: &str,
+        root_node: bool,
     ) -> Result<Self> {
         let (trans, rot, scale) = g_node.transform().decomposed();
         let r = rot;
@@ -69,6 +71,7 @@ impl StoreNode {
             translation: trans.into(),
             name,
             final_transform: Mat4::identity(),
+            root_node,
         })
     }
 }

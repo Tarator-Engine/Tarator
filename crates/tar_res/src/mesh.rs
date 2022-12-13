@@ -10,7 +10,7 @@ pub struct Mesh {
     pub primitives: Vec<Primitive>,
     // TODO: weights
     // pub weights: Vec<?>
-    pub name: Option<String>,
+    pub name: String,
 }
 
 impl Mesh {

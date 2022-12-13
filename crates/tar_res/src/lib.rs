@@ -20,6 +20,7 @@ mod uniform;
 mod vertex;
 
 use cgmath::{Matrix4, Vector3};
+use object::Object;
 use store::store_object::StoreObject;
 use uuid::Uuid;
 
@@ -111,6 +112,12 @@ pub enum Error {
     NonExistentPrimitive,
     #[error("You have to provide a name or a name must be included")]
     NameMissing,
+    #[error("The requested mesh does not exist")]
+    NonexistentMesh,
+    #[error("The requested mesh does not exist")]
+    NonexistentNode,
+    #[error("The requested texture does not exist")]
+    NonExistentTexture,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -125,10 +132,14 @@ pub fn import_gltf(path: &str, name: &str) -> Result<String> {
     Ok(path)
 }
 
+pub fn load_object(path: String, w_info: &WgpuInfo) -> Result<Object> {
+    builder::build(path, w_info)
+}
+
 pub struct WgpuInfo {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
-    surface_format: wgpu::TextureFormat,
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
+    pub surface_format: wgpu::TextureFormat,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

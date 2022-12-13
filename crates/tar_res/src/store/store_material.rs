@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{scene::ImportData, shader::ShaderFlags, Result, Vec3, Vec4};
+use crate::{scene::ImportData, shader::ShaderFlags, Error, Result, Vec3, Vec4};
 
 use super::store_texture::{StoreTexture, TextureType};
 /// The alpha rendering mode of a material.
@@ -30,9 +30,20 @@ impl Into<AlphaMode> for gltf::material::AlphaMode {
     }
 }
 
+impl Into<gltf::material::AlphaMode> for AlphaMode {
+    fn into(self) -> gltf::material::AlphaMode {
+        use gltf::material::AlphaMode::*;
+        match self {
+            Self::Opaque => Opaque,
+            Self::Mask => Mask,
+            Self::Blend => Blend,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoreMaterial {
-    pub index: Option<usize>,
+    pub index: usize,
     pub name: Option<String>,
 
     pub base_color_factor: Vec4,
@@ -133,7 +144,7 @@ impl StoreMaterial {
         }
 
         Ok(Self {
-            index: g_material.index(),
+            index: g_material.index().ok_or(Error::NonExistentMaterial)?,
             name: g_material.name().map(|s| s.into()),
             base_color_factor: pbr.base_color_factor().into(),
             base_color_texture,

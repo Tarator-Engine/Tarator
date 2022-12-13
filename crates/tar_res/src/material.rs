@@ -10,8 +10,8 @@ use crate::{
 };
 
 pub struct PbrMaterial {
-    pub index: Option<usize>,
-    pub name: String,
+    pub index: usize,
+    pub name: Option<String>,
 
     pub base_color_factor: Vector4<f32>,
     pub base_color_texture: Option<Texture>,
@@ -40,8 +40,8 @@ pub struct PbrMaterial {
 
 impl PbrMaterial {
     pub fn new(
-        index: Option<usize>,
-        name: String,
+        index: usize,
+        name: Option<String>,
 
         base_color_factor: Vector4<f32>,
         base_color_texture: Option<Texture>,

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, vec};
 
 use tar_utils::*;
 
@@ -54,8 +54,18 @@ impl StoreObject {
                 &imp,
                 base_path,
                 format!("{object_name}-node-{i}").as_str(),
+                false,
             )?;
             nodes.push(node);
+        }
+        let mut children: Vec<usize> = vec![];
+        for node in &mut nodes {
+            children.append(&mut node.children)
+        }
+        for node in &mut nodes {
+            if !children.contains(&node.index) {
+                node.root_node = true;
+            }
         }
 
         log_timing(

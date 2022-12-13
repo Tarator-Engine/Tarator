@@ -1,7 +1,7 @@
 use crate::{node::Node, CameraParams};
 
 pub struct Object {
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
 }
 
 impl Object {
