@@ -696,7 +696,10 @@ pub async fn run() {
         .collect::<Vec<_>>();
 
     renderer
-        .add_object(GameObject::ModelPath("res/Box/Box.gltf", "test".into()))
+        .add_object(GameObject::ModelPath(
+            "/home/slackers/Desktop/gltf/FlightHelmet/FlightHelmet.gltf",
+            "test".into(),
+        ))
         .await
         .unwrap();
 
