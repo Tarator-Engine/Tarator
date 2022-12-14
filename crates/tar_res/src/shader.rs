@@ -91,6 +91,8 @@ impl Shader {
         println!("importing shader {path}");
         let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
 
+        // println!("{layouts:?}");
+
         let shader = binding
             .bind_groups_from_layouts(layouts)
             .put_constant("material_base_color_factor", mat_in.base_color_factor)

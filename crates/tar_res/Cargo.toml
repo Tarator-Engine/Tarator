@@ -25,9 +25,10 @@ chrono = {version="0.4", features=["serde", "clock"]}
 
 
 [dependencies.wgsl_preprocessor]
-git = "https://github.com/slackers123/wgsl_preprocessor"
-rev="f1a2c12"
+# git = "https://github.com/slackers123/wgsl_preprocessor"
+# rev="f1a2c12"
 features=["array_vectors"]
+path = "../../../wgsl_preprocessor"
 
 
 [dependencies.image]

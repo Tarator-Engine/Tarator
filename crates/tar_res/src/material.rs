@@ -105,18 +105,14 @@ impl PerMaterialUniforms {
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
+                    multisampled: false,
                 },
                 count: None,
             });
             entries.push(wgpu::BindGroupLayoutEntry {
                 binding: get_binding(&mut binding),
                 visibility: ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
-                },
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             });
         }
@@ -127,18 +123,14 @@ impl PerMaterialUniforms {
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
+                    multisampled: false,
                 },
                 count: None,
             });
             entries.push(wgpu::BindGroupLayoutEntry {
                 binding: get_binding(&mut binding),
                 visibility: ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
-                },
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             });
         }
@@ -150,18 +142,14 @@ impl PerMaterialUniforms {
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
+                    multisampled: false,
                 },
                 count: None,
             });
             entries.push(wgpu::BindGroupLayoutEntry {
                 binding: get_binding(&mut binding),
                 visibility: ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
-                },
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             });
         }
@@ -172,18 +160,14 @@ impl PerMaterialUniforms {
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
+                    multisampled: false,
                 },
                 count: None,
             });
             entries.push(wgpu::BindGroupLayoutEntry {
                 binding: get_binding(&mut binding),
                 visibility: ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
-                },
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             });
         }
@@ -194,18 +178,14 @@ impl PerMaterialUniforms {
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
+                    multisampled: false,
                 },
                 count: None,
             });
             entries.push(wgpu::BindGroupLayoutEntry {
                 binding: get_binding(&mut binding),
                 visibility: ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
-                },
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             });
         }

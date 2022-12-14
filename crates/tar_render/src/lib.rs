@@ -697,7 +697,7 @@ pub async fn run() {
 
     renderer
         .add_object(GameObject::ModelPath(
-            "res/TexturedBox/BoxTextured.gltf",
+            "C:/Users/slackers/Desktop/scifi_helmet/SciFiHelmet.gltf",
             "textured".into(),
         ))
         .await

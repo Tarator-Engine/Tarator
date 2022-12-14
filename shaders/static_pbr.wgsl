@@ -1,53 +1,5 @@
 //!include pbr_types.wgsl
 
-// ignore this it is implemented really weirdly in the wgsl_preprocessor crate
-// material_definition
-
-// textures
-// @group(0) @binding(0)
-// var<uniform> mat: MaterialInput;
-// @group(0) @binding(1)
-// var base_color_tex: texture_2d<f32>;
-// @group(0) @binding(2)
-// var base_color_sampler: sampler;
-// @group(0) @binding(3)
-// var metallic_roughness_tex: texture_2d<f32>;
-// @group(0) @binding(4)
-// var metallic_roughness_sampler: sampler;
-// @group(0) @binding(5)
-// var normal_tex: texture_2d<f32>;
-// @group(0) @binding(6)
-// var normal_sampler: sampler;
-// @group(0) @binding(7)
-// var occlusion_tex: texture_2d<f32>;
-// @group(0) @binding(8)
-// var occlusion_sampler: sampler;
-// @group(0) @binding(9)
-// var emissive_tex: texture_2d<f32>;
-// @group(0) @binding(10)
-// var emissive_sampler: sampler;
-
-// @group(1) @binding(0)
-// var<uniform> u_MPVMatrix: mat4x4<f32>;
-// @group(1) @binding(1)
-// var<uniform> u_ModelMatrix: mat4x4<f32>;
-// @group(1) @binding(2)
-// var<uniform> u_Camera: vec3<f32>;
-// @group(1) @binding(3)
-// var<uniform> u_LightDirection: vec3<f32>;
-// @group(1) @binding(4)
-// var<uniform> u_LightColor: vec3<f32>;
-// @group(1) @binding(5)
-// var<uniform> u_AmbientLightColor: vec3<f32>;
-// @group(1) @binding(6)
-// var<uniform> u_AmbientLightIntensity: f32;
-// @group(1) @binding(7)
-// var<uniform> u_AlphaBlend: f32;
-// @group(1) @binding(8)
-// var<uniform> u_AlphaCutoff: f32;
-// @group(1) @binding(9)
-// var<uniform> u_ShaderFlags: u32;
-
 // bitflags matching shader.rs
 // vertex + fragment shader
 // let HAS_NORMALS: u32           = 1u;
@@ -143,30 +95,6 @@ fn vs_main(
 
     return out;
 }
-
-
-
-
-
-
-
-// @group(0) @binding(2)
-// var<uniform> u_Camera: vec3<f32>;
-
-// @group(0) @binding(3)
-// var<uniform> u_LightDirection: vec3<f32>;
-// @group(0) @binding(2)
-// var<uniform> u_LightColor: vec3<f32>;
-
-// @group(0) @binding(3)
-// var<uniform> u_AmbientLightColor: vec3<f32>;
-// @group(0) @binding(2)
-// var<uniform> u_AmbientLightIntensity: f32;
-
-// @group(0) @binding(3)
-// var<uniform> u_AlphaBlend: f32;
-// @group(0) @binding(3)
-// var<uniform> u_AlphaCutoff: f32;
 
 // Encapsulate the various inputs used by the various functions in the shading equation
 // We store values in this struct to simplify the integration of alternative implementations
