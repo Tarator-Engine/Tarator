@@ -37,15 +37,27 @@ impl StoreTexture {
 
         let g_img = g_texture.source();
 
-        let img = match g_img.source() {
+        let dir = format!("{ASSET_PATH}{object_name}/");
+        let store_path = format!(
+            "{dir}{}-{}-{}.png",
+            material_name,
+            g_texture.name().map(|s| s.into()).unwrap_or("texture"),
+            format!("{tex_ty:?}")
+        );
+
+        std::fs::create_dir_all(dir)?;
+
+        match g_img.source() {
             Source::View { view, mime_type } => {
                 let parent_buffer_data = &buffers[view.buffer().index()].0;
                 let begin = view.offset();
                 let end = begin + view.length();
                 let data = &parent_buffer_data[begin..end];
                 match mime_type {
-                    "image/jpeg" => image::load_from_memory_with_format(data, ImageFormat::Jpeg),
-                    "image/png" => image::load_from_memory_with_format(data, ImageFormat::Png),
+                    "image/jpeg" => image::load_from_memory_with_format(data, ImageFormat::Jpeg)?
+                        .save(store_path.clone())?,
+                    "image/png" => image::load_from_memory_with_format(data, ImageFormat::Png)?
+                        .save(store_path.clone())?,
                     _ => {
                         return Err(Error::NotSupported(format!(
                             "unsupported image type (image: {}, mime_type: {})",
@@ -75,9 +87,13 @@ impl StoreTexture {
 
                     match mime_type {
                         "image/jpeg" => {
-                            image::load_from_memory_with_format(&data, ImageFormat::Jpeg)
+                            image::load_from_memory_with_format(&data, ImageFormat::Jpeg)?
+                                .save(store_path.clone())?
                         }
-                        "image/png" => image::load_from_memory_with_format(&data, ImageFormat::Png),
+                        "image/png" => {
+                            image::load_from_memory_with_format(&data, ImageFormat::Png)?
+                                .save(store_path.clone())?
+                        }
                         _ => {
                             return Err(Error::NotSupported(format!(
                                 "unsupported image type (image: {}, mime_type: {})",
@@ -94,8 +110,12 @@ impl StoreTexture {
                     let file = std::fs::File::open(path).unwrap();
                     let reader = std::io::BufReader::new(file);
                     match mime_type {
-                        "image/jpeg" => image::load(reader, ImageFormat::Jpeg),
-                        "image/png" => image::load(reader, ImageFormat::Png),
+                        "image/jpeg" => {
+                            image::load(reader, ImageFormat::Jpeg)?.save(store_path.clone())?
+                        }
+                        "image/png" => {
+                            image::load(reader, ImageFormat::Png)?.save(store_path.clone())?
+                        }
                         _ => {
                             return Err(Error::NotSupported(format!(
                                 "unsupported image type (image: {}, mime_type: {})",
@@ -109,27 +129,17 @@ impl StoreTexture {
                         .parent()
                         .unwrap_or_else(|| Path::new("./"))
                         .join(uri);
-                    image::open(path)
+
+                    std::fs::copy(path, store_path.clone())?;
                 }
             }
-        }?;
-        let dir = format!("{ASSET_PATH}{object_name}/");
-        let path = format!(
-            "{dir}{}-{}-{}.png",
-            material_name,
-            g_texture.name().map(|s| s.into()).unwrap_or("texture"),
-            format!("{tex_ty:?}")
-        );
+        }
 
-        // println!("saving to {}", path);
-
-        std::fs::create_dir_all(dir)?;
-
-        img.save(path.clone())?;
+        println!("saving to {}", store_path);
 
         Ok(Self {
             index: g_texture.index(),
-            path,
+            path: store_path,
         })
     }
 }

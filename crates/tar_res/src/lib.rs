@@ -128,6 +128,7 @@ pub fn import_gltf(path: &str, name: &str) -> Result<String> {
 
     let data = rmp_serde::to_vec(&object)?;
     let path = format!("{ASSET_PATH}{name}.rmp");
+    println!("writing to {path:?}");
     std::fs::write(path.clone(), data)?;
     Ok(path)
 }
