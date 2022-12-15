@@ -1,15 +1,25 @@
+mod archetype;
 mod component;
 mod entity;
+mod error;
+mod id;
+mod storage;
+#[cfg(test)]
+mod tests;
 mod world;
 
+
 pub mod prelude {
-    pub use super::entity::Entity;
-    pub use super::world::World;
-    pub use super::component::{ Component, ComponentId };
+    pub use super::{
+        entity::Entity,
+        error::EcsError,
+        component::{
+            Component,
+            ComponentId
+        },
+        id::Id,
+        world::*
+    };
     pub use macros::Component;
 }
-
-
-const MAXENTITIES: usize = 256;
-const MAXCOMPONENTS: usize = 16;
 
