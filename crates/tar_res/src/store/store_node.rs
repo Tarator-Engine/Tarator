@@ -1,10 +1,9 @@
-use std::{ops::Index, path::Path};
+use std::path::Path;
 
 use cgmath::SquareMatrix;
-use rmp_serde::encode::ExtFieldSerializer;
 use serde::{Deserialize, Serialize};
 
-use crate::{scene::ImportData, Error, Mat4, Quat, Result, Vec3};
+use crate::{scene::ImportData, Mat4, Quat, Result, Vec3};
 
 use super::{store_material::StoreMaterial, store_mesh::StoreMesh, store_texture::StoreTexture};
 

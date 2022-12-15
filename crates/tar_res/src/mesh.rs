@@ -1,9 +1,6 @@
-use std::{path::Path, sync::Arc};
-
-use cgmath::{Matrix4, Vector3};
 use wgpu::RenderPass;
 
-use crate::{primitive::Primitive, scene::ImportData, Error, Result, WgpuInfo};
+use crate::{material::PerFrameData, primitive::Primitive};
 
 pub struct Mesh {
     pub index: usize,
@@ -14,16 +11,15 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn draw<'a, 'b>(
-        &'a self,
-        render_pass: &'b mut RenderPass<'a>,
-        model_matrix: &Matrix4<f32>,
-        mvp_matrix: &Matrix4<f32>,
-        camera_position: &Vector3<f32>,
-    ) -> Result<()> {
-        for primitive in &self.primitives {
-            primitive.draw(render_pass, model_matrix, mvp_matrix, camera_position)?
+    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
+        for prim in &mut self.primitives {
+            prim.update_per_frame(data, queue)
         }
-        Ok(())
+    }
+
+    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
+        for primitive in &self.primitives {
+            primitive.draw(render_pass);
+        }
     }
 }

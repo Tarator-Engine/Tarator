@@ -2,12 +2,10 @@ use cgmath::{Vector3, Vector4};
 use wgpu::{BindGroupLayoutEntry, ShaderStages};
 
 use crate::{
-    primitive::Instance,
-    shader::{MaterialInput, PbrShader, ShaderFlags},
+    shader::{PbrShader, ShaderFlags},
     texture::Texture,
     uniform::Uniform,
-    vertex::Vertex,
-    Result, Vec3Slice, Vec4Slice, WgpuInfo,
+    WgpuInfo,
 };
 
 pub struct PbrMaterial {
@@ -32,10 +30,15 @@ pub struct PbrMaterial {
 
     pub per_frame_uniforms: PerFrameUniforms,
     pub per_material_uniforms: PerMaterialUniforms,
+
     pub pipeline: wgpu::RenderPipeline,
 }
 
 impl PbrMaterial {
+    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
+        self.per_frame_uniforms.update(data, queue);
+    }
+
     pub fn shader_flags(
         base_color_texture: bool,
         normal_texture: bool,
@@ -62,16 +65,17 @@ impl PbrMaterial {
         flags
     }
 
-    pub fn set_render_pass<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+    pub fn set_pipeline<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
         render_pass.set_pipeline(&self.pipeline);
     }
 
-    pub fn set_bind_groups<'a, 'b>(
-        &'a self,
-        render_pass: &'b mut wgpu::RenderPass<'a>,
-        start: u32,
-    ) {
-        render_pass.set_bind_group(start, &self.per_frame_uniforms.bind_group, &[]);
+    pub fn set_bind_groups<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+        render_pass.set_bind_group(0, &self.per_frame_uniforms.bind_group, &[]);
+        render_pass.set_bind_group(
+            1,
+            &self.per_material_uniforms.bind_group.as_ref().unwrap(),
+            &[],
+        );
     }
 }
 
@@ -80,6 +84,7 @@ pub trait BindGroup {
     fn new(data: Self::Data, layout: &wgpu::BindGroupLayout, w_info: &WgpuInfo) -> Self;
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static>;
     fn names() -> Vec<(String, String)>;
+    fn update(&mut self, dat: &Self::Data, queue: &wgpu::Queue);
 }
 
 pub struct PerMaterialUniforms {
@@ -88,6 +93,7 @@ pub struct PerMaterialUniforms {
     pub normal_texture: Option<Texture>,
     pub occlusion_texture: Option<Texture>,
     pub emissive_texture: Option<Texture>,
+    pub bind_group: Option<wgpu::BindGroup>,
 }
 
 impl PerMaterialUniforms {
@@ -226,6 +232,92 @@ impl PerMaterialUniforms {
 
         names
     }
+
+    pub fn set_bind_group(&mut self, device: &wgpu::Device, layout: &wgpu::BindGroupLayout) {
+        let mut entries = vec![];
+        let mut binding = 0;
+        fn get_binding(binding: &mut u32) -> u32 {
+            *binding += 1;
+            return *binding - 1;
+        }
+        if self.base_color_texture.is_some() {
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::TextureView(
+                    &self.base_color_texture.as_ref().unwrap().view,
+                ),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::Sampler(
+                    &self.base_color_texture.as_ref().unwrap().sampler,
+                ),
+            });
+        }
+        if self.metallic_roughness_texture.is_some() {
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::TextureView(
+                    &self.metallic_roughness_texture.as_ref().unwrap().view,
+                ),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::Sampler(
+                    &self.metallic_roughness_texture.as_ref().unwrap().sampler,
+                ),
+            });
+        }
+
+        if self.normal_texture.is_some() {
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::TextureView(
+                    &self.normal_texture.as_ref().unwrap().view,
+                ),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::Sampler(
+                    &self.normal_texture.as_ref().unwrap().sampler,
+                ),
+            });
+        }
+        if self.occlusion_texture.is_some() {
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::TextureView(
+                    &self.occlusion_texture.as_ref().unwrap().view,
+                ),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::Sampler(
+                    &self.occlusion_texture.as_ref().unwrap().sampler,
+                ),
+            });
+        }
+        if self.emissive_texture.is_some() {
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::TextureView(
+                    &self.emissive_texture.as_ref().unwrap().view,
+                ),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: get_binding(&mut binding),
+                resource: wgpu::BindingResource::Sampler(
+                    &self.emissive_texture.as_ref().unwrap().sampler,
+                ),
+            });
+        }
+
+        self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &entries,
+            label: Some("bind_group for textures"),
+        }));
+    }
 }
 
 pub struct PerFrameUniforms {
@@ -259,8 +351,8 @@ pub struct PerFrameData {
     pub u_alpha_cutoff: f32,
 }
 
-impl PerFrameData {
-    pub fn new() -> Self {
+impl Default for PerFrameData {
+    fn default() -> Self {
         Self {
             u_mpv_matrix: [[0.0; 4]; 4],
             u_model_matrix: [[0.0; 4]; 4],
@@ -366,6 +458,20 @@ impl BindGroup for PerFrameUniforms {
             ("u_alpha_blend".into(), "f32".into()),
             ("u_alpha_cutoff".into(), "f32".into()),
         ]
+    }
+
+    fn update(&mut self, data: &Self::Data, queue: &wgpu::Queue) {
+        self.u_mpv_matrix.update(data.u_mpv_matrix, queue);
+        self.u_model_matrix.update(data.u_model_matrix, queue);
+        self.u_camera.update(data.u_camera, queue);
+        self.u_light_direction.update(data.u_light_direction, queue);
+        self.u_light_color.update(data.u_light_color, queue);
+        self.u_ambient_light_color
+            .update(data.u_ambient_light_color, queue);
+        self.u_ambient_light_intensity
+            .update(data.u_ambient_light_intensity, queue);
+        self.u_alpha_blend.update(data.u_alpha_blend, queue);
+        self.u_alpha_cutoff.update(data.u_alpha_cutoff, queue);
     }
 
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static> {

@@ -8,7 +8,7 @@ use crate::{scene::ImportData, Error, Result};
 
 use super::{
     store_material::StoreMaterial, store_mesh::StoreMesh, store_node::StoreNode,
-    store_primitive::StorePrimitive, store_texture::StoreTexture,
+    store_texture::StoreTexture,
 };
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -221,8 +221,8 @@ pub struct RawLightUniform {
 
 pub struct RawLight {
     pub uniform: RawLightUniform,
-    pub buffer: wgpu::Buffer,
-    pub bind_group: wgpu::BindGroup,
+    // pub buffer: wgpu::Buffer,
+    // pub bind_group: wgpu::BindGroup,
 }
 
 pub struct RawMesh {

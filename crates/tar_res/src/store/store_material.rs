@@ -64,6 +64,7 @@ pub struct StoreMaterial {
     pub alpha_mode: AlphaMode,
 
     pub double_sided: bool,
+    pub shader_flags: ShaderFlags,
     // pub pbr_shader: StoreShader,
 }
 
@@ -160,6 +161,7 @@ impl StoreMaterial {
             alpha_cutoff: g_material.alpha_cutoff(),
             alpha_mode: g_material.alpha_mode().into(),
             double_sided: g_material.double_sided(),
+            shader_flags,
         })
     }
 }

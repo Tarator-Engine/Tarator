@@ -92,6 +92,7 @@ fn vs_main(
     //!endif
 
     out.gl_Position = u_mpv_matrix * vec4<f32>(model.position, 1.0);
+    out.v_Position = model.position;
 
     return out;
 }
@@ -329,5 +330,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
-    return vec4<f32>(color, alpha);
+    return vec4<f32>(in.v_Position, alpha);
 }

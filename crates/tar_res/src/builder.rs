@@ -126,6 +126,20 @@ fn build_primitive(
             contents: bytemuck::cast_slice(prim.indices.as_ref().unwrap()),
             usage: wgpu::BufferUsages::INDEX,
         });
+
+    let instance_data = vec![Instance {
+        model: [[0.0; 4]; 4],
+        normal: [[0.0; 3]; 3],
+    }];
+    let num_instances = instance_data.len() as u32;
+
+    let instances = w_info
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
     let material = build_material(prim.material, object, w_info)?;
 
     tar_utils::log_timing("loaded primitive in ", timer);
@@ -135,6 +149,8 @@ fn build_primitive(
         vertices,
         num_indices,
         indices,
+        instances,
+        num_instances,
         material,
     })
 }
@@ -147,15 +163,18 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
         .find(|m| m.index == id)
         .ok_or(Error::NonExistentMaterial)?;
 
-    let per_material_uniforms = PerMaterialUniforms {
+    let mut per_material_uniforms = PerMaterialUniforms {
         base_color_texture: build_texture(mat.base_color_texture, object, w_info)?,
         metallic_roughness_texture: build_texture(mat.metallic_roughness_texture, object, w_info)?,
         normal_texture: build_texture(mat.normal_texture, object, w_info)?,
         occlusion_texture: build_texture(mat.occlusion_texture, object, w_info)?,
         emissive_texture: build_texture(mat.emissive_texture, object, w_info)?,
+        bind_group: None,
     };
 
-    let shader_flags = PbrMaterial::shader_flags(
+    let mut shader_flags = mat.shader_flags;
+
+    shader_flags |= PbrMaterial::shader_flags(
         mat.base_color_texture.is_some(),
         mat.normal_texture.is_some(),
         mat.emissive_texture.is_some(),
@@ -167,6 +186,7 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
         PerFrameUniforms::bind_group_layout(),
         PerFrameUniforms::names(),
     );
+
     let per_material_entries = per_material_uniforms.entries();
     let per_material_bind_group_layouts =
         PerMaterialUniforms::bind_group_layout(&per_material_entries);
@@ -198,8 +218,10 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
         .device
         .create_bind_group_layout(&per_material_bind_group_layouts);
 
+    per_material_uniforms.set_bind_group(&w_info.device, &per_material_bind_group);
+
     let per_frame_uniforms =
-        PerFrameUniforms::new(PerFrameData::new(), &per_frame_bind_group, w_info);
+        PerFrameUniforms::new(PerFrameData::default(), &per_frame_bind_group, w_info);
 
     let pipeline_layout = w_info
         .device

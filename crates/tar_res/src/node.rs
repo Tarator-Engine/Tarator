@@ -1,9 +1,6 @@
-use std::{path::Path, sync::Arc};
+use cgmath::{Matrix4, Quaternion, Vector3};
 
-use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
-use serde::{Deserialize, Serialize};
-
-use crate::{mesh::Mesh, scene::ImportData, CameraParams, Error, Result, WgpuInfo};
+use crate::{material::PerFrameData, mesh::Mesh, CameraParams, Result};
 
 pub struct Node {
     pub index: usize,
@@ -21,28 +18,6 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(
-        index: usize,
-        children: Vec<Node>,
-        mesh: Option<Mesh>,
-        rotation: Quaternion<f32>,
-        scale: Vector3<f32>,
-        translation: Vector3<f32>,
-        name: String,
-        final_transform: Matrix4<f32>,
-    ) -> Self {
-        Self {
-            index,
-            children,
-            mesh,
-            rotation,
-            scale,
-            translation,
-            name,
-            final_transform,
-        }
-    }
-
     pub fn update_transform(&mut self, parent_transform: &Matrix4<f32>) -> Result<()> {
         self.final_transform = *parent_transform;
 
@@ -53,32 +28,58 @@ impl Node {
             * Matrix4::from(self.rotation);
 
         for node in &mut self.children {
-            node.update_transform(&self.final_transform);
+            node.update_transform(&self.final_transform)?;
         }
 
         Ok(())
     }
-
-    pub fn draw<'a, 'b>(
-        &'a self,
-        render_pass: &'b mut wgpu::RenderPass<'a>,
+    pub fn update_per_frame(
+        &mut self,
         cam_params: &CameraParams,
+        u_light_direction: [f32; 3],
+        u_light_color: [f32; 3],
+        u_ambient_light_color: [f32; 3],
+        u_ambient_light_intensity: f32,
+        u_alpha_blend: f32,
+        u_alpha_cutoff: f32,
+        queue: &wgpu::Queue,
     ) {
-        if let Some(ref m_id) = self.mesh {
+        if let Some(mesh) = &mut self.mesh {
             let mvp_matrix =
                 cam_params.projection_matrix * cam_params.view_matrix * self.final_transform;
-
-            if let Some(mesh) = &self.mesh {
-                mesh.draw(
-                    render_pass,
-                    &self.final_transform,
-                    &mvp_matrix,
-                    &cam_params.position,
-                );
-            }
+            let data = PerFrameData {
+                u_model_matrix: self.final_transform.into(),
+                u_mpv_matrix: mvp_matrix.into(),
+                u_camera: cam_params.position.into(),
+                u_light_direction,
+                u_light_color,
+                u_ambient_light_color,
+                u_ambient_light_intensity,
+                u_alpha_blend,
+                u_alpha_cutoff,
+            };
+            mesh.update_per_frame(&data, queue);
         }
-        for node in &self.children {
-            node.draw(render_pass, cam_params);
+        for child in &mut self.children {
+            child.update_per_frame(
+                cam_params,
+                u_light_direction,
+                u_light_color,
+                u_ambient_light_color,
+                u_ambient_light_intensity,
+                u_alpha_blend,
+                u_alpha_cutoff,
+                queue,
+            );
+        }
+    }
+
+    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+        if let Some(mesh) = &self.mesh {
+            mesh.draw(render_pass);
+        }
+        for child in &self.children {
+            child.draw(render_pass);
         }
     }
 }

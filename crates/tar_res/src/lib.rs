@@ -6,18 +6,18 @@ extern crate thiserror;
 #[macro_use]
 extern crate bitflags;
 
-mod builder;
-mod material;
-mod mesh;
-mod node;
-mod object;
-mod primitive;
-mod scene;
-mod shader;
-mod store;
-mod texture;
-mod uniform;
-mod vertex;
+pub mod builder;
+pub mod material;
+pub mod mesh;
+pub mod node;
+pub mod object;
+pub mod primitive;
+pub mod scene;
+pub mod shader;
+pub mod store;
+pub mod texture;
+pub mod uniform;
+pub mod vertex;
 
 use cgmath::{Matrix4, Vector3};
 use object::Object;

@@ -1,13 +1,12 @@
+use serde::{Deserialize, Serialize};
 use wgpu::BindGroupLayoutDescriptor;
 use wgsl_preprocessor::WGSLType;
 
-use crate::{
-    material::{BindGroup, PerFrameUniforms},
-    Result, WgpuInfo,
-};
+use crate::{Result, WgpuInfo};
 
 bitflags! {
     /// Flags matching the defines in the PBR shader
+    #[derive(Serialize, Deserialize)]
     pub struct ShaderFlags: u16 {
         // vertex shader + fragment shader
         const HAS_NORMALS           = 1;
@@ -103,7 +102,7 @@ impl Shader {
             .put_constant("material_emissive_factor", mat_in.emissive_factor)
             .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
 
-        println!("shader code: {}", shader.source_string);
+        // println!("shader code: {}", shader.source_string);
 
         let shader = shader.build();
 
