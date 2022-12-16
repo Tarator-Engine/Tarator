@@ -7,33 +7,36 @@ use crate::{
 };
 
 
-pub(crate) type ArchetypeId = Id;
+pub(crate) type ArchetypeId = usize;
 
 struct Archetype {
     id: ArchetypeId,
     parents: Vec<ArchetypeId>,
-    components: ComponentSet,
+    set: ComponentSet,
     data: Storage
 }
 
 impl Archetype {
-    fn new<'a, C: ComponentTuple<'a>>(id: ArchetypeId) -> Self {
-        let mut ssize = 0;
-        for size in C::sizes() {
-            ssize += *size
-        }
+    fn new(id: ArchetypeId, set: ComponentSet, size: usize) -> Self {
         Self {
-            id,
-            components: C::set(),
+            id, set,
             parents: Vec::new(),
-            data: unsafe { Storage::new(ssize, 4) } // 4 stands for "having room for 4 ComponentTuples"
+            data: unsafe { Storage::new(size, 4) } // 4 stands for "having room for 4 ComponentTuples"
         }
     }
 
-    fn set<'a, C: ComponentTuple<'a>>(&mut self, desc: &mut Description, data: C) -> Result<(), Error> {
-        desc.index = self.data.len();
-        desc.id = DescriptionId::new(self.id, desc.id.get_version());
-        self.data.push()?;
+    fn set(&mut self, desc: &mut Description, unit: TupleUnit) -> Result<(), Error> {
+        if !desc.is_index_valid() {
+            let index = self.data.len();
+            self.data.increase()?;
+            self.data.set(index, unit)?;
+
+            desc.index = index;
+            desc.id = DescriptionId::new(self.id, desc.id.get_version());
+        } else {
+            todo!()
+        }
+
         Ok(())
     }
 }
@@ -50,17 +53,27 @@ impl ArchetypePool {
         }
     }
     pub(crate) fn set<'a, C: ComponentTuple<'a>>(&mut self, desc: &mut Description, data: C) -> Result<(), Error> {
-        let set = C::set();
-        for arch in &mut self.arch {
-            if set == arch.components {
-                return arch.set(desc, data);
+        let archetype: &mut Archetype;
+        'getter: {
+            let set = C::set();
+            for arch in &mut self.arch {
+                if set == arch.set {
+                    archetype = arch;
+                    break 'getter;
+                }
             }
+            let id = self.arch.len();
+            let arch = Archetype::new(id, set, C::size());
+            self.arch.push(arch);
+            archetype = unsafe{self.arch.get_unchecked_mut(id)};
         }
 
-        let id = self.arch.len();
-        let mut arch = Archetype::new::<C>(id);
-        arch.set(desc, data)?;
-        self.arch.push(arch);
+        let mut index = 0;
+        for mut unit in data.units() {
+            unit.index = index;
+            archetype.set(desc, unit)?;
+            index += 1;
+        }
 
         Ok(())
     }

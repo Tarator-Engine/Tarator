@@ -17,6 +17,13 @@ pub(crate) struct Description {
     pub(crate) index: usize
 }
 
+impl Description {
+    #[inline]
+    pub(crate) fn is_index_valid(&self) -> bool {
+        self.index != usize::MAX
+    }
+}
+
 
 pub(crate) struct DescriptionPool {
     free: Vec<EntityId>,
@@ -41,7 +48,7 @@ impl DescriptionPool {
             return Ok(Entity { id: EntityId::new(index, 0) })
         };
 
-        let version = unfreed.get_version() + 1;
+        let version = unfreed.get_version();
         let index = unfreed.get_index();
         let Some(desc) = self.desc.get_mut(index) else {
             return Err(Error::InvalidIndex(index));

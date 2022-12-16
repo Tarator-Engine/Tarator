@@ -1,14 +1,11 @@
-use crate::error::EcsError as Error;
-use std::{
-    alloc::{
-        Layout,
-    },
-    mem::size_of
+use crate::{
+    error::EcsError as Error,
+    component::TupleUnit
 };
 
 pub(crate) struct Storage {
     len: usize,
-    size: usize,
+    size: usize
 }
 
 impl Storage {
@@ -22,7 +19,25 @@ impl Storage {
     pub(crate) fn len(&self) -> usize {
         self.len
     }
-    pub(crate) fn push(&mut self) -> Result<(), Error> {
-        Ok(())        
+    pub(crate) fn increase(&mut self) -> Result<(), Error> {
+        todo!()
+    }
+    pub(crate) fn decrease(&mut self) -> Result<(), Error> {
+        todo!()
+    }
+    pub(crate) fn set(&mut self, index: usize, unit: TupleUnit) -> Result<(), Error> {
+        self.check_index(index)?; 
+        todo!()
+    }
+    pub(crate) fn unset(&mut self, index: usize) -> Result<(), Error> {
+        self.check_index(index)?; 
+        todo!()
+    }
+    fn check_index(&self, index: usize) -> Result<(), Error> {
+        if index >= self.len {
+            return Err(Error::InvalidIndex(index));
+        }
+        Ok(())
     }
 }
+
