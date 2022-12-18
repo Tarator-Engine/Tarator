@@ -330,5 +330,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
-    return vec4<f32>(in.v_Position, alpha);
+    return vec4<f32>(color, alpha);
+    // return base_color;
 }

@@ -35,6 +35,7 @@ impl StoreNode {
         name: &str,
         root_node: bool,
     ) -> Result<Self> {
+        let timer = tar_utils::start_timer();
         let (trans, rot, scale) = g_node.transform().decomposed();
         let r = rot;
         let rotation = Quat::new(r[3], r[0], r[1], r[2]);
@@ -64,6 +65,8 @@ impl StoreNode {
         // println!("meshes: {meshes:?}");
 
         let children = g_node.children().map(|g_node| g_node.index()).collect();
+
+        tar_utils::log_timing("generated node in ", timer);
 
         Ok(Self {
             index: g_node.index(),

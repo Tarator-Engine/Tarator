@@ -15,22 +15,27 @@ use crate::{
     Error, Result, WgpuInfo,
 };
 
-pub fn build(source: String, w_info: &WgpuInfo) -> Result<Object> {
+pub fn build_loaded(obj: StoreObject, w_info: &WgpuInfo) -> Result<Object> {
     let timer = tar_utils::start_timer();
-    let object: StoreObject = rmp_serde::from_slice(&std::fs::read(source)?)?;
-
-    // println!("{:?}", object.nodes);
 
     let mut nodes = vec![];
-    for node in &object.nodes {
+    for node in &obj.nodes {
         if node.root_node {
-            nodes.push(build_node(node, &object, w_info)?)
+            nodes.push(build_node(node, &obj, w_info)?)
         }
     }
 
     tar_utils::log_timing("loaded object in ", timer);
 
     Ok(Object { nodes })
+}
+
+pub fn build(source: String, w_info: &WgpuInfo) -> Result<Object> {
+    let timer = tar_utils::start_timer();
+    let object: StoreObject = rmp_serde::from_slice(&std::fs::read(source)?)?;
+    tar_utils::log_timing("loaded from disk in ", timer);
+
+    build_loaded(object, w_info)
 }
 
 fn build_node(node: &StoreNode, object: &StoreObject, w_info: &WgpuInfo) -> Result<Node> {
@@ -107,6 +112,9 @@ fn build_primitive(
     let timer = tar_utils::start_timer();
     let num_indices = prim.indices.as_ref().map(|i| i.len()).unwrap_or(0) as u32;
     let num_vertices = prim.vertices.len() as u32;
+
+    // println!("verts {:?}", prim.vertices);
+    // println!("inds {:?}", prim.indices);
 
     let vertices = w_info
         .device
@@ -256,7 +264,7 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
+                front_face: wgpu::FrontFace::Cw,
                 cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,

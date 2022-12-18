@@ -121,6 +121,8 @@ impl StorePrimitive {
             .read_indices()
             .map(|read_indices| read_indices.into_u32().collect::<Vec<_>>());
 
+        // let indices = Some(vec![0, 1, 2, 1, 3, 2, 0, 0]);
+
         let g_material = g_primitive.material();
 
         let material_name = g_material

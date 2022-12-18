@@ -7,7 +7,10 @@ use std::sync::Arc;
 
 use camera::CameraUniform;
 use cgmath::prelude::*;
-use tar_res::{material::PerFrameData, object::Object, CameraParams, Mat4, Vec3, WgpuInfo};
+use tar_res::{
+    material::PerFrameData, object::Object, store::store_material::StoreMaterial, CameraParams,
+    Mat4, Quat, Vec3, Vec4, WgpuInfo,
+};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -32,7 +35,7 @@ type UUID = u32;
 /// the GameObject is a enum which is used to pass something to a
 /// Renderer's add_object()
 pub enum GameObject<'a> {
-    Model(model::Model),
+    Object(tar_res::object::Object),
     ModelPath(&'a str, String),
     ImportedPath(&'a str),
     Light(model::Light),
@@ -464,7 +467,10 @@ impl NativeRenderer {
                 let object = tar_res::load_object(p.into(), &w_info)?;
                 self.objects.push(object);
             }
-            _ => todo!("implement rest"),
+
+            GameObject::Object(obj) => {
+                self.objects.push(obj);
+            }
         }
 
         Ok(())
@@ -542,7 +548,9 @@ impl NativeRenderer {
                     ),
                 };
 
-                let data = PerFrameData::default();
+                let mut data = PerFrameData::default();
+                data.u_ambient_light_color = self.lights[0].uniform.color;
+                data.u_ambient_light_intensity = 1.0;
 
                 for o in &mut self.objects {
                     o.update_per_frame(
@@ -720,10 +728,78 @@ pub async fn run() {
     //     })
     //     .collect::<Vec<_>>();
 
+    // renderer
+    //     .add_object(GameObject::ModelPath(
+    //         "res/TexturedBox/BoxTextured.gltf",
+    //         "box".into(),
+    //     ))
+    //     .await
+    //     .unwrap();
+
+    let mut vertices = vec![
+        tar_res::vertex::Vertex::default(),
+        tar_res::vertex::Vertex::default(),
+        tar_res::vertex::Vertex::default(),
+        tar_res::vertex::Vertex::default(),
+    ];
+
+    vertices[0].position = [0.0, 0.0, 0.0];
+    vertices[1].position = [1.0, 0.0, 0.0];
+    vertices[2].position = [0.0, 1.0, 0.0];
+    vertices[3].position = [1.0, 1.0, 0.0];
+
+    let indices = vec![0, 1, 3, 0, 3, 2];
+    let obj = tar_res::store::store_object::StoreObject {
+        nodes: vec![tar_res::store::store_node::StoreNode {
+            index: 0,
+            children: vec![],
+            mesh: Some(0),
+            rotation: Quat::zero(),
+            scale: Vec3::new(1.0, 1.0, 1.0),
+            translation: Vec3::zero(),
+            name: "test_node".into(),
+            final_transform: Mat4::identity(),
+            root_node: true,
+        }],
+        meshes: vec![tar_res::store::store_mesh::StoreMesh {
+            index: 0,
+            primitives: vec![tar_res::store::store_primitive::StorePrimitive {
+                vertices,
+                indices: Some(indices),
+                material: 0,
+            }],
+            name: "test_mesh".into(),
+        }],
+        materials: vec![tar_res::store::store_material::StoreMaterial {
+            index: 0,
+            name: Some("test_material".into()),
+            base_color_factor: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            base_color_texture: None,
+            metallic_factor: 1.0,
+            roughness_factor: 1.0,
+            metallic_roughness_texture: None,
+            normal_scale: None,
+            normal_texture: None,
+            occlusion_strength: 0.0,
+            occlusion_texture: None,
+            emissive_factor: Vec3::zero(),
+            emissive_texture: None,
+            alpha_cutoff: None,
+            alpha_mode: tar_res::store::store_material::AlphaMode::Blend,
+            double_sided: false,
+            shader_flags: tar_res::shader::ShaderFlags::empty(),
+        }],
+        textures: vec![],
+    };
+    let w_info = WgpuInfo {
+        device: renderer.device.clone(),
+        queue: renderer.queue.clone(),
+        surface_format: renderer.config.format,
+    };
+
     renderer
-        .add_object(GameObject::ModelPath(
-            "res/TexturedBox/BoxTextured.gltf",
-            "box".into(),
+        .add_object(GameObject::Object(
+            tar_res::builder::build_loaded(obj, &w_info).unwrap(),
         ))
         .await
         .unwrap();

@@ -145,7 +145,7 @@ impl StoreMaterial {
         }
 
         Ok(Self {
-            index: g_material.index().ok_or(Error::NonExistentMaterial)?,
+            index: g_material.index().unwrap_or(0),
             name: g_material.name().map(|s| s.into()),
             base_color_factor: pbr.base_color_factor().into(),
             base_color_texture,
