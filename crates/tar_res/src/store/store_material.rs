@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{scene::ImportData, shader::ShaderFlags, Error, Result, Vec3, Vec4};
+use crate::{scene::ImportData, shader::ShaderFlags, Result, Vec3, Vec4};
 
 use super::store_texture::{StoreTexture, TextureType};
 /// The alpha rendering mode of a material.

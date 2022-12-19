@@ -102,7 +102,7 @@ impl Shader {
             .put_constant("material_emissive_factor", mat_in.emissive_factor)
             .put_constant("material_alpha_cutoff", mat_in.alpha_cutoff);
 
-        // println!("shader code: {}", shader.source_string);
+        println!("shader code: {}", shader.source_string);
 
         let shader = shader.build();
 

@@ -44,6 +44,6 @@ impl Primitive {
         render_pass.set_vertex_buffer(1, self.instances.slice(..));
         render_pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         self.material.set_bind_groups(render_pass);
-        render_pass.draw(0..self.num_vertices, 0..1);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

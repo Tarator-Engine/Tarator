@@ -43,13 +43,18 @@ struct VertexOutput {
     @location(1) v_UV_1: vec2<f32>,
     @location(2) v_Color: vec4<f32>,
     //!ifdef HAS_NORMALS 
-    //!ifdef HAS_TANGENTS
-    @location(3) v_TBN: mat3x3<f32>,
+        //!ifdef HAS_TANGENTS
+            @location(3) v_TBN_0: vec3<f32>,
+            @location(4) v_TBN_1: vec3<f32>,
+            @location(5) v_TBN_2: vec3<f32>,
+            @location(6) v_Position: vec3<f32>
+        //!else
+            @location(3) v_Normal: vec3<f32>,
+            @location(4) v_Position: vec3<f32>
+        //!endif
     //!else
-    @location(3) v_Normal: vec3<f32>,
+        @location(3) v_Position: vec3<f32>
     //!endif
-    //!endif
-    @location(4) v_Position: vec3<f32>,
 }
 
 @vertex
@@ -77,9 +82,12 @@ fn vs_main(
             let normalW = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
             let tangentW = normalize((model_matrix * vec4<f32>(model.tangent.xyz, 0.0)).xyz);
             let bitangentW = cross(normalW, tangentW) * model.tangent.w;
-            out.v_TBN = mat3x3<f32>(tangentW, bitangentW, normalW);
+            out.v_TBN_0 = tangentW;
+            out.v_TBN_1 = bitangentW;
+            out.v_TBN_2 = normalW;
+        //!else
+            out.v_Normal = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
         //!endif
-        out.v_Normal = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
     //!endif
 
 
@@ -115,7 +123,6 @@ struct PBRInfo {
     specularColor: vec3<f32>,       // color contribution from specular lighting
     v_Position: vec3<f32>,
     v_UV_0: vec2<f32>,
-    v_UV_1: vec2<f32>,
     //!ifdef HAS_NORMALS
     //!ifdef HAS_TANGENTS
     v_TBN: mat3x3<f32>,
@@ -123,6 +130,7 @@ struct PBRInfo {
     v_Normal: vec3<f32>,
     //!endif
     //!endif
+    v_UV_1: vec2<f32>
 }
 
 let M_PI: f32 = 3.141592653589793;
@@ -241,7 +249,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let base_color = material_base_color_factor;
     //!endif
 
-    let base_color = base_color * in.v_Color;
+    // let base_color = base_color * in.v_Color;
 
     let f0 = vec3<f32>(0.04);
 
@@ -265,11 +273,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     pbr_info.v_UV_0 = in.v_UV_0;
     pbr_info.v_UV_1 = in.v_UV_1;
     //!ifdef HAS_NORMALS
-    //!ifdef HAS_TANGENTS
-    pbr_info.v_TBN = in.v_TBN;
-    //!else
-    pbr_info.v_Normal = in.v_Normal;
-    //!endif
+        //!ifdef HAS_TANGENTS
+            pbr_info.v_TBN = mat3x3<f32>(
+                in.v_TBN_0,
+                in.v_TBN_1,
+                in.v_TBN_2,
+            );
+        //!else
+            pbr_info.v_Normal = in.v_Normal;
+        //!endif
     //!endif
 
 
