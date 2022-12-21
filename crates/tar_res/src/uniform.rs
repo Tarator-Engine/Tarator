@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
 
@@ -9,12 +11,14 @@ pub struct Uniform<T: NoUninit> {
 }
 
 impl<T: NoUninit> Uniform<T> {
-    pub fn new(data: T, usage: String, w_info: &WgpuInfo) -> Self {
-        let buff = w_info.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some((usage+"buffer").as_str()),
-            contents: bytemuck::cast_slice(&[data]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+    pub fn new(data: T, usage: String, w_info: Arc<WgpuInfo>) -> Self {
+        let buff = w_info
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some((usage + "buffer").as_str()),
+                contents: bytemuck::cast_slice(&[data]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
         let mut uni = Self { buff, data };
 
@@ -28,10 +32,6 @@ impl<T: NoUninit> Uniform<T> {
     }
 
     fn write_buffer(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(
-            &self.buff,
-            0, 
-            bytemuck::cast_slice(&[self.data]),
-        );
+        queue.write_buffer(&self.buff, 0, bytemuck::cast_slice(&[self.data]));
     }
 }

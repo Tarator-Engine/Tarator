@@ -229,24 +229,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var perceptualRoughness = material_roughness_factor;
     var metallic = material_metallic_factor;
 
-//!ifdef HAS_METALROUGHNESSMAP
-    // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
-    // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-    let mrSample = textureSample(metallic_roughness_tex, metallic_roughness_sampler, in.v_UV_0);
-    perceptualRoughness = mrSample.y * perceptualRoughness;
-    metallic = mrSample.y * metallic;
+    //!ifdef HAS_METALROUGHNESSMAP
+        // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
+        // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
+        let mrSample = textureSample(metallic_roughness_tex, metallic_roughness_sampler, in.v_UV_0);
+        perceptualRoughness = mrSample.g * perceptualRoughness;
+        metallic = mrSample.b * metallic;
+    //!endif
 
     perceptualRoughness = clamp(perceptualRoughness, c_MinRoughness, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
-//!endif
-
     // Roughness is authored as perceptual roughness; as is convention,
     // convert to material roughness by squaring the perceptual roughness [2].
     let alphaRoughness = perceptualRoughness * perceptualRoughness;
     //!ifdef HAS_BASECOLORMAP
-    let base_color = textureSample(base_color_tex, base_color_sampler, in.v_UV_0) * material_base_color_factor;
+        let base_color = textureSample(base_color_tex, base_color_sampler, in.v_UV_0) * material_base_color_factor;
     //!else
-    let base_color = material_base_color_factor;
+        let base_color = material_base_color_factor;
     //!endif
 
     // let base_color = base_color * in.v_Color;
@@ -255,7 +254,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let diffuse_color = base_color.rgb * (vec3<f32>(1.0) - f0);
 
-    let diffuse_color: vec3<f32> = (base_color * (1.0 - metallic)).xyz;
+    let diffuse_color: vec3<f32> = (diffuse_color * (1.0 - metallic)).xyz;
 
     let specular_color = mix(f0, base_color.rgb, metallic);
 
@@ -289,7 +288,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let v = normalize(u_camera - in.gl_Position.xyz);   // Vector from surface point to camera
     let l = normalize(u_light_direction);                // Vector from surface point to light
     let h = normalize(l+v);                             // Half vector between both l and v
-    let reflection = -normalize(reflect(v, n));
+    // let reflection = -normalize(reflect(v, n));
 
     let NdotL = clamp(dot(n, l), 0.001, 1.0);
     let NdotV = clamp(abs(dot(n, v)), 0.001, 1.0);
@@ -341,7 +340,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if alpha == 0.0 {
         discard;
     }
+    
+    let color = F;
 
     return vec4<f32>(color, alpha);
-    // return base_color;
+    // return mrSample;
 }

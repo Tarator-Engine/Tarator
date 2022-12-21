@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use wgpu::BindGroupLayoutDescriptor;
 use wgsl_preprocessor::WGSLType;
@@ -85,7 +87,7 @@ impl Shader {
         layouts: &[(wgpu::BindGroupLayoutDescriptor, Vec<(String, String)>)],
         defines: &[String],
         mat_in: MaterialInput,
-        w_info: &WgpuInfo,
+        w_info: Arc<WgpuInfo>,
     ) -> Result<Self> {
         println!("importing shader {path}");
         let mut binding = wgsl_preprocessor::ShaderBuilder::new(path, Some(defines))?;
@@ -122,7 +124,7 @@ impl PbrShader {
         flags: ShaderFlags,
         mat_in: MaterialInput,
         layouts: &[(BindGroupLayoutDescriptor, Vec<(String, String)>)],
-        w_info: &WgpuInfo,
+        w_info: Arc<WgpuInfo>,
     ) -> Result<Self> {
         // let per_frame_bind_group = w_info.device.create_bind_group_layout(&per_frame.0);
         let shader = Shader::from_path(

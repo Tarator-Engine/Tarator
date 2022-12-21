@@ -87,7 +87,7 @@ impl NativeRenderer {
             format: surface.get_supported_formats(&adapter)[0],
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: wgpu::PresentMode::AutoNoVsync,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
         };
 
@@ -150,22 +150,22 @@ impl NativeRenderer {
 
             GameObject::ModelPath(p, name) => {
                 let path = tar_res::import_gltf(p, &name)?;
-                let w_info = WgpuInfo {
+                let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
                     surface_format: self.config.format,
-                };
-                let object = tar_res::load_object(path, &w_info)?;
+                });
+                let object = tar_res::load_object(path, w_info)?;
                 self.objects.push(object);
             }
 
             GameObject::ImportedPath(p) => {
-                let w_info = WgpuInfo {
+                let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
                     surface_format: self.config.format,
-                };
-                let object = tar_res::load_object(p.into(), &w_info)?;
+                });
+                let object = tar_res::load_object(p.into(), w_info)?;
                 self.objects.push(object);
             }
 
@@ -250,7 +250,6 @@ impl NativeRenderer {
             data.u_ambient_light_intensity = 1.0;
             data.u_light_color = [1.0, 1.0, 1.0];
             data.u_light_direction = [0.0, 0.5, 0.5];
-
             for o in &mut self.objects {
                 o.update_per_frame(
                     &cam_params,
@@ -435,7 +434,6 @@ pub async fn run() {
                     _ => {}
                 }
             }
-            // UPDATED!
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 let now = instant::Instant::now();
                 let dt = now - last_render_time;

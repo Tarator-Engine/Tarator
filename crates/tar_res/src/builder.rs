@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
@@ -15,13 +15,14 @@ use crate::{
     Error, Result, WgpuInfo,
 };
 
-pub fn build_loaded(obj: StoreObject, w_info: &WgpuInfo) -> Result<Object> {
+pub fn build_loaded(obj: StoreObject, w_info: Arc<WgpuInfo>) -> Result<Object> {
     let timer = tar_utils::start_timer();
+    let obj = Arc::new(obj);
 
     let mut nodes = vec![];
     for node in &obj.nodes {
         if node.root_node {
-            nodes.push(build_node(node, &obj, w_info)?)
+            nodes.push(build_node(node, obj.clone(), w_info.clone())?)
         }
     }
 
@@ -30,7 +31,7 @@ pub fn build_loaded(obj: StoreObject, w_info: &WgpuInfo) -> Result<Object> {
     Ok(Object { nodes })
 }
 
-pub fn build(source: String, w_info: &WgpuInfo) -> Result<Object> {
+pub fn build(source: String, w_info: Arc<WgpuInfo>) -> Result<Object> {
     let timer = tar_utils::start_timer();
     let object: StoreObject = rmp_serde::from_slice(&std::fs::read(source)?)?;
     tar_utils::log_timing("loaded from disk in ", timer);
@@ -38,19 +39,20 @@ pub fn build(source: String, w_info: &WgpuInfo) -> Result<Object> {
     build_loaded(object, w_info)
 }
 
-fn build_node(node: &StoreNode, object: &StoreObject, w_info: &WgpuInfo) -> Result<Node> {
+fn build_node(node: &StoreNode, object: Arc<StoreObject>, w_info: Arc<WgpuInfo>) -> Result<Node> {
     let timer = tar_utils::start_timer();
     let mut children = vec![];
     let child_ids = &node.children;
     for id in child_ids {
         children.push(build_node(
             object
+                .clone()
                 .nodes
                 .iter()
                 .find(|n| (*n).index == *id)
                 .ok_or(Error::NonexistentNode)?,
-            object,
-            w_info,
+            object.clone(),
+            w_info.clone(),
         )?);
     }
     // println!("new_mesh_m: {:?}", node.mesh);
@@ -73,8 +75,8 @@ fn build_node(node: &StoreNode, object: &StoreObject, w_info: &WgpuInfo) -> Resu
 
 fn build_mesh(
     mesh: &Option<usize>,
-    object: &StoreObject,
-    w_info: &WgpuInfo,
+    object: Arc<StoreObject>,
+    w_info: Arc<WgpuInfo>,
 ) -> Result<Option<Mesh>> {
     // println!("new_mesh {mesh:?}");
     if let Some(id) = mesh {
@@ -89,7 +91,7 @@ fn build_mesh(
         let mut primitives = vec![];
 
         for prim in prims {
-            primitives.push(build_primitive(prim, object, w_info)?);
+            primitives.push(build_primitive(prim, object.clone(), w_info.clone())?);
         }
 
         tar_utils::log_timing("loaded mesh in ", timer);
@@ -106,8 +108,8 @@ fn build_mesh(
 
 fn build_primitive(
     prim: &StorePrimitive,
-    object: &StoreObject,
-    w_info: &WgpuInfo,
+    object: Arc<StoreObject>,
+    w_info: Arc<WgpuInfo>,
 ) -> Result<Primitive> {
     let timer = tar_utils::start_timer();
     let num_indices = prim.indices.as_ref().map(|i| i.len()).unwrap_or(0) as u32;
@@ -163,7 +165,11 @@ fn build_primitive(
     })
 }
 
-fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<PbrMaterial> {
+fn build_material(
+    id: usize,
+    object: Arc<StoreObject>,
+    w_info: Arc<WgpuInfo>,
+) -> Result<PbrMaterial> {
     let timer = tar_utils::start_timer();
     let mat = object
         .materials
@@ -171,12 +177,55 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
         .find(|m| m.index == id)
         .ok_or(Error::NonExistentMaterial)?;
 
+    let base_obj = object.clone();
+    let info_clone = w_info.clone();
+    let base_tex = mat.base_color_texture.clone();
+
+    let base_color_thread =
+        std::thread::spawn(move || build_texture(base_tex, base_obj, info_clone));
+
+    let obj_clone = object.clone();
+    let info_clone = w_info.clone();
+    let met_rou_tex = mat.metallic_roughness_texture.clone();
+
+    let metallic_roughness_thread =
+        std::thread::spawn(move || build_texture(met_rou_tex, obj_clone, info_clone));
+
+    let obj_clone = object.clone();
+    let info_clone = w_info.clone();
+    let normal_tex = mat.normal_texture.clone();
+
+    let normal_thread =
+        std::thread::spawn(move || build_texture(normal_tex, obj_clone, info_clone));
+
+    let obj_clone = object.clone();
+    let info_clone = w_info.clone();
+    let occ_tex = mat.occlusion_texture.clone();
+
+    let occlusion_thread =
+        std::thread::spawn(move || build_texture(occ_tex, obj_clone, info_clone));
+
+    let obj_clone = object.clone();
+    let info_clone = w_info.clone();
+    let emissive_tex = mat.emissive_texture.clone();
+
+    let emissive_thread =
+        std::thread::spawn(move || build_texture(emissive_tex, obj_clone, info_clone));
+
+    let base_color_texture = base_color_thread.join().map_err(|_| Error::ThreadError)??;
+    let metallic_roughness_texture = metallic_roughness_thread
+        .join()
+        .map_err(|_| Error::ThreadError)??;
+    let normal_texture = normal_thread.join().map_err(|_| Error::ThreadError)??;
+    let occlusion_texture = occlusion_thread.join().map_err(|_| Error::ThreadError)??;
+    let emissive_texture = emissive_thread.join().map_err(|_| Error::ThreadError)??;
+
     let mut per_material_uniforms = PerMaterialUniforms {
-        base_color_texture: build_texture(mat.base_color_texture, object, w_info)?,
-        metallic_roughness_texture: build_texture(mat.metallic_roughness_texture, object, w_info)?,
-        normal_texture: build_texture(mat.normal_texture, object, w_info)?,
-        occlusion_texture: build_texture(mat.occlusion_texture, object, w_info)?,
-        emissive_texture: build_texture(mat.emissive_texture, object, w_info)?,
+        base_color_texture,
+        metallic_roughness_texture,
+        normal_texture,
+        occlusion_texture,
+        emissive_texture,
         bind_group: None,
     };
 
@@ -215,10 +264,11 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
             alpha_cutoff: mat.alpha_cutoff.unwrap_or(1.0),
         },
         &[per_frame, per_material],
-        w_info,
+        w_info.clone(),
     )?;
 
     let per_frame_bind_group = w_info
+        .clone()
         .device
         .create_bind_group_layout(&PerFrameUniforms::bind_group_layout());
 
@@ -228,8 +278,11 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
 
     per_material_uniforms.set_bind_group(&w_info.device, &per_material_bind_group);
 
-    let per_frame_uniforms =
-        PerFrameUniforms::new(PerFrameData::default(), &per_frame_bind_group, w_info);
+    let per_frame_uniforms = PerFrameUniforms::new(
+        PerFrameData::default(),
+        &per_frame_bind_group,
+        w_info.clone(),
+    );
 
     let pipeline_layout = w_info
         .device
@@ -310,8 +363,8 @@ fn build_material(id: usize, object: &StoreObject, w_info: &WgpuInfo) -> Result<
 
 fn build_texture(
     id: Option<usize>,
-    object: &StoreObject,
-    w_info: &WgpuInfo,
+    object: Arc<StoreObject>,
+    w_info: Arc<WgpuInfo>,
 ) -> Result<Option<Texture>> {
     let timer = tar_utils::start_timer();
     if id.is_none() {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cgmath::{Vector3, Vector4};
 use wgpu::{BindGroupLayoutEntry, ShaderStages};
 
@@ -81,7 +83,7 @@ impl PbrMaterial {
 
 pub trait BindGroup {
     type Data;
-    fn new(data: Self::Data, layout: &wgpu::BindGroupLayout, w_info: &WgpuInfo) -> Self;
+    fn new(data: Self::Data, layout: &wgpu::BindGroupLayout, w_info: Arc<WgpuInfo>) -> Self;
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static>;
     fn names() -> Vec<(String, String)>;
     fn update(&mut self, dat: &Self::Data, queue: &wgpu::Queue);
@@ -369,25 +371,32 @@ impl Default for PerFrameData {
 
 impl BindGroup for PerFrameUniforms {
     type Data = PerFrameData;
-    fn new(data: PerFrameData, layout: &wgpu::BindGroupLayout, w_info: &WgpuInfo) -> Self {
-        let u_mpv_matrix = Uniform::new(data.u_mpv_matrix, "u_mpv_matrix".into(), w_info);
-        let u_model_matrix = Uniform::new(data.u_model_matrix, "u_model_matrix".into(), w_info);
-        let u_camera = Uniform::new(data.u_camera, "u_camera".into(), w_info);
-        let u_light_direction =
-            Uniform::new(data.u_light_direction, "u_light_direction".into(), w_info);
-        let u_light_color = Uniform::new(data.u_light_color, "u_light_color".into(), w_info);
+    fn new(data: PerFrameData, layout: &wgpu::BindGroupLayout, w_info: Arc<WgpuInfo>) -> Self {
+        let u_mpv_matrix = Uniform::new(data.u_mpv_matrix, "u_mpv_matrix".into(), w_info.clone());
+        let u_model_matrix =
+            Uniform::new(data.u_model_matrix, "u_model_matrix".into(), w_info.clone());
+        let u_camera = Uniform::new(data.u_camera, "u_camera".into(), w_info.clone());
+        let u_light_direction = Uniform::new(
+            data.u_light_direction,
+            "u_light_direction".into(),
+            w_info.clone(),
+        );
+        let u_light_color =
+            Uniform::new(data.u_light_color, "u_light_color".into(), w_info.clone());
         let u_ambient_light_color = Uniform::new(
             data.u_ambient_light_color,
             "u_ambient_light_color".into(),
-            w_info,
+            w_info.clone(),
         );
         let u_ambient_light_intensity = Uniform::new(
             data.u_ambient_light_intensity,
             "u_ambient_light_intensity".into(),
-            w_info,
+            w_info.clone(),
         );
-        let u_alpha_blend = Uniform::new(data.u_alpha_blend, "u_alpha_blend".into(), w_info);
-        let u_alpha_cutoff = Uniform::new(data.u_alpha_cutoff, "u_alpha_cutoff".into(), w_info);
+        let u_alpha_blend =
+            Uniform::new(data.u_alpha_blend, "u_alpha_blend".into(), w_info.clone());
+        let u_alpha_cutoff =
+            Uniform::new(data.u_alpha_cutoff, "u_alpha_cutoff".into(), w_info.clone());
 
         let bind_group = w_info.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("per frame bind group"),

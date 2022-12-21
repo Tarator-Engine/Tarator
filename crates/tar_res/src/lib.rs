@@ -90,6 +90,8 @@ pub enum Error {
         #[from]
         e: gltf::Error,
     },
+    #[error("Thread Error")]
+    ThreadError,
     #[error("The given Id does not exist")]
     NonExistentID,
     #[error("The given path does not have a file extension")]
@@ -133,7 +135,7 @@ pub fn import_gltf(path: &str, name: &str) -> Result<String> {
     Ok(path)
 }
 
-pub fn load_object(path: String, w_info: &WgpuInfo) -> Result<Object> {
+pub fn load_object(path: String, w_info: Arc<WgpuInfo>) -> Result<Object> {
     builder::build(path, w_info)
 }
 
