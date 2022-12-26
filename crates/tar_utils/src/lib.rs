@@ -10,6 +10,15 @@ pub fn start_timer() -> Instant {
     Instant::now()
 }
 
+/// returns an instant with the current time (the timer)
+///
+/// # Returns
+/// - Instant of current time
+pub fn start_timer_msg(msg: &str) -> Instant {
+    dbg!(msg);
+    Instant::now()
+}
+
 /// logs the elapsed time since the given instant and a message
 /// additionally it returns a new instant
 pub fn relog_timing(msg: &str, timer: Instant) -> Instant {

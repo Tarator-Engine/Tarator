@@ -23,7 +23,7 @@ pub struct StoreObject {
 
 impl StoreObject {
     pub fn from_gltf(source: &str, object_name: &str) -> Result<Self> {
-        let start_time = start_timer();
+        let start_time = start_timer_msg("stared loading store_object");
         println!("started importing {source:?}");
         if source.starts_with("http") {
             // TODO: implement http(s) loading

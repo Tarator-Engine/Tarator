@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::{mem::size_of, num::NonZeroU32, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub fn build_loaded(obj: StoreObject, w_info: Arc<WgpuInfo>) -> Result<Object> {
-    let timer = tar_utils::start_timer();
+    let timer = tar_utils::start_timer_msg("started building loaded object");
     let obj = Arc::new(obj);
 
     let mut nodes = vec![];
@@ -32,7 +32,7 @@ pub fn build_loaded(obj: StoreObject, w_info: Arc<WgpuInfo>) -> Result<Object> {
 }
 
 pub fn build(source: String, w_info: Arc<WgpuInfo>) -> Result<Object> {
-    let timer = tar_utils::start_timer();
+    let timer = tar_utils::start_timer_msg("started building object");
     let object: StoreObject = rmp_serde::from_slice(&std::fs::read(source)?)?;
     tar_utils::log_timing("loaded from disk in ", timer);
 
@@ -40,7 +40,7 @@ pub fn build(source: String, w_info: Arc<WgpuInfo>) -> Result<Object> {
 }
 
 fn build_node(node: &StoreNode, object: Arc<StoreObject>, w_info: Arc<WgpuInfo>) -> Result<Node> {
-    let timer = tar_utils::start_timer();
+    let timer = tar_utils::start_timer_msg("started building node");
     let mut children = vec![];
     let child_ids = &node.children;
     for id in child_ids {
@@ -80,7 +80,7 @@ fn build_mesh(
 ) -> Result<Option<Mesh>> {
     // println!("new_mesh {mesh:?}");
     if let Some(id) = mesh {
-        let timer = tar_utils::start_timer();
+        let timer = tar_utils::start_timer_msg("started building timer");
         let mesh = object
             .meshes
             .iter()
@@ -111,7 +111,7 @@ fn build_primitive(
     object: Arc<StoreObject>,
     w_info: Arc<WgpuInfo>,
 ) -> Result<Primitive> {
-    let timer = tar_utils::start_timer();
+    let timer = tar_utils::start_timer_msg("started building primitive");
     let num_indices = prim.indices.as_ref().map(|i| i.len()).unwrap_or(0) as u32;
     let num_vertices = prim.vertices.len() as u32;
 
@@ -170,7 +170,7 @@ fn build_material(
     object: Arc<StoreObject>,
     w_info: Arc<WgpuInfo>,
 ) -> Result<PbrMaterial> {
-    let timer = tar_utils::start_timer();
+    let timer = tar_utils::start_timer_msg("started building material");
     let mat = object
         .materials
         .iter()
@@ -366,7 +366,7 @@ fn build_texture(
     object: Arc<StoreObject>,
     w_info: Arc<WgpuInfo>,
 ) -> Result<Option<Texture>> {
-    let timer = tar_utils::start_timer();
+    let timer = tar_utils::start_timer_msg("started building texture");
     if id.is_none() {
         return Ok(None);
     };
@@ -377,17 +377,18 @@ fn build_texture(
         .find(|t| t.index == id)
         .ok_or(Error::NonExistentTexture)?;
 
+    println!("tex_name: {}", tex.path);
     let img = image::open(&tex.path)?;
 
     let dims = (img.width(), img.height());
 
     use image::DynamicImage::*;
-    let (format, data_layout, data): (_, _, Vec<u8>) = match img {
+    let (format, data_layout, data): (_, _, Vec<u8>) = match &img {
         ImageLuma8(d) => (
             wgpu::TextureFormat::R8Unorm, // TODO: confirm if these are correct
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(dims.0),
+                bytes_per_row: NonZeroU32::new(dims.0 * size_of::<image::Luma<u8>>() as u32),
                 rows_per_image: NonZeroU32::new(dims.1),
             },
             d.to_vec(),
@@ -396,35 +397,40 @@ fn build_texture(
             wgpu::TextureFormat::Rg8Unorm,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(2 * dims.0),
+                bytes_per_row: NonZeroU32::new(dims.0 * size_of::<image::LumaA<u8>>() as u32),
                 rows_per_image: NonZeroU32::new(dims.1),
             },
             d.to_vec(),
         ),
-        ImageRgb8(d) => (
-            wgpu::TextureFormat::Rgba8Unorm,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * dims.0),
-                rows_per_image: NonZeroU32::new(dims.1),
-            },
-            d.to_vec(),
-        ),
+        ImageRgb8(_) => {
+            let d = img.to_rgba8();
+            (
+                wgpu::TextureFormat::Rgba8Unorm,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: NonZeroU32::new(dims.0 * size_of::<image::Rgba<u8>>() as u32),
+                    rows_per_image: NonZeroU32::new(dims.1),
+                },
+                d.to_vec(),
+            )
+        }
         ImageRgba8(d) => (
             wgpu::TextureFormat::Rgba8Unorm,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * dims.0),
+                bytes_per_row: NonZeroU32::new(dims.0 * size_of::<image::Rgba<u8>>() as u32),
                 rows_per_image: NonZeroU32::new(dims.1),
             },
             d.to_vec(),
         ),
         _ => {
             return Err(Error::NotSupported(
-                "image formats with pixel parts that are not 8 bit".to_owned(),
+                "image formats with pixels that are not 8 bit".to_owned(),
             ))
         }
     };
+    // println!("per_row_size: {:?}", data_layout.bytes_per_row);
+    // println!("rows_per_image: {:?}", data_layout.rows_per_image);
 
     let size = wgpu::Extent3d {
         width: dims.0,

@@ -1,4 +1,5 @@
 pub mod camera;
+// pub mod render;
 
 use std::sync::Arc;
 
@@ -21,7 +22,7 @@ type UUID = u32;
 /// Renderer's add_object()
 pub enum GameObject<'a> {
     Object(tar_res::object::Object),
-    ModelPath(&'a str, String),
+    ModelPath(&'a str, &'a str),
     ImportedPath(&'a str),
     Camera(camera::Camera),
 }
@@ -149,7 +150,7 @@ impl NativeRenderer {
             }
 
             GameObject::ModelPath(p, name) => {
-                let path = tar_res::import_gltf(p, &name)?;
+                let path = tar_res::import_gltf(p, name)?;
                 let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
@@ -189,6 +190,81 @@ impl NativeRenderer {
                 label: Some("Render Pass"),
             });
 
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.5,
+                            b: 0.4,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
+            });
+            let a: f32 = self.cameras[self.active_camera as usize].proj.aspect;
+            let y: f32 = self.cameras[self.active_camera as usize].proj.fovy.0;
+            let n: f32 = self.cameras[self.active_camera as usize].proj.znear;
+            let pos = self.cameras[self.active_camera as usize].cam.position;
+            let cam_params = CameraParams {
+                position: Vec3 {
+                    x: pos.x,
+                    y: pos.y,
+                    z: pos.z,
+                },
+                view_matrix: self.cameras[self.active_camera as usize].cam.calc_matrix(),
+                projection_matrix: Mat4::new(
+                    1.0 / (a * (0.5 * y).tan()),
+                    0.0,
+                    0.0,
+                    0.0, // NOTE: first column!
+                    0.0,
+                    1.0 / (0.5 * y).tan(),
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    -1.0,
+                    -1.0,
+                    0.0,
+                    0.0,
+                    -2.0 * n,
+                    0.0,
+                ),
+            };
+
+            let mut data = PerFrameData::default();
+            data.u_ambient_light_color = [1.0, 1.0, 1.0];
+            data.u_ambient_light_intensity = 1.0;
+            data.u_light_color = [1.0, 1.0, 1.0];
+            data.u_light_direction = [0.0, 0.5, 0.5];
+            for o in &mut self.objects {
+                o.update_per_frame(
+                    &cam_params,
+                    data.u_light_direction,
+                    data.u_light_color,
+                    data.u_ambient_light_color,
+                    data.u_ambient_light_intensity,
+                    data.u_alpha_blend,
+                    data.u_alpha_cutoff,
+                    &self.queue,
+                );
+                o.draw(&mut render_pass);
+            }
+        }
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),

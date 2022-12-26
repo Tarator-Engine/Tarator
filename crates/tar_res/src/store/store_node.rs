@@ -35,7 +35,7 @@ impl StoreNode {
         name: &str,
         root_node: bool,
     ) -> Result<Self> {
-        let timer = tar_utils::start_timer();
+        let timer = tar_utils::start_timer_msg("started loading store_node");
         let (trans, rot, scale) = g_node.transform().decomposed();
         let r = rot;
         let rotation = Quat::new(r[3], r[0], r[1], r[2]);
