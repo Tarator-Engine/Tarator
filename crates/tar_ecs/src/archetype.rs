@@ -17,19 +17,19 @@ struct Archetype {
 }
 
 impl Archetype {
-    fn new(id: ArchetypeId, set: ComponentSet, size: usize) -> Self {
-        Self {
+    fn new(id: ArchetypeId, set: ComponentSet, size: usize) -> Result<Self, Error> {
+        Ok(Self {
             id, set,
             parents: Vec::new(),
-            data: unsafe { Storage::new(size, 4) } // 4 stands for "having room for 4 ComponentTuples"
-        }
+            data: unsafe { Storage::new(size, 16)? } // 4 stands for "having room for 4 ComponentTuples"
+        })
     }
 
     fn set(&mut self, desc: &mut Description, unit: TupleUnit) -> Result<(), Error> {
         if !desc.is_index_valid() {
             let index = self.data.len();
             self.data.increase()?;
-            self.data.set(index, unit)?;
+            unsafe { self.data.set(index, unit)?; }
 
             desc.index = index;
             desc.id = DescriptionId::new(self.id, desc.id.get_version());
@@ -63,7 +63,7 @@ impl ArchetypePool {
                 }
             }
             let id = self.arch.len();
-            let arch = Archetype::new(id, set, C::size());
+            let arch = Archetype::new(id, set, C::size())?;
             self.arch.push(arch);
             archetype = unsafe{self.arch.get_unchecked_mut(id)};
         }
@@ -71,8 +71,8 @@ impl ArchetypePool {
         let mut index = 0;
         for mut unit in data.units() {
             unit.index = index;
+            index += unit.size;
             archetype.set(desc, unit)?;
-            index += 1;
         }
 
         Ok(())
