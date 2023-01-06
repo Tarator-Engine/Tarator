@@ -11,7 +11,12 @@ use crate::{
 
 use super::Renderer;
 
-pub struct DeferredRenderer {
+/// The forward renderer cl
+/// ```
+/// let fw = ForwardRenderer::new();
+/// ```
+/// # Whatever
+pub struct ForwardRenderer {
     pub surface: wgpu::Surface,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
@@ -27,7 +32,7 @@ pub struct DeferredRenderer {
 }
 
 #[async_trait]
-impl Renderer<'_> for DeferredRenderer {
+impl Renderer<'_> for ForwardRenderer {
     async fn new(window: &winit::window::Window) -> Self {
         let size = window.inner_size();
 

@@ -55,7 +55,6 @@ fn build_node(node: &StoreNode, object: Arc<StoreObject>, w_info: Arc<WgpuInfo>)
             w_info.clone(),
         )?);
     }
-    // println!("new_mesh_m: {:?}", node.mesh);
 
     let mesh = build_mesh(&node.mesh, object, w_info)?;
 
@@ -78,7 +77,6 @@ fn build_mesh(
     object: Arc<StoreObject>,
     w_info: Arc<WgpuInfo>,
 ) -> Result<Option<Mesh>> {
-    // println!("new_mesh {mesh:?}");
     if let Some(id) = mesh {
         let timer = tar_utils::start_timer_msg("started building timer");
         let mesh = object
@@ -114,9 +112,6 @@ fn build_primitive(
     let timer = tar_utils::start_timer_msg("started building primitive");
     let num_indices = prim.indices.as_ref().map(|i| i.len()).unwrap_or(0) as u32;
     let num_vertices = prim.vertices.len() as u32;
-
-    // println!("verts {:?}", prim.vertices);
-    // println!("inds {:?}", prim.indices);
 
     let vertices = w_info
         .device
@@ -377,7 +372,6 @@ fn build_texture(
         .find(|t| t.index == id)
         .ok_or(Error::NonExistentTexture)?;
 
-    println!("tex_name: {}", tex.path);
     let img = image::open(&tex.path)?;
 
     let dims = (img.width(), img.height());
@@ -429,8 +423,6 @@ fn build_texture(
             ))
         }
     };
-    // println!("per_row_size: {:?}", data_layout.bytes_per_row);
-    // println!("rows_per_image: {:?}", data_layout.rows_per_image);
 
     let size = wgpu::Extent3d {
         width: dims.0,

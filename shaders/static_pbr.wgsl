@@ -341,7 +341,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     
-    let color = vec3<f32>(metallic);
 
     return vec4<f32>(color, alpha);
     // return mrSample;

@@ -338,6 +338,7 @@ pub struct PerFrameUniforms {
 
     pub bind_group: wgpu::BindGroup,
 }
+#[derive(Debug, Clone)]
 pub struct PerFrameData {
     pub u_mpv_matrix: [[f32; 4]; 4],
     pub u_model_matrix: [[f32; 4]; 4],

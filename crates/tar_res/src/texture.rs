@@ -56,3 +56,21 @@ impl Texture {
         }
     }
 }
+
+pub struct GBuffer {
+    albedo: Texture,
+    normal: Texture,
+    specular: Texture,
+    roughness: Texture,
+    depth: Texture,
+}
+
+impl GBuffer {
+    pub fn new() -> Self {
+        todo!()
+    }
+
+    pub fn resize(&mut self) {
+        todo!()
+    }
+}

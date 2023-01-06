@@ -1,6 +1,7 @@
 use cgmath::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
+use tar_res::{CameraParams, Mat4, Vec3};
 use winit::dpi::PhysicalPosition;
 use winit::event::*;
 
@@ -41,6 +42,43 @@ pub struct RawCamera {
     pub proj: Projection,
     pub uniform: CameraUniform,
     pub controller: CameraController,
+}
+
+impl RawCamera {
+    pub fn params(&self) -> CameraParams {
+        let a: f32 = self.proj.aspect;
+        let y: f32 = self.proj.fovy.0;
+        let n: f32 = self.proj.znear;
+        let pos = self.cam.position;
+        let cam_params = CameraParams {
+            position: Vec3 {
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+            },
+            view_matrix: self.cam.calc_matrix(),
+            projection_matrix: Mat4::new(
+                1.0 / (a * (0.5 * y).tan()),
+                0.0,
+                0.0,
+                0.0, // NOTE: first column!
+                0.0,
+                1.0 / (0.5 * y).tan(),
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -1.0,
+                -1.0,
+                0.0,
+                0.0,
+                -2.0 * n,
+                0.0,
+            ),
+        };
+
+        cam_params
+    }
 }
 
 pub struct Camera {

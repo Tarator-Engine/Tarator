@@ -36,41 +36,20 @@ impl Node {
     pub fn update_per_frame(
         &mut self,
         cam_params: &CameraParams,
-        u_light_direction: [f32; 3],
-        u_light_color: [f32; 3],
-        u_ambient_light_color: [f32; 3],
-        u_ambient_light_intensity: f32,
-        u_alpha_blend: f32,
-        u_alpha_cutoff: f32,
+        data: &PerFrameData,
         queue: &wgpu::Queue,
     ) {
         if let Some(mesh) = &mut self.mesh {
+            let mut data = (*data).clone();
             let mvp_matrix =
                 cam_params.projection_matrix * cam_params.view_matrix * self.final_transform;
-            let data = PerFrameData {
-                u_model_matrix: self.final_transform.into(),
-                u_mpv_matrix: mvp_matrix.into(),
-                u_camera: cam_params.position.into(),
-                u_light_direction,
-                u_light_color,
-                u_ambient_light_color,
-                u_ambient_light_intensity,
-                u_alpha_blend,
-                u_alpha_cutoff,
-            };
+            data.u_model_matrix = self.final_transform.into();
+            data.u_mpv_matrix = mvp_matrix.into();
+            data.u_camera = cam_params.position.into();
             mesh.update_per_frame(&data, queue);
         }
         for child in &mut self.children {
-            child.update_per_frame(
-                cam_params,
-                u_light_direction,
-                u_light_color,
-                u_ambient_light_color,
-                u_ambient_light_intensity,
-                u_alpha_blend,
-                u_alpha_cutoff,
-                queue,
-            );
+            child.update_per_frame(cam_params, data, queue);
         }
     }
 
