@@ -1,6 +1,7 @@
-use std::{sync::Arc, vec};
-
-use async_trait::async_trait;
+use std::{
+    sync::{Arc, Mutex},
+    vec,
+};
 
 use tar_res::{material::PerFrameData, texture::Texture, WgpuInfo};
 
@@ -9,104 +10,58 @@ use crate::{
     GameObject,
 };
 
-use super::Renderer;
-
-/// The forward renderer cl
-/// ```
-/// let fw = ForwardRenderer::new();
-/// ```
-/// # Whatever
 pub struct ForwardRenderer {
-    pub surface: wgpu::Surface,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
-    pub config: wgpu::SurfaceConfiguration,
-    pub size: winit::dpi::PhysicalSize<u32>,
     pub cameras: Vec<crate::camera::RawCamera>,
     pub objects: Vec<tar_res::object::Object>,
     pub active_camera: Option<u32>,
     pub depth_texture: tar_res::texture::Texture,
+    pub format: wgpu::TextureFormat,
 
     // DEVELOPMENT PURPOSES ONLY // TODO!: REMOVE //
     pub mouse_pressed: bool,
 }
 
-#[async_trait]
-impl Renderer<'_> for ForwardRenderer {
-    async fn new(window: &winit::window::Window) -> Self {
-        let size = window.inner_size();
-
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    features: wgpu::Features::empty(),
-                    limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                },
-                None,
-            )
-            .await
-            .unwrap();
-
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_supported_formats(&adapter)[0],
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-        };
-
-        surface.configure(&device, &config);
-
-        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+impl ForwardRenderer {
+    pub async fn new(
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+        config: &wgpu::SurfaceConfiguration,
+        format: wgpu::TextureFormat,
+    ) -> Self {
+        let depth_texture = Texture::create_depth_texture(&device, config, "depth_texture");
         Self {
-            surface,
-            device: Arc::new(device),
-            queue: Arc::new(queue),
+            device,
+            queue,
             cameras: vec![],
             objects: vec![],
-            size,
-            config,
             active_camera: None,
             depth_texture,
             mouse_pressed: false,
+            format,
         }
     }
 
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(
+        &mut self,
+        new_size: winit::dpi::PhysicalSize<u32>,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
         if new_size.width > 0 && new_size.height > 0 {
             for camera in &mut self.cameras {
                 camera.proj.resize(new_size.width, new_size.height);
-                self.size = new_size;
-                self.config.width = new_size.width;
-                self.config.height = new_size.height;
-                self.surface.configure(&self.device, &self.config);
                 self.depth_texture =
-                    Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+                    Texture::create_depth_texture(&self.device, config, "depth_texture");
             }
         }
     }
 
-    fn select_camera(&mut self, cam: u32) {
+    pub fn select_camera(&mut self, cam: u32) {
         self.active_camera = Some(cam);
     }
 
-    async fn add_object(&mut self, obj: GameObject<'impl0>) -> tar_res::Result<()> {
+    pub async fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<()> {
         match obj {
             GameObject::Camera(cam) => {
                 let camera = cam.cam;
@@ -128,7 +83,7 @@ impl Renderer<'_> for ForwardRenderer {
                 let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
-                    surface_format: self.config.format,
+                    surface_format: self.format,
                 });
                 let object = tar_res::load_object(path, w_info)?;
                 self.objects.push(object);
@@ -138,7 +93,7 @@ impl Renderer<'_> for ForwardRenderer {
                 let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
-                    surface_format: self.config.format,
+                    surface_format: self.format,
                 });
                 let object = tar_res::load_object(p.into(), w_info)?;
                 self.objects.push(object);
@@ -152,23 +107,21 @@ impl Renderer<'_> for ForwardRenderer {
         Ok(())
     }
 
-    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Command Encoder"),
-            });
+    pub fn render(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) -> Result<(), wgpu::SurfaceError> {
+        // let output = surface.get_current_texture()?;
+        // let view = output
+        //     .texture
+        //     .create_view(&wgpu::TextureViewDescriptor::default());
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -202,8 +155,6 @@ impl Renderer<'_> for ForwardRenderer {
                 }
             }
         }
-        self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
         Ok(())
     }
 }
