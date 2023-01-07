@@ -58,6 +58,7 @@ pub async fn run() {
     let title = env!("CARGO_PKG_NAME");
     let window = winit::window::WindowBuilder::new()
         .with_title(title)
+        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
         .build(&event_loop)
         .unwrap();
 
@@ -147,7 +148,7 @@ pub async fn run() {
     };
 
     game_renderer
-        .add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"))
+        .add_object(tar_render::GameObject::ModelPath("res/Box/Box.gltf", "box"))
         .await
         .unwrap();
 
@@ -163,9 +164,12 @@ pub async fn run() {
 
     let context = egui::Context::default();
 
-    let mut accept_input = false;
+    let mut frames = 0;
+    let mut fps = 0;
+    let mut since_start = 0;
+    let start_time = instant::Instant::now();
 
-    let mut last_render_time = instant::Instant::now();
+    let mut last_render_time = start_time;
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
@@ -173,6 +177,13 @@ pub async fn run() {
                 let dt = now - last_render_time;
                 last_render_time = now;
                 update(&mut game_renderer, dt);
+                let secs = start_time.elapsed().as_secs();
+                if secs > since_start {
+                    since_start = secs;
+                    fps = frames;
+                    frames = 0;
+                }
+
 
                 let output_frame = match surface.get_current_texture() {
                     Ok(frame) => frame,
@@ -196,7 +207,28 @@ pub async fn run() {
                 egui::Window::new("Timings").show(&context, |ui| {
                     ui.label("Here you can see different frame timings");
                     ui.label(format!("Frame time: {dt:?}"));
+                    ui.label(format!("FPS: {fps}"));
                 });
+                egui::SidePanel::right("right panel")
+                    .resizable(true)
+                    .default_width(300.0)
+                    .show(&context, |ui| {
+                        ui.vertical_centered(|ui| ui.heading("right panel"))
+                    });
+                egui::SidePanel::left("left panel")
+                    .resizable(true)
+                    .default_width(300.0)
+                    .show(&context, |ui| {
+                        ui.vertical_centered(|ui| ui.heading("left panel"));
+                        ui.add(egui::Slider::new(&mut game_renderer.cameras[game_renderer.active_camera.unwrap() as usize].controller.sensitivity, 0.0..=5.0));
+                    });
+                egui::TopBottomPanel::bottom("bottom panel").resizable(true).default_height(200.0).show(&context, |ui| {
+                    ui.vertical_centered(|ui| ui.heading("bottom panel"))
+                });
+                egui::TopBottomPanel::top("top panel").resizable(false).default_height(50.0).show(&context, |ui| {
+                    ui.vertical_centered(|ui| ui.heading("controls"))
+                });
+
                 let output = context.end_frame();
                 let paint_jobs = context.tessellate(output.shapes);
 
@@ -277,11 +309,12 @@ pub async fn run() {
                 queue.submit(
                     user_cmd_bufs
                         .into_iter()
-                        .chain(std::iter::once(encoder.finish())),
                 );
+                queue.submit(std::iter::once(encoder.finish()));
 
                 // Redraw egui
                 output_frame.present();
+                frames += 1;
             }
             Event::MainEventsCleared => {
                 window.request_redraw();

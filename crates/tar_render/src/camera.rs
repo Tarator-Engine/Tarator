@@ -157,7 +157,7 @@ pub struct CameraController {
     rotate_vertical: f32,
     scroll: f32,
     speed: f32,
-    sensitivity: f32,
+    pub sensitivity: f32,
 }
 
 impl CameraController {
