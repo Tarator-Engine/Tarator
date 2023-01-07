@@ -1,9 +1,7 @@
-mod archetype;
 mod component;
 mod entity;
 mod error;
 mod id;
-mod storage;
 #[cfg(test)]
 mod tests;
 mod world;

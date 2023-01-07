@@ -1,23 +1,18 @@
+use super::*;
 use crate::{
     error::EcsError as Error,
     id::*
 };
 
-pub(crate) type EntityId = Id;
 // index = ArchetypeId
-pub(crate) type DescriptionId = Id;
+pub(crate) type DescId = Id;
 
-pub struct Entity {
-    id: EntityId
-}
-
-
-pub(crate) struct Description {
-    pub(crate) id: DescriptionId,
+pub(crate) struct Desc {
+    pub(crate) id: DescId,
     pub(crate) index: usize
 }
 
-impl Description {
+impl Desc {
     #[inline]
     pub(crate) fn is_index_valid(&self) -> bool {
         self.index != usize::MAX
@@ -25,23 +20,24 @@ impl Description {
 }
 
 
-pub(crate) struct DescriptionPool {
+pub(crate) struct DescPool {
     free: Vec<EntityId>,
-    desc: Vec<Description>
+    desc: Vec<Desc>
 }
 
-impl DescriptionPool {
+impl DescPool {
     pub(crate) fn new() -> Self {
         Self {
             free: Vec::new(),
             desc: Vec::new()
         } 
     }
+
     pub(crate) fn create(&mut self) -> Result<Entity, Error> {
         let Some(unfreed) = self.free.pop() else {
             let index = self.desc.len();
-            let desc = Description {
-                id: DescriptionId::versioned_invalid(0),
+            let desc = Desc {
+                id: DescId::versioned_invalid(0),
                 index: usize::MAX
             };
             self.desc.push(desc);
@@ -53,14 +49,35 @@ impl DescriptionPool {
         let Some(desc) = self.desc.get_mut(index) else {
             return Err(Error::InvalidIndex(index));
         };
-        *desc = Description {
-            id: DescriptionId::versioned_invalid(version),
+        *desc = Desc {
+            id: DescId::versioned_invalid(version),
             index: usize::MAX
         };
         Ok(Entity { id: EntityId::new(index, version) })
     }
 
-    pub(crate) fn get_mut(&mut self, entity: Entity) -> Result<&mut Description, Error> {
+    pub(crate) fn destroy(&mut self, entity: Entity) -> Result<(), Error> {
+        let desc = self.get_mut(entity)?;
+        *desc = Desc {
+            id: DescId::versioned_invalid(desc.id.get_version() + 1),
+            index: usize::MAX
+        };
+        self.free.push(entity.id);
+        Ok(())
+    }
+
+    pub(crate) fn get(&self, entity: Entity) -> Result<&Desc, Error> {
+        let id = entity.id;
+        let Some(desc) = self.desc.get(id.get_index()) else {
+            return Err(Error::InvalidEntity(id));
+        };
+        if desc.id.get_version() != id.get_version() {
+            return Err(Error::ClearedEntity(id));
+        }
+        Ok(desc)       
+    }
+
+    pub(crate) fn get_mut(&mut self, entity: Entity) -> Result<&mut Desc, Error> {
         let id = entity.id;
         let Some(desc) = self.desc.get_mut(id.get_index()) else {
             return Err(Error::InvalidEntity(id));
