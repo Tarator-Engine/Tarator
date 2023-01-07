@@ -14,7 +14,7 @@ cgmath = {version = "0.18", features = ["serde"]}
 wgpu = "0.14.*"
 bytemuck = { version = "1.12.1", features = [ "derive" ] }
 bitflags = {version = "1.3"}
-base64 = "0.13"
+base64 = "0.20.0"
 # Paralell Iterators
 rayon = "1.5"
 
@@ -25,10 +25,10 @@ chrono = {version="0.4", features=["serde", "clock"]}
 
 
 [dependencies.wgsl_preprocessor]
-# git = "https://github.com/slackers123/wgsl_preprocessor"
+git = "https://github.com/slackers123/wgsl_preprocessor"
 # rev="f1a2c12"
 features=["array_vectors"]
-path = "../../../wgsl_preprocessor"
+# path = "../../../wgsl_preprocessor"
 
 
 [dependencies.image]
