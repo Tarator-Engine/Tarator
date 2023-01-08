@@ -2,7 +2,7 @@ use std::alloc::{ Layout, LayoutError };
 
 use crate::{
     entity::EntityId,
-    id::Index, component::ComponentSet
+    id::{Index, Id}, component::ComponentSet
 };
 
 #[derive(Debug)]
@@ -14,4 +14,7 @@ pub enum EcsError {
 
     // Memory Errors
     Layout(Result<Layout, LayoutError>),
+    DataMoved(Id),
+
+    MutexError
 }

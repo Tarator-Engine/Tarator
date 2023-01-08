@@ -6,6 +6,7 @@ pub(crate) trait IdTrait {
     fn invalid() -> Self;
     fn versioned_invalid(version: Version) -> Self;
     fn get_index(self) -> Index;
+    fn is_index_valid(self) -> bool;
     fn get_version(self) -> Version;
 }
 
@@ -31,6 +32,10 @@ impl IdTrait for Id {
     #[inline]
     fn get_index(self) -> Index {
         self >> BSIZE      
+    }
+    #[inline]
+    fn is_index_valid(self) -> bool {
+        self.get_index() != Index::MAX
     }
     #[inline]
     fn get_version(self) -> Version {

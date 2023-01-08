@@ -1,35 +1,54 @@
+use std::{sync::{Arc, atomic::AtomicBool}, mem::size_of};
+
 use super::{
-    ComponentSet,
-    tuple::{ComponentTuple, DataUnit},
+    Component, ComponentSet,
+    tuple::*,
     store::*
 };
 use crate::{
     error::EcsError as Error,
-    entity::desc::Desc
+    entity::desc::Desc, id::IdTrait
 };
 
 
 pub(crate) type ArcheId = usize;
 
-struct Arche {
+pub(crate) struct Arche {
     id: ArcheId,
     set: ComponentSet,
     parents: Vec<ArcheId>,
-    store: Store
+    pub(crate) units: Vec<TupleUnit>,
+    pub(crate) store: Arc<Store>
 }
 
 impl Arche {
-    fn new(id: ArcheId, set: ComponentSet) -> Self {
-        Self { parents: Vec::new(), id, set, store: Store::new() }
+    fn new(id: ArcheId, set: ComponentSet, units: Vec<TupleUnit>) -> Self {
+        let tmp = units[units.len() - 1];
+        let size = tmp.offset + tmp.size() + size_of::<AtomicBool>();
+        Self { parents: Vec::new(), id, set, units, store: Arc::new(Store::new(size)) }
     }
-    fn set(&self, desc: &mut Desc, unit: DataUnit) -> Result<(), Error> {
-        todo!() 
+    fn set(&self, desc: &mut Desc, data: DataUnit) -> Result<(), Error> {
+        let offset = 'getter: {
+            for unit in &self.units {
+                if unit.id == data.id {
+                    break 'getter unit.offset;
+                }
+            }
+            return Err(Error::InvalidIndex(data.id));
+        };
+
+        if !desc.is_index_valid() {
+            desc.index = self.store.create()?;
+        }
+        self.store.set(desc.index, offset, data)?;
+
+        Ok(())
     }
 }
 
 
 pub(crate) struct ArchePool {
-    arche: Vec<Arche>
+    pub(crate) arche: Vec<Arche>
 }
 
 impl ArchePool {
@@ -38,18 +57,20 @@ impl ArchePool {
             arche: Vec::new() 
         }
     }
+    // TODO: Relocation of Component Data
     pub(crate) fn set<C: ComponentTuple>(&mut self, desc: &mut Desc, data: C) -> Result<(), Error> {
         let arche = 'getter: {
             let set = C::set();
 
-            for arche in &mut self.arche {
-                if arche.set == set {
-                    break 'getter arche;
-                }
+            if desc.id.is_index_valid() {
+                let Some(arche) = self.arche.get(desc.id) else {
+                    return Err(Error::InvalidIndex(desc.id));
+                };
+                break 'getter arche;
             }
 
             let new_id = self.arche.len();
-            let mut new_arche = Arche::new(new_id, set);
+            let mut new_arche = Arche::new(new_id, set, C::tuple_units().collect());
             for arche in &mut self.arche {
                 if arche.set.is_superset(&new_arche.set) {
                     new_arche.parents.push(arche.id);
@@ -59,15 +80,17 @@ impl ArchePool {
             }
 
             self.arche.push(new_arche);
-            self.arche.get_mut(new_id).unwrap()
+            // no need for bound checking here
+            unsafe { self.arche.get_unchecked_mut(new_id) }
         };
+
         for unit in data.data_units() {
             arche.set(desc, unit)?;
         }
-        
-        todo!()
+
+        Ok(())
     }
-    pub(crate) fn get<C: ComponentTuple>(&self, desc: &Desc) -> Result<StorePtr<C>, Error> {
+    pub(crate) fn get<C: Component>(&self, desc: &Desc) -> Result<StorePtr<C>, Error> {
         todo!()
     }
 }

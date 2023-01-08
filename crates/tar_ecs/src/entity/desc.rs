@@ -56,18 +56,17 @@ impl DescPool {
         Ok(Entity { id: EntityId::new(index, version) })
     }
 
-    pub(crate) fn destroy(&mut self, entity: Entity) -> Result<(), Error> {
-        let desc = self.get_mut(entity)?;
+    pub(crate) fn destroy(&mut self, id: EntityId) -> Result<(), Error> {
+        let desc = self.get_mut(id)?;
         *desc = Desc {
             id: DescId::versioned_invalid(desc.id.get_version() + 1),
             index: usize::MAX
         };
-        self.free.push(entity.id);
+        self.free.push(id);
         Ok(())
     }
 
-    pub(crate) fn get(&self, entity: Entity) -> Result<&Desc, Error> {
-        let id = entity.id;
+    pub(crate) fn get(&self, id: EntityId) -> Result<&Desc, Error> {
         let Some(desc) = self.desc.get(id.get_index()) else {
             return Err(Error::InvalidEntity(id));
         };
@@ -77,8 +76,7 @@ impl DescPool {
         Ok(desc)       
     }
 
-    pub(crate) fn get_mut(&mut self, entity: Entity) -> Result<&mut Desc, Error> {
-        let id = entity.id;
+    pub(crate) fn get_mut(&mut self, id: EntityId) -> Result<&mut Desc, Error> {
         let Some(desc) = self.desc.get_mut(id.get_index()) else {
             return Err(Error::InvalidEntity(id));
         };

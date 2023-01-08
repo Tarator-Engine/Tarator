@@ -1,24 +1,24 @@
 use std::{
     mem::size_of,
-    ptr::addr_of
+    ptr::addr_of, sync::atomic::AtomicBool
 };
 use super::*;
 
 
-trait Unit {
+pub trait Unit {
     fn size(&self) -> usize;
     fn set_offset(&mut self, offset: usize);
 }
 
+#[derive(Clone, Copy)]
 pub struct TupleUnit {
     pub(crate) id: ComponentId,
     pub(crate) offset: usize,
-    pub(crate) size: usize
 }
 
 impl Unit for TupleUnit {
     fn size(&self) -> usize {
-        self.size
+        size_of::<Self>()
     }
     fn set_offset(&mut self, offset: usize) {
         self.offset = offset
@@ -26,23 +26,23 @@ impl Unit for TupleUnit {
 }
 
 
+#[derive(Clone, Copy)]
 pub struct DataUnit {
     pub(crate) id: ComponentId,
     pub(crate) offset: usize,
-    pub(crate) size: usize,
     pub(crate) data: *const u8
 }
 
 impl Unit for DataUnit {
     fn size(&self) -> usize {
-        self.size
+        size_of::<Self>()
     }
     fn set_offset(&mut self, offset: usize) {
         self.offset = offset
     }
 }
 
-pub(crate) struct UnitIter<T: Unit> {
+pub struct UnitIter<T: Unit> {
     current: usize,
     offset: usize,
     units: Vec<T>
@@ -58,12 +58,12 @@ impl<T: Unit> UnitIter<T> {
     }
 }
 
-impl<T: Unit> Iterator for UnitIter<T> {
+impl<T: Unit + Copy> Iterator for UnitIter<T> {
     type Item = T;
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         let ret = self.units.get_mut(self.current)?;
         ret.set_offset(self.offset);
-        self.offset = ret.size();
+        self.offset = ret.size() + size_of::<AtomicBool>();
         self.current += 1;
 
         Some(*ret)
@@ -109,7 +109,6 @@ mod macros {
                         TupleUnit {
                             id: $c::id(),
                             offset: 0,
-                            size: size_of::<$c>(),
                         },
                     )*];
                     units.sort_unstable_by(|a, b| b.id.cmp(&a.id));
@@ -122,7 +121,6 @@ mod macros {
                         DataUnit {
                             id: $c::id(),
                             offset: 0,
-                            size: size_of::<$c>(),
                             data: unsafe{(addr_of!(self) as *const u8).add(size_of::<$c>())}
                         },
                     )*];
