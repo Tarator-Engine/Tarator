@@ -204,7 +204,7 @@ pub async fn run() {
 
                 let input = egui_state.take_egui_input(&window);
                 context.begin_frame(input);
-                egui::Window::new("Timings").show(&context, |ui| {
+                egui::Window::new("Timings").resizable(false).show(&context, |ui| {
                     ui.label("Here you can see different frame timings");
                     ui.label(format!("Frame time: {dt:?}"));
                     ui.label(format!("FPS: {fps}"));
@@ -220,6 +220,7 @@ pub async fn run() {
                     .default_width(300.0)
                     .show(&context, |ui| {
                         ui.vertical_centered(|ui| ui.heading("left panel"));
+                        ui.label("sensitvity");
                         ui.add(egui::Slider::new(&mut game_renderer.cameras[game_renderer.active_camera.unwrap() as usize].controller.sensitivity, 0.0..=5.0));
                     });
                 egui::TopBottomPanel::bottom("bottom panel").resizable(true).default_height(200.0).show(&context, |ui| {

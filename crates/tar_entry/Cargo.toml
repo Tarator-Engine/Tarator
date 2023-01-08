@@ -9,5 +9,4 @@ edition = "2021"
 tar_gui = {path="../tar_gui"}
 # tar_render = {path="../tar_render"}
 tar_res = {path="../tar_res"}
-pollster = "0.2.5"
 tokio = {version = "1", features=["full"]}
