@@ -1,6 +1,7 @@
 use cgmath::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
+use tar_res::{CameraParams, Mat4, Vec3};
 use winit::dpi::PhysicalPosition;
 use winit::event::*;
 
@@ -39,10 +40,45 @@ impl CameraUniform {
 pub struct RawCamera {
     pub cam: IntCamera,
     pub proj: Projection,
-    pub buffer: wgpu::Buffer,
-    pub bind_group: wgpu::BindGroup,
     pub uniform: CameraUniform,
     pub controller: CameraController,
+}
+
+impl RawCamera {
+    pub fn params(&self) -> CameraParams {
+        let a: f32 = self.proj.aspect;
+        let y: f32 = self.proj.fovy.0;
+        let n: f32 = self.proj.znear;
+        let pos = self.cam.position;
+        let cam_params = CameraParams {
+            position: Vec3 {
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+            },
+            view_matrix: self.cam.calc_matrix(),
+            projection_matrix: Mat4::new(
+                1.0 / (a * (0.5 * y).tan()),
+                0.0,
+                0.0,
+                0.0, // NOTE: first column!
+                0.0,
+                1.0 / (0.5 * y).tan(),
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -1.0,
+                -1.0,
+                0.0,
+                0.0,
+                -2.0 * n,
+                0.0,
+            ),
+        };
+
+        cam_params
+    }
 }
 
 pub struct Camera {
@@ -84,10 +120,10 @@ impl IntCamera {
 }
 
 pub struct Projection {
-    aspect: f32,
-    fovy: Rad<f32>,
-    znear: f32,
-    zfar: f32,
+    pub aspect: f32,
+    pub fovy: Rad<f32>,
+    pub znear: f32,
+    pub zfar: f32,
 }
 
 impl Projection {
@@ -121,7 +157,7 @@ pub struct CameraController {
     rotate_vertical: f32,
     scroll: f32,
     speed: f32,
-    sensitivity: f32,
+    pub sensitivity: f32,
 }
 
 impl CameraController {
