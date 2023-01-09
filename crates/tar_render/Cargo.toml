@@ -17,7 +17,6 @@ tobj = { version = "3.2.3", features = ["async"]}
 wgpu = { version = "0.14"}
 winit = "0.27.4"
 instant = "0.1.12"
-# eframe = {version="0.19.0", features=["wgpu"]}
 egui = "0.20.1"
 thiserror = "1.0"
 gltf = "1.0"
@@ -28,10 +27,6 @@ async-trait = "0.1.60"
 version = "0.24.4"
 default-features = false
 features = ["png", "jpeg"]
-
-# [dependencies.tokio]
-# version = "1"
-# features = ["rt-multi-thread", "macros", ]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 reqwest = { version = "0.11.12" }

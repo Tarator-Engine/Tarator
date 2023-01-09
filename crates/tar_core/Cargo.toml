@@ -1,5 +1,5 @@
 [package]
-name = "tar_gui"
+name = "tar_core"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,3 +19,8 @@ log = "0.4.17"
 cgmath = "0.18"
 instant = "0.1.12"
 bytemuck = {version="1.12.1", features=["derive"]}
+
+
+[dependencies.tokio]
+version = "1"
+features = ["rt-multi-thread"]
