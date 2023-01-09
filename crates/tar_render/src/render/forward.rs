@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, Mutex},
-    vec,
-};
+use std::{sync::Arc, vec};
 
 use tar_res::{material::PerFrameData, texture::Texture, WgpuInfo};
 
