@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tar_ecs = {path="../tar_ecs"}
 tar_gui = {path="../tar_gui"}
-# tar_render = {path="../tar_render"}
-tar_res = {path="../tar_res"}
 tokio = {version = "1", features=["full"]}

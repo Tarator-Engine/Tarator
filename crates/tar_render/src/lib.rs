@@ -113,6 +113,7 @@ pub async fn run() {
         proj: projection,
         controller: camera_controller,
     };
+    
     // const NUM_INSTANCES_PER_ROW: u32 = 10;
     // const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     //     NUM_INSTANCES_PER_ROW as f32 * 0.5,
