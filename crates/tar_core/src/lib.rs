@@ -1,4 +1,9 @@
-use std::sync::Arc;
+mod error_msg;
+
+use std::{
+    clone,
+    sync::{atomic::AtomicBool, Arc, Barrier, Mutex},
+};
 
 use egui_wgpu::renderer::ScreenDescriptor;
 use winit::{
@@ -127,6 +132,26 @@ pub async fn run() {
     )
     .await;
 
+    let blocking_threads = threadpool::ThreadPool::new(4);
+
+    let barrier = Arc::new(Barrier::new(3));
+
+    // let pre_render_sync = Arc::new(Barrier::new(2));
+    let p_barrier = barrier.clone();
+    let pre_render_thread = std::thread::spawn(move || {
+        loop {
+            // do pre_rendering here
+
+            p_barrier.wait();
+        }
+    });
+    let r_barrier = barrier.clone();
+    let render_thread = std::thread::spawn(move || loop {
+        r_barrier.wait();
+
+        // do rendering here
+    });
+
     let int_camera = tar_render::camera::IntCamera::new(
         (0.0, 5.0, 10.0),
         cgmath::Deg(-90.0),
@@ -170,12 +195,37 @@ pub async fn run() {
     let start_time = instant::Instant::now();
 
     let mut last_render_time = start_time;
+
+    let mut errors: Vec<Box<dyn std::error::Error>> = vec![];
+
+    let blocking_threads = threadpool::ThreadPool::new(4);
+
+    let barrier = Arc::new(Barrier::new(3));
+
+    // let pre_render_sync = Arc::new(Barrier::new(2));
+    let p_barrier = barrier.clone();
+    let pre_render_thread = std::thread::spawn(move || {
+        loop {
+            // do pre_rendering here
+
+            p_barrier.wait();
+        }
+    });
+    let r_barrier = barrier.clone();
+    let render_thread = std::thread::spawn(move || loop {
+        r_barrier.wait();
+
+        // do rendering here
+    });
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
                 let now = instant::Instant::now();
                 let dt = now - last_render_time;
                 last_render_time = now;
+
+                barrier.wait();
                 update(&mut game_renderer, dt);
                 let secs = start_time.elapsed().as_secs();
                 if secs > since_start {
@@ -204,6 +254,17 @@ pub async fn run() {
 
                 let input = egui_state.take_egui_input(&window);
                 context.begin_frame(input);
+
+                let mut remove = vec![];
+                for (i, err) in (&errors).iter().enumerate() {
+                    if error_msg::error_message(&context, err) {
+                        remove.push(i);
+                    };
+                }
+                for r in remove.iter().rev() {
+                    errors.remove(*r);
+                }
+
                 egui::Window::new("Timings").resizable(false).show(&context, |ui| {
                     ui.label("Here you can see different frame timings");
                     ui.label(format!("Frame time: {dt:?}"));

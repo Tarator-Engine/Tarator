@@ -13,14 +13,17 @@ wgpu = "0.14"
 winit = "0.27.4"
 eframe = {version="0.20.1", features=["wgpu"]}
 tar_render = {path="../tar_render"}
+tar_res = {path = "../tar_res"}
 cfg-if = "1"
 env_logger = "0.10.0"
 log = "0.4.17"
 cgmath = "0.18"
 instant = "0.1.12"
 bytemuck = {version="1.12.1", features=["derive"]}
+threadpool = "1.8.1"
+crossbeam-channel = "0.5.6"
 
 
 [dependencies.tokio]
 version = "1"
-features = ["rt-multi-thread"]
+features = ["rt"]
