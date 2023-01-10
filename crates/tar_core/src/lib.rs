@@ -48,44 +48,17 @@ fn update(renderer: &mut tar_render::render::forward::ForwardRenderer, dt: std::
     cam.uniform.update_view_proj(&cam.cam, &cam.proj);
 }
 
-pub async fn run() {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
-        }
-        else {
-            env_logger::init();
-        }
-    }
-
-    let event_loop = EventLoop::new();
-    let title = env!("CARGO_PKG_NAME");
-    let window = winit::window::WindowBuilder::new()
-        .with_title(title)
-        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
-        .build(&event_loop)
-        .unwrap();
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        // Winit prevents sizing with CSS, wo we have to set
-        // the size manually when on web.
-        use winit::dpi::PhysicalSize;
-        window.set_inner_size(PhysicalSize::new(450, 400));
-
-        use winit::platform::web::WindowExtWebSys;
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                let dst = cod.get_element_by_id("wasm-example")?;
-                let canvas = web_sys::Element::from(window.canvas());
-                dst.append_child(&canvas).ok()?;
-                Some(())
-            })
-            .expect("Couldn't append canvas to document body.");
-    }
-
+async fn build_renderer_extras(
+    window: &winit::window::Window,
+) -> (
+    tar_render::render::forward::ForwardRenderer,
+    Arc<wgpu::Device>,
+    Arc<wgpu::Queue>,
+    winit::dpi::PhysicalSize<u32>,
+    wgpu::Surface,
+    wgpu::SurfaceConfiguration,
+    wgpu::Adapter,
+) {
     let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
 
@@ -132,25 +105,49 @@ pub async fn run() {
     )
     .await;
 
-    let blocking_threads = threadpool::ThreadPool::new(4);
+    return (game_renderer, device, queue, size, surface, config, adapter);
+}
 
-    let barrier = Arc::new(Barrier::new(3));
-
-    // let pre_render_sync = Arc::new(Barrier::new(2));
-    let p_barrier = barrier.clone();
-    let pre_render_thread = std::thread::spawn(move || {
-        loop {
-            // do pre_rendering here
-
-            p_barrier.wait();
+pub async fn run() {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
         }
-    });
-    let r_barrier = barrier.clone();
-    let render_thread = std::thread::spawn(move || loop {
-        r_barrier.wait();
+        else {
+            env_logger::init();
+        }
+    }
 
-        // do rendering here
-    });
+    let event_loop = EventLoop::new();
+    let title = env!("CARGO_PKG_NAME");
+    let window = winit::window::WindowBuilder::new()
+        .with_title(title)
+        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
+        .build(&event_loop)
+        .unwrap();
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Winit prevents sizing with CSS, wo we have to set
+        // the size manually when on web.
+        use winit::dpi::PhysicalSize;
+        window.set_inner_size(PhysicalSize::new(450, 400));
+
+        use winit::platform::web::WindowExtWebSys;
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = cod.get_element_by_id("wasm-example")?;
+                let canvas = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas).ok()?;
+                Some(())
+            })
+            .expect("Couldn't append canvas to document body.");
+    }
+
+    let (mut game_renderer, device, queue, size, surface, mut config, adapter) =
+        build_renderer_extras(&window).await;
 
     let int_camera = tar_render::camera::IntCamera::new(
         (0.0, 5.0, 10.0),
@@ -193,6 +190,8 @@ pub async fn run() {
     let mut fps = 0;
     let mut since_start = 0;
     let start_time = instant::Instant::now();
+
+    let mut view_rect = (800, 800);
 
     let mut last_render_time = start_time;
 
