@@ -1,4 +1,23 @@
+use tar_ecs::prelude::*;
+
+#[derive(Component)]
+struct Test1(String, u32);
+
+#[derive(Component)]
+struct Test2(String, u32);
+
 #[tokio::main]
 async fn main() {
-    tar_core::run().await
+    let mut world = World::new();
+
+    let entity = world.entity_new().unwrap();
+    let component = (Test1(format!("Yeah!"), 32), Test2(format!("Baby!"), 64));
+    world.entity_set(entity, component).unwrap();
+
+    let test1 = world.entity_get::<Test1>(entity).unwrap().lock().unwrap();
+    let test2 = world.entity_get::<Test2>(entity).unwrap().lock().unwrap();
+    assert!(test1.0 == format!("Yeah!"));
+    assert!(test1.1 == 32);
+    assert!(test2.0 == format!("Baby!!"));
+    assert!(test2.1 == 64);
 }

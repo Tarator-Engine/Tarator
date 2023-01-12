@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 tar_ecs = {path="../tar_ecs"}
-tar_core = {path="../tar_core"}
+# tar_core = {path="../tar_core"}
 tokio = {version = "1", features=["full"]}
