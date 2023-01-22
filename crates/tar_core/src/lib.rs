@@ -131,7 +131,7 @@ pub async fn run() {
 
     #[cfg(target_arch = "wasm32")]
     {
-        // Winit prevents sizing with CSS, wo we have to set
+        // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
         use winit::dpi::PhysicalSize;
         window.set_inner_size(PhysicalSize::new(450, 400));
@@ -228,20 +228,13 @@ pub async fn run() {
             }
 
             // do pre_rendering here
-            let now = instant::Instant::now();
-            let dt = now - last_render_time;
-            last_render_time = now;
             update(&mut pre_render_r.write(), dt);
-            let secs = start_time.elapsed().as_secs();
-            if secs > since_start {
-                since_start = secs;
-                fps = frames;
-                frames = 0;
-            }
 
             // scripts run
 
             // run physics
+
+            // build ui
 
             p_barrier.wait();
         }
