@@ -1,17 +1,35 @@
 mod error_msg;
+mod pre_render;
+mod render;
 mod state;
 
-use std::{
-    clone,
-    sync::{atomic::AtomicBool, Arc, Barrier, Mutex},
-};
+use std::sync::{Arc, Barrier};
 
-use egui_wgpu::renderer::ScreenDescriptor;
+use instant::Duration;
+use parking_lot::Mutex;
+
 use parking_lot::RwLock;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
 };
+
+#[derive(Debug)]
+struct DoubleBuffer<T: Clone> {
+    pub state: T,
+}
+
+impl<T: Clone> DoubleBuffer<T> {
+    pub fn update_read(&mut self) -> T {
+        return self.state.clone();
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EngineState {
+    dt: Duration,
+    fps: u32,
+}
 
 fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &WindowEvent) -> bool {
     match event {
@@ -111,6 +129,14 @@ async fn build_renderer_extras(
 }
 
 pub async fn run() {
+    let db = DoubleBuffer {
+        state: EngineState {
+            dt: Duration::from_secs(0),
+            fps: 0,
+        },
+    };
+    let db = Arc::new(Mutex::new(db));
+
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -123,11 +149,13 @@ pub async fn run() {
 
     let event_loop = EventLoop::new();
     let title = env!("CARGO_PKG_NAME");
-    let window = winit::window::WindowBuilder::new()
-        .with_title(title)
-        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
-        .build(&event_loop)
-        .unwrap();
+    let window = Arc::new(
+        winit::window::WindowBuilder::new()
+            .with_title(title)
+            .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
+            .build(&event_loop)
+            .unwrap(),
+    );
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -148,59 +176,7 @@ pub async fn run() {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let (mut game_renderer, device, queue, size, surface, mut config, adapter) =
-        build_renderer_extras(&window).await;
-
-    let game_renderer = Arc::new(RwLock::new(game_renderer));
-    let stop = Arc::new(RwLock::new(false));
-
-    let int_camera = tar_render::camera::IntCamera::new(
-        (0.0, 5.0, 10.0),
-        cgmath::Deg(-90.0),
-        cgmath::Deg(-20.0),
-    );
-    let projection = tar_render::camera::Projection::new(
-        config.width,
-        config.height,
-        cgmath::Deg(45.0),
-        0.1,
-        100.0,
-    );
-    let camera_controller = tar_render::camera::CameraController::new(4.0, 0.4);
-
-    let camera = tar_render::camera::Camera {
-        cam: int_camera,
-        proj: projection,
-        controller: camera_controller,
-    };
-
-    game_renderer
-        .write()
-        .add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"))
-        .await
-        .unwrap();
-
-    game_renderer
-        .write()
-        .add_object(tar_render::GameObject::Camera(camera))
-        .await
-        .unwrap();
-    game_renderer.write().select_camera(0);
-
-    let mut egui_renderer =
-        egui_wgpu::Renderer::new(&device, surface.get_supported_formats(&adapter)[0], None, 1);
-    let mut egui_state = egui_winit::State::new(&event_loop);
-
-    let context = egui::Context::default();
-
-    let mut frames = 0;
-    let mut fps = 0;
-    let mut since_start = 0;
-    let start_time = instant::Instant::now();
-
     let mut view_rect = (800, 800);
-
-    let mut last_render_time = start_time;
 
     let mut errors: Vec<Box<dyn std::error::Error>> = vec![];
 
@@ -208,211 +184,55 @@ pub async fn run() {
 
     let barrier = Arc::new(Barrier::new(3));
 
+    let stop = Arc::new(RwLock::new(false));
+
+    let (game_renderer, device, queue, size, surface, config, adapter) =
+        build_renderer_extras(&window).await;
+    let surface = Arc::new(surface);
+
+    let mut egui_renderer =
+        egui_wgpu::Renderer::new(&device, surface.get_supported_formats(&adapter)[0], None, 1);
+    let mut egui_state = egui_winit::State::new(&event_loop);
+
     // let pre_render_sync = Arc::new(Barrier::new(2));
     let p_barrier = barrier.clone();
-    let pre_render_r = game_renderer.clone();
     let pre_render_s = stop.clone();
-    let pre_render_thread = std::thread::spawn(move || {
-        let mut frames = 0;
-        let mut fps = 0;
-        let mut since_start = 0;
-        let start_time = instant::Instant::now();
-
-        let mut view_rect = (800, 800);
-
-        let mut last_render_time = start_time;
-
-        loop {
-            if let Some(_) = pre_render_s.read().then_some(true) {
-                return;
-            }
-
-            // do pre_rendering here
-            update(&mut pre_render_r.write(), dt);
-
-            // scripts run
-
-            // run physics
-
-            // build ui
-
-            p_barrier.wait();
-        }
+    let pre_render_thread = std::thread::spawn(|| {
+        pre_render::pre_render_fn(pre_render_s, p_barrier);
     });
     let r_barrier = barrier.clone();
-    let render_r = game_renderer.clone();
     let render_s = stop.clone();
-    let render_thread = std::thread::spawn(move || loop {
-        if let Some(_) = render_s.read().then_some(true) {
-            return;
-        }
-        r_barrier.wait();
-
-        // do rendering here
-
-        let output_frame = match surface.get_current_texture() {
-            Ok(frame) => frame,
-            Err(wgpu::SurfaceError::Outdated) => {
-                // This error occurs when the app is minimized on Windows.
-                // Silently return here to prevent spamming the console with:
-                // "The underlying surface has changed, and therefore the swap chain must be updated"
-                return;
-            }
-            Err(e) => {
-                eprintln!("Dropped frame with error: {}", e);
-                return;
-            }
-        };
-        let view = output_frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let input = egui_state.take_egui_input(&window);
-        context.begin_frame(input);
-
-        let mut remove = vec![];
-        for (i, err) in (&errors).iter().enumerate() {
-            if error_msg::error_message(&context, err) {
-                remove.push(i);
-            };
-        }
-        for r in remove.iter().rev() {
-            errors.remove(*r);
-        }
-
-        egui::Window::new("Timings")
-            .resizable(false)
-            .show(&context, |ui| {
-                ui.label("Here you can see different frame timings");
-                ui.label(format!("Frame time: {dt:?}"));
-                ui.label(format!("FPS: {fps}"));
-            });
-        egui::SidePanel::right("right panel")
-            .resizable(true)
-            .default_width(300.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("right panel"))
-            });
-        egui::SidePanel::left("left panel")
-            .resizable(true)
-            .default_width(300.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("left panel"));
-                ui.label("sensitvity");
-                ui.add(egui::Slider::new(
-                    &mut game_renderer.cameras[game_renderer.active_camera.unwrap() as usize]
-                        .controller
-                        .sensitivity,
-                    0.0..=5.0,
-                ));
-            });
-        egui::TopBottomPanel::bottom("bottom panel")
-            .resizable(true)
-            .default_height(200.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("bottom panel"))
-            });
-        egui::TopBottomPanel::top("top panel")
-            .resizable(false)
-            .default_height(50.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("controls"))
-            });
-
-        let output = context.end_frame();
-        let paint_jobs = context.tessellate(output.shapes);
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("encoder"),
-        });
-
-        // My rendering
-        {
-            // Blah blah render pipeline stuff here
-
-            match game_renderer.render(&mut encoder, &view) {
-                Ok(_) => {}
-                // Reconfigure the surface if it's lost or outdated
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    game_renderer.resize(size, &config);
-                }
-                // The system is out of memory, we should probably quit
-                Err(wgpu::SurfaceError::OutOfMemory) => {
-                    let w = stop.write();
-                    *w = true;
-                    *control_flow = ControlFlow::Exit;
-                }
-                // We're ignoring timeouts
-                Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-            }
-        }
-
-        // Egui rendering now
-        let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [config.width, config.height],
-            // Forcing pixels per point 1.0 - the egui input handling seems to not scale the cursor coordinates automatically
-            pixels_per_point: 1.0,
-        };
-
-        let user_cmd_bufs = {
-            for (id, image_delta) in &output.textures_delta.set {
-                egui_renderer.update_texture(&device, &queue, *id, image_delta);
-            }
-
-            egui_renderer.update_buffers(
-                &device,
-                &queue,
-                &mut encoder,
-                &paint_jobs.as_ref(),
-                &screen_descriptor,
-            )
-        };
-
-        egui_renderer.update_buffers(
-            &device,
-            &queue,
-            &mut encoder,
-            &paint_jobs.as_ref(),
-            &screen_descriptor,
+    let w_clone = window.clone();
+    let db_clone = db.clone();
+    let s_clone = surface.clone();
+    let d_clone = device.clone();
+    let q_clone = queue.clone();
+    let egui_state = Arc::new(egui_state);
+    let game_renderer = Arc::new(game_renderer);
+    let egui_renderer = Arc::new(egui_renderer);
+    let config = Arc::new(config);
+    let size = Arc::new(size);
+    let render_thread = std::thread::spawn(move || {
+        render::render_fn(
+            w_clone,
+            db_clone,
+            r_barrier,
+            egui_state,
+            game_renderer,
+            egui_renderer,
+            config,
+            s_clone,
+            d_clone,
+            q_clone,
+            size,
+            render_s,
         );
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("UI Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
-
-            egui_renderer.render(&mut render_pass, &paint_jobs.as_ref(), &screen_descriptor);
-        }
-
-        for id in &output.textures_delta.free {
-            egui_renderer.free_texture(id);
-        }
-
-        queue.submit(user_cmd_bufs.into_iter());
-        queue.submit(std::iter::once(encoder.finish()));
-
-        // Redraw egui
-        output_frame.present();
     });
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
-                let now = instant::Instant::now();
-                let dt = now - last_render_time;
-                last_render_time = now;
-
                 barrier.wait();
-
-                frames += 1;
             }
             Event::MainEventsCleared => {
                 window.request_redraw();
@@ -422,10 +242,10 @@ pub async fn run() {
                 window_id,
             } if window_id == window.id() => {
                 // TODO use for seeing if egui wanted this event or not
-                let res = egui_state.on_event(&context, &event);
-                if !res.consumed {
-                    input(&mut game_renderer, event);
-                }
+                // let res = egui_state.on_event(&context, &event);
+                // if !res.consumed {
+                //     input(&mut game_renderer, event);
+                // }
                 match event {
                     #[cfg(not(target_arch = "wasm32"))]
                     WindowEvent::CloseRequested

@@ -58,7 +58,7 @@ impl ForwardRenderer {
         self.active_camera = Some(cam);
     }
 
-    pub async fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<()> {
+    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<()> {
         match obj {
             GameObject::Camera(cam) => {
                 let camera = cam.cam;
