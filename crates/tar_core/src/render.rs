@@ -1,27 +1,21 @@
 use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use winit::window::Window;
 
-use crate::{error_msg, DoubleBuffer, EngineState};
+use crate::{DoubleBuffer, EngineState};
 
 pub fn render_fn(
-    window: Arc<Window>,
-    state: Arc<Mutex<DoubleBuffer<EngineState>>>,
     r_barrier: Arc<Barrier>,
-    mut egui_state: Arc<egui_winit::State>,
-    mut game_renderer: Arc<tar_render::render::forward::ForwardRenderer>,
-    mut egui_renderer: Arc<egui_wgpu::Renderer>,
+    engine_state: Arc<Mutex<DoubleBuffer<EngineState>>>,
+    mut game_renderer: tar_render::render::forward::ForwardRenderer,
+    mut egui_renderer: egui_wgpu::Renderer,
     config: Arc<wgpu::SurfaceConfiguration>,
     surface: Arc<wgpu::Surface>,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-    size: Arc<winit::dpi::PhysicalSize<u32>>,
-    render_s: Arc<RwLock<bool>>,
 ) {
-    let mut errors: Vec<Box<dyn std::error::Error>> = vec![];
-
     let int_camera = tar_render::camera::IntCamera::new(
         (0.0, 5.0, 10.0),
         cgmath::Deg(-90.0),
@@ -51,16 +45,15 @@ pub fn render_fn(
         .unwrap();
     game_renderer.select_camera(0);
 
-    let context = egui::Context::default();
     loop {
-        if let Some(_) = render_s.read().then_some(true) {
-            return;
-        }
-
         r_barrier.wait();
-        let state = state.lock().update_read();
+        let state = engine_state.lock().update_read();
 
         // do rendering here
+
+        if state.halt {
+            return;
+        }
 
         let output_frame = match surface.get_current_texture() {
             Ok(frame) => frame,
@@ -79,60 +72,7 @@ pub fn render_fn(
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let input = egui_state.take_egui_input(&window);
-        context.begin_frame(input);
-
-        let mut remove = vec![];
-        for (i, err) in (&errors).iter().enumerate() {
-            if error_msg::error_message(&context, err) {
-                remove.push(i);
-            };
-        }
-        for r in remove.iter().rev() {
-            errors.remove(*r);
-        }
-
-        egui::Window::new("Timings")
-            .resizable(false)
-            .show(&context, |ui| {
-                ui.label("Here you can see different frame timings");
-                ui.label(format!("Frame time: {:?}", state.dt));
-                ui.label(format!("FPS: {}", state.fps));
-            });
-        egui::SidePanel::right("right panel")
-            .resizable(true)
-            .default_width(300.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("right panel"))
-            });
-        egui::SidePanel::left("left panel")
-            .resizable(true)
-            .default_width(300.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("left panel"));
-                ui.label("sensitvity");
-                ui.add(egui::Slider::new(
-                    &mut game_renderer.cameras[game_renderer.active_camera.unwrap() as usize]
-                        .controller
-                        .sensitivity,
-                    0.0..=5.0,
-                ));
-            });
-        egui::TopBottomPanel::bottom("bottom panel")
-            .resizable(true)
-            .default_height(200.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("bottom panel"))
-            });
-        egui::TopBottomPanel::top("top panel")
-            .resizable(false)
-            .default_height(50.0)
-            .show(&context, |ui| {
-                ui.vertical_centered(|ui| ui.heading("controls"))
-            });
-
-        let output = context.end_frame();
-        let paint_jobs = context.tessellate(output.shapes);
+        // rendering
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
@@ -146,7 +86,7 @@ pub fn render_fn(
                 Ok(_) => {}
                 // Reconfigure the surface if it's lost or outdated
                 Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    game_renderer.resize(*size, &config);
+                    game_renderer.resize(state.size, &config);
                 }
                 // The system is out of memory, we should probably quit
                 Err(wgpu::SurfaceError::OutOfMemory) => {
@@ -165,7 +105,7 @@ pub fn render_fn(
         };
 
         let user_cmd_bufs = {
-            for (id, image_delta) in &output.textures_delta.set {
+            for (id, image_delta) in &state.egui_textures_delta.set {
                 egui_renderer.update_texture(&device, &queue, *id, image_delta);
             }
 
@@ -173,7 +113,7 @@ pub fn render_fn(
                 &device,
                 &queue,
                 &mut encoder,
-                &paint_jobs.as_ref(),
+                &state.paint_jobs.as_ref(),
                 &screen_descriptor,
             )
         };
@@ -182,7 +122,7 @@ pub fn render_fn(
             &device,
             &queue,
             &mut encoder,
-            &paint_jobs.as_ref(),
+            &state.paint_jobs.as_ref(),
             &screen_descriptor,
         );
         {
@@ -199,10 +139,14 @@ pub fn render_fn(
                 depth_stencil_attachment: None,
             });
 
-            egui_renderer.render(&mut render_pass, &paint_jobs.as_ref(), &screen_descriptor);
+            egui_renderer.render(
+                &mut render_pass,
+                &state.paint_jobs.as_ref(),
+                &screen_descriptor,
+            );
         }
 
-        for id in &output.textures_delta.free {
+        for id in &state.egui_textures_delta.free {
             egui_renderer.free_texture(id);
         }
 

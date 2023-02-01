@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use instant::Duration;
 use parking_lot::RwLock;

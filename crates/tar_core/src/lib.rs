@@ -5,6 +5,8 @@ mod state;
 
 use std::sync::{Arc, Barrier};
 
+use egui::ClippedPrimitive;
+use egui::FullOutput;
 use instant::Duration;
 use parking_lot::Mutex;
 
@@ -15,7 +17,7 @@ use winit::{
 };
 
 #[derive(Debug)]
-struct DoubleBuffer<T: Clone> {
+pub struct DoubleBuffer<T: Clone> {
     pub state: T,
 }
 
@@ -25,10 +27,16 @@ impl<T: Clone> DoubleBuffer<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-struct EngineState {
+#[derive(Clone)]
+pub struct EngineState {
     dt: Duration,
     fps: u32,
+    size: winit::dpi::PhysicalSize<u32>,
+    halt: bool,
+    view_rect: winit::dpi::PhysicalSize<u32>,
+    cam_sensitivity: f32,
+    paint_jobs: Vec<ClippedPrimitive>,
+    egui_textures_delta: egui::epaint::textures::TexturesDelta,
 }
 
 fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &WindowEvent) -> bool {
@@ -133,6 +141,12 @@ pub async fn run() {
         state: EngineState {
             dt: Duration::from_secs(0),
             fps: 0,
+            size: winit::dpi::PhysicalSize::new(0, 0),
+            halt: false,
+            view_rect: winit::dpi::PhysicalSize::new(0, 0),
+            cam_sensitivity: 0.4,
+            paint_jobs: vec![],
+            egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
         },
     };
     let db = Arc::new(Mutex::new(db));
@@ -149,13 +163,11 @@ pub async fn run() {
 
     let event_loop = EventLoop::new();
     let title = env!("CARGO_PKG_NAME");
-    let window = Arc::new(
-        winit::window::WindowBuilder::new()
-            .with_title(title)
-            .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
-            .build(&event_loop)
-            .unwrap(),
-    );
+    let window = winit::window::WindowBuilder::new()
+        .with_title(title)
+        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
+        .build(&event_loop)
+        .unwrap();
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -178,61 +190,110 @@ pub async fn run() {
 
     let mut view_rect = (800, 800);
 
-    let mut errors: Vec<Box<dyn std::error::Error>> = vec![];
-
     let blocking_threads = threadpool::ThreadPool::new(4);
 
-    let barrier = Arc::new(Barrier::new(3));
+    let barrier = Arc::new(Barrier::new(2));
 
     let stop = Arc::new(RwLock::new(false));
 
     let (game_renderer, device, queue, size, surface, config, adapter) =
         build_renderer_extras(&window).await;
+
+    let config = Arc::new(config);
+    let size = Arc::new(size);
+
     let surface = Arc::new(surface);
 
-    let mut egui_renderer =
+    let egui_renderer =
         egui_wgpu::Renderer::new(&device, surface.get_supported_formats(&adapter)[0], None, 1);
+
     let mut egui_state = egui_winit::State::new(&event_loop);
 
-    // let pre_render_sync = Arc::new(Barrier::new(2));
-    let p_barrier = barrier.clone();
-    let pre_render_s = stop.clone();
-    let pre_render_thread = std::thread::spawn(|| {
-        pre_render::pre_render_fn(pre_render_s, p_barrier);
-    });
     let r_barrier = barrier.clone();
     let render_s = stop.clone();
-    let w_clone = window.clone();
-    let db_clone = db.clone();
     let s_clone = surface.clone();
     let d_clone = device.clone();
     let q_clone = queue.clone();
-    let egui_state = Arc::new(egui_state);
-    let game_renderer = Arc::new(game_renderer);
-    let egui_renderer = Arc::new(egui_renderer);
-    let config = Arc::new(config);
-    let size = Arc::new(size);
+    let engine_state = db.clone();
     let render_thread = std::thread::spawn(move || {
         render::render_fn(
-            w_clone,
-            db_clone,
             r_barrier,
-            egui_state,
+            engine_state,
             game_renderer,
             egui_renderer,
             config,
             s_clone,
             d_clone,
             q_clone,
-            size,
-            render_s,
         );
     });
+    let mut errors: Vec<Box<dyn std::error::Error>> = vec![];
+
+    let context = egui::Context::default();
+
+    let mut halt = false;
+
+    let mut winit_events = vec![];
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
+                let state = &mut db.lock().state;
+
+                let input = egui_state.take_egui_input(&window);
+                context.begin_frame(input);
+
+                let mut remove = vec![];
+                for (i, err) in (&errors).iter().enumerate() {
+                    if error_msg::error_message(&context, err) {
+                        remove.push(i);
+                    };
+                }
+                for r in remove.iter().rev() {
+                    errors.remove(*r);
+                }
+
+                egui::Window::new("Timings")
+                    .resizable(false)
+                    .show(&context, |ui| {
+                        ui.label("Here you can see different frame timings");
+                        ui.label(format!("Frame time: {:?}", state.dt));
+                        ui.label(format!("FPS: {}", state.fps));
+                    });
+                egui::SidePanel::right("right panel")
+                    .resizable(true)
+                    .default_width(300.0)
+                    .show(&context, |ui| {
+                        ui.vertical_centered(|ui| ui.heading("right panel"))
+                    });
+                egui::SidePanel::left("left panel")
+                    .resizable(true)
+                    .default_width(300.0)
+                    .show(&context, |ui| {
+                        ui.vertical_centered(|ui| ui.heading("left panel"));
+                        ui.label("sensitvity");
+                        ui.add(egui::Slider::new(&mut state.cam_sensitivity, 0.0..=5.0));
+                    });
+                egui::TopBottomPanel::bottom("bottom panel")
+                    .resizable(true)
+                    .default_height(200.0)
+                    .show(&context, |ui| {
+                        ui.vertical_centered(|ui| ui.heading("bottom panel"))
+                    });
+                egui::TopBottomPanel::top("top panel")
+                    .resizable(false)
+                    .default_height(50.0)
+                    .show(&context, |ui| {
+                        ui.vertical_centered(|ui| ui.heading("controls"))
+                    });
+
+                let output = context.end_frame();
+
+                state.paint_jobs = context.tessellate(output.shapes);
+                state.egui_textures_delta = output.textures_delta;
+
                 barrier.wait();
+                render_thread.is_finished();
             }
             Event::MainEventsCleared => {
                 window.request_redraw();
@@ -241,48 +302,47 @@ pub async fn run() {
                 ref event,
                 window_id,
             } if window_id == window.id() => {
-                // TODO use for seeing if egui wanted this event or not
+                // winit_events.push(event);
+                // TODO! use for seeing if egui wanted this event or not
                 // let res = egui_state.on_event(&context, &event);
                 // if !res.consumed {
                 //     input(&mut game_renderer, event);
                 // }
-                match event {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => {
-                        let w = stop.write();
-                        *w = true;
-                        *control_flow = ControlFlow::Exit;},
-                    winit::event::WindowEvent::Resized(size) => {
-                        // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
-                        // See: https://github.com/rust-windowing/winit/issues/208
-                        // This solves an issue where the app would panic when minimizing on Windows.
-                        if size.width > 0 && size.height > 0 {
-                            config.width = size.width;
-                            config.height = size.height;
-                            surface.configure(&device, &config);
-                            game_renderer.resize(*size, &config);
-                        }
-                    }
+                // match event {
+                //     #[cfg(not(target_arch = "wasm32"))]
+                //     WindowEvent::CloseRequested
+                //     | WindowEvent::KeyboardInput {
+                //         input:
+                //             KeyboardInput {
+                //                 state: ElementState::Pressed,
+                //                 virtual_keycode: Some(VirtualKeyCode::Escape),
+                //                 ..
+                //             },
+                //         ..
+                //     } => {
+                //         halt = true},
+                //     winit::event::WindowEvent::Resized(size) => {
+                //         // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
+                //         // See: https://github.com/rust-windowing/winit/issues/208
+                //         // This solves an issue where the app would panic when minimizing on Windows.
+                //         if size.width > 0 && size.height > 0 {
+                //             config.width = size.width;
+                //             config.height = size.height;
+                //             surface.configure(&device, &config);
+                //             game_renderer.resize(*size, &config);
+                //         }
+                //     }
 
-                    _ => {}
-                }
+                //     _ => {winit_events.push(event.clone())}
+                // }
             }
-            Event::DeviceEvent {
-                event: DeviceEvent::MouseMotion{ delta, },
-                .. // We're not using device_id currently
-            } => if game_renderer.mouse_pressed {
-                game_renderer.cameras[game_renderer.active_camera.unwrap() as usize].controller.process_mouse(delta.0, delta.1)
-            }
-            _ => (),
+            // Event::DeviceEvent {
+            //     event: DeviceEvent::MouseMotion{ delta, },
+            //     .. // We're not using device_id currently
+            // } => if game_renderer.mouse_pressed {
+            //     game_renderer.cameras[game_renderer.active_camera.unwrap() as usize].controller.process_mouse(delta.0, delta.1)
+            // }
+            e => winit_events.push(e.to_static().clone()),
         }
     });
 }
