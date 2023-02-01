@@ -5,6 +5,10 @@ edition="2021"
 [workspace]
 resolver="2"
 members = [
-  "crates/*",
+  "crates/tar_core",
+  "crates/tar_render",
+  "crates/tar_res",
+  "crates/tar_entry",
+  "crates/tar_utils",
   "crates/tar_ecs/macros"
 ]

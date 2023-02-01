@@ -1,31 +1,21 @@
+mod double_buffer;
 mod error_msg;
 mod pre_render;
 mod render;
-mod state;
+// mod state;
 
 use std::sync::{Arc, Barrier};
 
 use egui::ClippedPrimitive;
-use egui::FullOutput;
 use instant::Duration;
-use parking_lot::Mutex;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
 };
 
-#[derive(Debug)]
-pub struct DoubleBuffer<T: Clone> {
-    pub state: T,
-}
-
-impl<T: Clone> DoubleBuffer<T> {
-    pub fn update_read(&mut self) -> T {
-        return self.state.clone();
-    }
-}
+use crate::double_buffer::DoubleBuffer;
 
 #[derive(Clone)]
 pub struct EngineState {
@@ -137,19 +127,17 @@ async fn build_renderer_extras(
 }
 
 pub async fn run() {
-    let db = DoubleBuffer {
-        state: EngineState {
-            dt: Duration::from_secs(0),
-            fps: 0,
-            size: winit::dpi::PhysicalSize::new(0, 0),
-            halt: false,
-            view_rect: winit::dpi::PhysicalSize::new(0, 0),
-            cam_sensitivity: 0.4,
-            paint_jobs: vec![],
-            egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
-        },
-    };
-    let db = Arc::new(Mutex::new(db));
+    let db = DoubleBuffer::new(EngineState {
+        dt: Duration::from_secs(0),
+        fps: 0,
+        size: winit::dpi::PhysicalSize::new(0, 0),
+        halt: false,
+        view_rect: winit::dpi::PhysicalSize::new(0, 0),
+        cam_sensitivity: 0.4,
+        paint_jobs: vec![],
+        egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
+    });
+    let db = Arc::new(db);
 
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -188,19 +176,12 @@ pub async fn run() {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let mut view_rect = (800, 800);
-
-    let blocking_threads = threadpool::ThreadPool::new(4);
-
     let barrier = Arc::new(Barrier::new(2));
-
-    let stop = Arc::new(RwLock::new(false));
 
     let (game_renderer, device, queue, size, surface, config, adapter) =
         build_renderer_extras(&window).await;
 
     let config = Arc::new(config);
-    let size = Arc::new(size);
 
     let surface = Arc::new(surface);
 
@@ -210,18 +191,18 @@ pub async fn run() {
     let mut egui_state = egui_winit::State::new(&event_loop);
 
     let r_barrier = barrier.clone();
-    let render_s = stop.clone();
     let s_clone = surface.clone();
     let d_clone = device.clone();
     let q_clone = queue.clone();
     let engine_state = db.clone();
+    let c_clone = config.clone();
     let render_thread = std::thread::spawn(move || {
         render::render_fn(
             r_barrier,
             engine_state,
             game_renderer,
             egui_renderer,
-            config,
+            c_clone,
             s_clone,
             d_clone,
             q_clone,
@@ -231,14 +212,54 @@ pub async fn run() {
 
     let context = egui::Context::default();
 
-    let mut halt = false;
-
     let mut winit_events = vec![];
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
-                let state = &mut db.lock().state;
+                let mut state = db.lock();
+
+                // for event in &winit_events {
+                //     if let Some(e) = event {
+                //         match e {
+                //             Event::WindowEvent {
+                //                 ref event,
+                //                 window_id,
+                //             } if window_id == &window.id() => {
+                //                 // TODO! use for seeing if egui wanted this event or not
+                //                 // let res = egui_state.on_event(&context, &event);
+                //                 // if !res.consumed {
+                //                 //     input(&mut game_renderer, event);
+                //                 // }
+                //                 match event {
+                //                     #[cfg(not(target_arch = "wasm32"))]
+                //                     WindowEvent::CloseRequested
+                //                     | WindowEvent::KeyboardInput {
+                //                         input:
+                //                             KeyboardInput {
+                //                                 state: ElementState::Pressed,
+                //                                 virtual_keycode: Some(VirtualKeyCode::Escape),
+                //                                 ..
+                //                             },
+                //                         ..
+                //                     } => halt = true,
+                //                     winit::event::WindowEvent::Resized(size) => {
+                //                         // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
+                //                         // See: https://github.com/rust-windowing/winit/issues/208
+                //                         // This solves an issue where the app would panic when minimizing on Windows.
+                //                         if size.width > 0 && size.height > 0 {
+                //                             state.size = *size;
+                //                             surface.configure(&device, &config);
+                //                         }
+                //                     }
+
+                //                     _ => (),
+                //                 }
+                //             }
+                //             _ => (),
+                //         }
+                //     }
+                // }
 
                 let input = egui_state.take_egui_input(&window);
                 context.begin_frame(input);
@@ -292,49 +313,18 @@ pub async fn run() {
                 state.paint_jobs = context.tessellate(output.shapes);
                 state.egui_textures_delta = output.textures_delta;
 
+                println!("main_wait");
+                MutexGuard::unlock_fair(state);
+
+                if render_thread.is_finished() {
+                    print!("error: render thread has crashed");
+                }
+
                 barrier.wait();
-                render_thread.is_finished();
+                println!("main_wait done");
             }
             Event::MainEventsCleared => {
                 window.request_redraw();
-            }
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == window.id() => {
-                // winit_events.push(event);
-                // TODO! use for seeing if egui wanted this event or not
-                // let res = egui_state.on_event(&context, &event);
-                // if !res.consumed {
-                //     input(&mut game_renderer, event);
-                // }
-                // match event {
-                //     #[cfg(not(target_arch = "wasm32"))]
-                //     WindowEvent::CloseRequested
-                //     | WindowEvent::KeyboardInput {
-                //         input:
-                //             KeyboardInput {
-                //                 state: ElementState::Pressed,
-                //                 virtual_keycode: Some(VirtualKeyCode::Escape),
-                //                 ..
-                //             },
-                //         ..
-                //     } => {
-                //         halt = true},
-                //     winit::event::WindowEvent::Resized(size) => {
-                //         // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
-                //         // See: https://github.com/rust-windowing/winit/issues/208
-                //         // This solves an issue where the app would panic when minimizing on Windows.
-                //         if size.width > 0 && size.height > 0 {
-                //             config.width = size.width;
-                //             config.height = size.height;
-                //             surface.configure(&device, &config);
-                //             game_renderer.resize(*size, &config);
-                //         }
-                //     }
-
-                //     _ => {winit_events.push(event.clone())}
-                // }
             }
             // Event::DeviceEvent {
             //     event: DeviceEvent::MouseMotion{ delta, },

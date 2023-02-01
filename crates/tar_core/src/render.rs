@@ -1,14 +1,12 @@
 use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
-use parking_lot::Mutex;
-use winit::window::Window;
 
 use crate::{DoubleBuffer, EngineState};
 
 pub fn render_fn(
     r_barrier: Arc<Barrier>,
-    engine_state: Arc<Mutex<DoubleBuffer<EngineState>>>,
+    engine_state: Arc<DoubleBuffer<EngineState>>,
     mut game_renderer: tar_render::render::forward::ForwardRenderer,
     mut egui_renderer: egui_wgpu::Renderer,
     config: Arc<wgpu::SurfaceConfiguration>,
@@ -46,7 +44,9 @@ pub fn render_fn(
     game_renderer.select_camera(0);
 
     loop {
+        println!("render_wait");
         r_barrier.wait();
+        println!("render_wait done");
         let state = engine_state.lock().update_read();
 
         // do rendering here
@@ -54,6 +54,7 @@ pub fn render_fn(
         if state.halt {
             return;
         }
+        println!("aquiring frame");
 
         let output_frame = match surface.get_current_texture() {
             Ok(frame) => frame,
@@ -61,6 +62,7 @@ pub fn render_fn(
                 // This error occurs when the app is minimized on Windows.
                 // Silently return here to prevent spamming the console with:
                 // "The underlying surface has changed, and therefore the swap chain must be updated"
+                eprintln!("The underlying surface has changed, and therefore the swap chain must be updated");
                 return;
             }
             Err(e) => {
@@ -90,6 +92,7 @@ pub fn render_fn(
                 }
                 // The system is out of memory, we should probably quit
                 Err(wgpu::SurfaceError::OutOfMemory) => {
+                    eprintln!("Out of memory");
                     return; // TODO!: return error to clarify
                 }
                 // We're ignoring timeouts
@@ -152,8 +155,7 @@ pub fn render_fn(
 
         queue.submit(user_cmd_bufs.into_iter());
         queue.submit(std::iter::once(encoder.finish()));
-
-        // Redraw egui
+        println!("showing frame");
         output_frame.present();
     }
 }
