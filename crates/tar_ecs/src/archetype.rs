@@ -120,6 +120,18 @@ impl Archetype {
     }
 
     #[inline]
+    pub fn get_mut<T: Component>(&mut self, components: &Components, index: usize) -> Option<&mut T> {
+        if index >= self.len() {
+            return None;
+        }
+
+        let component_id = *components.get_id_from::<T>()?;
+        let raw_store = self.components.get_mut(component_id)?;
+        unsafe { Some(&mut *raw_store.get_unchecked_mut(index).cast::<T>()) }
+    }
+
+
+    #[inline]
     pub fn id(&self) -> ArchetypeId {
         self.id
     }
@@ -132,6 +144,11 @@ impl Archetype {
     #[inline]
     pub fn len(&self) -> usize {
         self.entities.len()
+    }
+
+    #[inline]
+    pub fn insert_edge(&mut self, component_id: ComponentId, edge: Edge) {
+        self.edges.insert(component_id, edge);
     }
 }
 
@@ -158,8 +175,9 @@ impl Archetypes {
         capacity: usize
     ) -> ArchetypeId {
         let id = ArchetypeId::new(self.len());
+        let archetype = Archetype::with_capacity(id, bundle_info.iter(), components, capacity);
 
-        self.archetypes.push(Archetype::with_capacity(id, bundle_info.iter(), components, capacity));
+        self.archetypes.push(archetype);
         self.archetype_ids.insert(bundle_info.id(), id);
 
         id

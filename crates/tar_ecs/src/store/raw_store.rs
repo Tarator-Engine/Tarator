@@ -142,6 +142,18 @@ impl RawStore {
         unsafe { Layout::from_size_align_unchecked(alloc_size, align) }
     }
 
+    pub unsafe fn clear(&mut self) {
+        if let Some(drop) = self.drop {
+            let size = self.item_layout.size();
+            for i in 0..self.len {
+                let ptr = self.get_ptr_mut().add(i * size);
+                drop(ptr);
+            }
+        }
+
+        self.len = 0;
+    }
+
     #[inline]
     pub fn capacity(&self) -> usize {
         self.capacity
@@ -183,6 +195,19 @@ impl RawStore {
         debug_assert!(index < self.len);
         let size = self.item_layout.size();
         self.get_ptr_mut().add(index * size)
+    }
+}
+
+impl Drop for RawStore {
+    fn drop(&mut self) {
+        unsafe {
+            self.clear();
+
+            let array_layout = Self::array_layout(&self.item_layout, self.capacity());
+            if array_layout.size() > 0 {
+                std::alloc::dealloc(self.data, array_layout);
+            }
+        }
     }
 }
 
