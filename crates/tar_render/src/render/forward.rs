@@ -43,14 +43,16 @@ impl ForwardRenderer {
     pub fn resize(
         &mut self,
         new_size: winit::dpi::PhysicalSize<u32>,
-        config: &wgpu::SurfaceConfiguration,
+        config: &mut wgpu::SurfaceConfiguration,
     ) {
         if new_size.width > 0 && new_size.height > 0 {
+            config.width = new_size.width;
+            config.height = new_size.height;
             for camera in &mut self.cameras {
                 camera.proj.resize(new_size.width, new_size.height);
-                self.depth_texture =
-                    Texture::create_depth_texture(&self.device, config, "depth_texture");
             }
+            self.depth_texture =
+                Texture::create_depth_texture(&self.device, config, "depth_texture");
         }
     }
 
@@ -104,54 +106,42 @@ impl ForwardRenderer {
         Ok(())
     }
 
-    pub fn render(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) -> Result<(), wgpu::SurfaceError> {
-        // let output = surface.get_current_texture()?;
-        // let view = output
-        //     .texture
-        //     .create_view(&wgpu::TextureViewDescriptor::default());
-
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 0.0,
-                        }),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+    pub fn render(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
                     }),
-                    stencil_ops: None,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
                 }),
-            });
-            if let Some(cam) = self.active_camera {
-                let cam_params = self.cameras[cam as usize].params();
-                let mut data = PerFrameData::default();
-                data.u_ambient_light_color = [1.0, 1.0, 1.0];
-                data.u_ambient_light_intensity = 1.0;
-                data.u_light_color = [1.0, 1.0, 1.0];
-                data.u_light_direction = [0.0, 0.5, 0.5];
-                for o in &mut self.objects {
-                    o.update_per_frame(&cam_params, &data, &self.queue);
-                    o.draw(&mut render_pass);
-                }
+                stencil_ops: None,
+            }),
+        });
+        if let Some(cam) = self.active_camera {
+            let cam_params = self.cameras[cam as usize].params();
+            let mut data = PerFrameData::default();
+            data.u_ambient_light_color = [1.0, 1.0, 1.0];
+            data.u_ambient_light_intensity = 1.0;
+            data.u_light_color = [1.0, 1.0, 1.0];
+            data.u_light_direction = [0.0, 0.5, 0.5];
+            for o in &mut self.objects {
+                o.update_per_frame(&cam_params, &data, &self.queue);
+                o.draw(&mut render_pass);
             }
         }
-        Ok(())
     }
 }

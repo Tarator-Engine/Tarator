@@ -1,15 +1,53 @@
 use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
+use winit::event::{ElementState, KeyboardInput, MouseButton, WindowEvent};
 
 use crate::{DoubleBuffer, EngineState};
+
+fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &WindowEvent) -> bool {
+    match event {
+        WindowEvent::KeyboardInput {
+            input:
+                KeyboardInput {
+                    virtual_keycode: Some(key),
+                    state,
+                    ..
+                },
+            ..
+        } => renderer.cameras[renderer.active_camera.unwrap() as usize]
+            .controller
+            .process_keyboard(*key, *state),
+        WindowEvent::MouseWheel { delta, .. } => {
+            renderer.cameras[renderer.active_camera.unwrap() as usize]
+                .controller
+                .process_scroll(delta);
+            true
+        }
+        WindowEvent::MouseInput {
+            button: MouseButton::Left,
+            state,
+            ..
+        } => {
+            renderer.mouse_pressed = *state == ElementState::Pressed;
+            true
+        }
+        _ => false,
+    }
+}
+
+fn update(renderer: &mut tar_render::render::forward::ForwardRenderer, dt: std::time::Duration) {
+    let cam = &mut renderer.cameras[renderer.active_camera.unwrap() as usize];
+    cam.controller.update_camera(&mut cam.cam, dt);
+    cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+}
 
 pub fn render_fn(
     r_barrier: Arc<Barrier>,
     engine_state: Arc<DoubleBuffer<EngineState>>,
     mut game_renderer: tar_render::render::forward::ForwardRenderer,
     mut egui_renderer: egui_wgpu::Renderer,
-    config: Arc<wgpu::SurfaceConfiguration>,
+    mut config: wgpu::SurfaceConfiguration,
     surface: Arc<wgpu::Surface>,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
@@ -44,9 +82,7 @@ pub fn render_fn(
     game_renderer.select_camera(0);
 
     loop {
-        println!("render_wait");
         r_barrier.wait();
-        println!("render_wait done");
         let state = engine_state.lock().update_read();
 
         // do rendering here
@@ -54,63 +90,62 @@ pub fn render_fn(
         if state.halt {
             return;
         }
-        println!("aquiring frame");
 
-        let output_frame = match surface.get_current_texture() {
-            Ok(frame) => frame,
-            Err(wgpu::SurfaceError::Outdated) => {
-                // This error occurs when the app is minimized on Windows.
-                // Silently return here to prevent spamming the console with:
-                // "The underlying surface has changed, and therefore the swap chain must be updated"
-                eprintln!("The underlying surface has changed, and therefore the swap chain must be updated");
-                return;
-            }
-            Err(e) => {
-                eprintln!("Dropped frame with error: {}", e);
-                return;
-            }
-        };
-        let view = output_frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        // rendering
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("encoder"),
-        });
-
-        // My rendering
-        {
-            // Blah blah render pipeline stuff here
-
-            match game_renderer.render(&mut encoder, &view) {
-                Ok(_) => {}
-                // Reconfigure the surface if it's lost or outdated
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    game_renderer.resize(state.size, &config);
-                }
-                // The system is out of memory, we should probably quit
-                Err(wgpu::SurfaceError::OutOfMemory) => {
-                    eprintln!("Out of memory");
-                    return; // TODO!: return error to clarify
-                }
-                // We're ignoring timeouts
-                Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-            }
+        for event in state.events {
+            input(&mut game_renderer, &event);
         }
 
-        // Egui rendering now
-        let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [config.width, config.height],
-            // Forcing pixels per point 1.0 - the egui input handling seems to not scale the cursor coordinates automatically
-            pixels_per_point: 1.0,
-        };
+        update(&mut game_renderer, state.dt);
 
-        let user_cmd_bufs = {
-            for (id, image_delta) in &state.egui_textures_delta.set {
-                egui_renderer.update_texture(&device, &queue, *id, image_delta);
+        let output_frame = match surface.get_current_texture() {
+            Ok(frame) => Some(frame),
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                game_renderer.resize(state.size, &mut config);
+                surface.configure(&device, &config);
+                None
             }
+            Err(wgpu::SurfaceError::Timeout) => {
+                eprintln!("Surface timeout");
+                None
+            }
+            Err(wgpu::SurfaceError::OutOfMemory) => return,
+        };
+        if let Some(output_frame) = output_frame {
+            let view = output_frame
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            // rendering
+
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("encoder"),
+            });
+
+            // My rendering
+            {
+                game_renderer.render(&mut encoder, &view);
+            }
+
+            // Egui rendering now
+            let screen_descriptor = ScreenDescriptor {
+                size_in_pixels: [config.width, config.height],
+                // Forcing pixels per point 1.0 - the egui input handling seems to not scale the cursor coordinates automatically
+                pixels_per_point: 1.0,
+            };
+
+            let user_cmd_bufs = {
+                for (id, image_delta) in &state.egui_textures_delta.set {
+                    egui_renderer.update_texture(&device, &queue, *id, image_delta);
+                }
+
+                egui_renderer.update_buffers(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &state.paint_jobs.as_ref(),
+                    &screen_descriptor,
+                )
+            };
 
             egui_renderer.update_buffers(
                 &device,
@@ -118,44 +153,35 @@ pub fn render_fn(
                 &mut encoder,
                 &state.paint_jobs.as_ref(),
                 &screen_descriptor,
-            )
-        };
-
-        egui_renderer.update_buffers(
-            &device,
-            &queue,
-            &mut encoder,
-            &state.paint_jobs.as_ref(),
-            &screen_descriptor,
-        );
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("UI Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
-
-            egui_renderer.render(
-                &mut render_pass,
-                &state.paint_jobs.as_ref(),
-                &screen_descriptor,
             );
-        }
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("UI Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                });
 
-        for id in &state.egui_textures_delta.free {
-            egui_renderer.free_texture(id);
-        }
+                egui_renderer.render(
+                    &mut render_pass,
+                    &state.paint_jobs.as_ref(),
+                    &screen_descriptor,
+                );
+            }
 
-        queue.submit(user_cmd_bufs.into_iter());
-        queue.submit(std::iter::once(encoder.finish()));
-        println!("showing frame");
-        output_frame.present();
+            for id in &state.egui_textures_delta.free {
+                egui_renderer.free_texture(id);
+            }
+
+            queue.submit(user_cmd_bufs.into_iter());
+            queue.submit(std::iter::once(encoder.finish()));
+            output_frame.present();
+        }
     }
 }
