@@ -25,7 +25,7 @@ unsafe impl<T: Component> Bundle for T {
     }
     fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8)) {
         let mut temp = ManuallyDrop::new(self);
-        func(components.get_id(TypeId::of::<T>()), &mut temp as *mut ManuallyDrop<Self> as *mut u8)
+        func(*components.get_id_from::<T>().unwrap(), &mut temp as *mut ManuallyDrop<Self> as *mut u8)
     }
 }
 

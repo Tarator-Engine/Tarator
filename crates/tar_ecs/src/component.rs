@@ -203,12 +203,12 @@ impl Components {
     }
 
     #[inline]
-    pub fn get_id(&self, id: TypeId) -> ComponentId {
-        *self.indices.get(&id).unwrap()
+    pub fn get_id(&self, id: TypeId) -> Option<&ComponentId> {
+        self.indices.get(&id)
     }
 
     #[inline]
-    pub fn get_id_from<T: Any>(&self) -> ComponentId {
+    pub fn get_id_from<T: Any>(&self) -> Option<&ComponentId> {
         self.get_id(TypeId::of::<T>())
     }
 

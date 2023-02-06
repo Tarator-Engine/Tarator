@@ -90,7 +90,7 @@ impl World {
     }
 
     #[inline]
-    pub fn component_id_from<T: Component>(&self) -> ComponentId {
+    pub fn component_id_from<T: Component>(&self) -> Option<&ComponentId> {
         self.components.get_id_from::<T>()
     }
 
@@ -109,14 +109,14 @@ impl World {
     pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
         let entity_meta = self.entities.get_mut(entity).expect("Entity was invalid!");
         let bundle_info = self.bundles.init::<T>(&mut self.components);
-        let archetype = match self.archetypes.get_mut(bundle_info.id()) {
+        let archetype = match self.archetypes.get_from_bundle_mut(bundle_info.id()) {
             Some(archetype) => archetype,
             None => {
                 let id = self.archetypes.create_with_capacity(bundle_info, &self.components, 1);
 
                 // SAFETY:
                 // Archetype was just created
-                unsafe { self.archetypes.get_unchecked_mut(id) }
+                unsafe { self.archetypes.get_unchecked_mut(id.index()) }
             }
         };
         entity_meta.index = archetype.len();
@@ -132,16 +132,16 @@ impl World {
     }
 
     #[inline]
-    pub fn entity_get<T: Bundle>(&self, entity: Entity) -> &T {
-        let meta = self.entities.get(entity);
-        let info = self.bundles.get_id(TypeId::of::<T>());
-        todo!("Still gotta get using {:#?} and {:#?}", meta, info);
+    pub fn entity_get<T: Component>(&self, entity: Entity) -> Option<&T> {
+        let meta = self.entities.get(entity)?;
+        let archetype = self.archetypes.get(meta.archetype_id)?;
+        archetype.get(&self.components, meta.index)
     }
 
     #[inline]
-    pub fn entity_get_mut<T: Bundle>(&mut self, entity: Entity) -> &mut T {
+    pub fn entity_get_mut<T: Component>(&mut self, entity: Entity) -> &mut T {
         let meta = self.entities.get(entity);
-        let info = self.bundles.get_id(TypeId::of::<T>());
+        let info = self.components.get_id_from::<T>();
         todo!("Still gotta get using {:#?} and {:#?}", meta, info);
     }
 }

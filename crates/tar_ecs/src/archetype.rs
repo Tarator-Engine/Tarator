@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    component::{ComponentId, Components},
+    component::{ ComponentId, Components, Component },
     store::{
         sparse::{ SparseSetIndex, SparseSet, MutSparseSet },
         raw_store::RawStore
     },
-    entity::{Entity, EntityMeta}, bundle::{BundleId, BundleInfo, Bundle}
+    entity::Entity,
+    bundle::{ BundleId, BundleInfo, Bundle }
 };
 
 
@@ -108,6 +109,17 @@ impl Archetype {
     }
 
     #[inline]
+    pub fn get<T: Component>(&self, components: &Components, index: usize) -> Option<&T> {
+        if index >= self.len() {
+            return None;
+        }
+
+        let component_id = *components.get_id_from::<T>()?;
+        let raw_store = self.components.get(component_id)?;
+        unsafe { Some(&*raw_store.get_unchecked(index).cast::<T>()) }
+    }
+
+    #[inline]
     pub fn id(&self) -> ArchetypeId {
         self.id
     }
@@ -154,25 +166,35 @@ impl Archetypes {
     }
 
     #[inline]
-    pub fn get(&self, id: BundleId) -> Option<&Archetype> {
+    pub fn get_from_bundle(&self, id: BundleId) -> Option<&Archetype> {
         let id = *self.archetype_ids.get(&id)?;
         self.archetypes.get(id.index())
     }
 
     #[inline]
-    pub fn get_mut(&mut self, id: BundleId) -> Option<&mut Archetype> {
+    pub fn get_from_bundle_mut(&mut self, id: BundleId) -> Option<&mut Archetype> {
         let id = *self.archetype_ids.get(&id)?;
         self.archetypes.get_mut(id.index())
     }
 
     #[inline]
-    pub unsafe fn get_unchecked(&self, id: ArchetypeId) -> &Archetype {
-        self.archetypes.get_unchecked(id.index())  
+    pub fn get(&self, id: ArchetypeId) -> Option<&Archetype> {
+        self.archetypes.get(id.index())
     }
 
     #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, id: ArchetypeId) -> &mut Archetype {
-        self.archetypes.get_unchecked_mut(id.index())  
+    pub fn get_mut(&mut self, id: ArchetypeId) -> Option<&mut Archetype> {
+        self.archetypes.get_mut(id.index())
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked(&self, index: usize) -> &Archetype {
+        self.archetypes.get_unchecked(index)  
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Archetype {
+        self.archetypes.get_unchecked_mut(index)  
     }
 
     #[inline]
