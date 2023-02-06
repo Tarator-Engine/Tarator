@@ -1,93 +1,148 @@
-use std::sync::{ Arc, Mutex };
+use std::{
+    sync::atomic::{ AtomicUsize, Ordering },
+    any::TypeId
+};
+
 use crate::{
-    component::{
-        Component,
-        arche::ArchePool,
-        tuple::ComponentTuple,
-        view::ComponentView,
-        store::StorePtr
-    },
-    entity::{
-        Entity,
-        desc::DescPool,
-        view::EntityView
-    },
-    error::EcsError as Error
+    bundle::{ Bundles, Bundle },
+    component::{ Component, Components, ComponentDescription, ComponentId },
+    entity::{ Entities, Entity },
+    archetype::Archetypes
 };
 
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct WorldId(usize);
+
+static WORLD_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+impl WorldId {
+    pub fn new() -> Self {
+        WORLD_COUNT
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+                count.checked_add(1)
+            })
+            .map(WorldId)
+            .expect("Too many worlds were created!")
+    }
+
+    #[inline]
+    pub fn index(self) -> usize {
+        self.0
+    }
+}
+
+
+#[derive(Debug)]
 pub struct World {
-    world: Arc<Mutex<InnerWorld>>
+    id: WorldId,
+    archetypes: Archetypes,
+    bundles: Bundles,
+    components: Components,
+    entities: Entities
 }
 
 impl World {
     #[inline]
     pub fn new() -> Self {
-        Self { world: Arc::new(Mutex::new(InnerWorld::new())) }
-    } 
-    #[inline]
-    pub fn entity_new(&mut self) -> Result<Entity, Error> {
-        let Ok(mut world) = self.world.lock() else {
-            return Err(Error::MutexError);
-        };
-        world.entity_new()
-    }
-    #[inline]
-    pub fn entity_set<C: ComponentTuple>(&mut self, entity: Entity, data: C) -> Result<(), Error> {
-        let Ok(mut world) = self.world.lock() else {
-            return Err(Error::MutexError);
-        };
-        world.entity_set(entity, data)
-
-    }
-    #[inline]
-    pub fn entity_get<C: Component>(&self, entity: Entity) -> Result<StorePtr<C>, Error> {
-        let Ok(world) = self.world.lock() else {
-            return Err(Error::MutexError);
-        };
-        world.entity_get(entity)
-    }
-    pub fn entity_view<C: ComponentTuple>(&self) -> Result<EntityView, Error> {
-        todo!()
-    }
-    pub fn component_view<C: ComponentTuple>(&self) -> Result<ComponentView, Error> {
-        todo!()
-    }
-}
-
-
-pub struct InnerWorld {
-    pub(crate) desc: DescPool,
-    pub(crate) arche: ArchePool
-}
-
-impl InnerWorld {
-    #[inline]
-    fn new() -> Self {
         Self {
-            desc: DescPool::new(),
-            arche: ArchePool::new()
+            id: WorldId::new(),
+            archetypes: Archetypes::new(),
+            bundles: Bundles::new(),
+            components: Components::new(),
+            entities: Entities::new()
         }
     }
+
     #[inline]
-    fn entity_new(&mut self) -> Result<Entity, Error> {
-        self.desc.create() 
+    pub fn id(&self) -> WorldId {
+        self.id
     }
+
     #[inline]
-    fn entity_set<C: ComponentTuple>(&mut self, entity: Entity, data: C) -> Result<(), Error> {
-        let desc = self.desc.get_mut(entity.id)?;
-        self.arche.set(desc, data)
+    pub fn archetypes(&self) -> &Archetypes {
+        &self.archetypes
     }
+
     #[inline]
-    fn entity_get<C: Component>(&self, entity: Entity) -> Result<StorePtr<C>, Error> {
-        let desc = self.desc.get(entity.id)?;
-        self.arche.get(desc)
+    pub fn bundles(&self) -> &Bundles {
+        &self.bundles
     }
-    fn entity_view<C: ComponentTuple>(&self) -> Result<EntityView, Error> {
-        todo!()
+
+    #[inline]
+    pub fn components(&self) -> &Components {
+        &self.components
     }
-    fn component_view<C: ComponentTuple>(&self) -> Result<ComponentView, Error> {
-        todo!()
+
+    #[inline]
+    pub fn entities(&self) -> &Entities {
+        &self.entities
+    }
+
+    #[inline]
+    pub fn component_init<T: Component>(&mut self) -> ComponentId {
+        self.components.init::<T>()
+    }
+
+    #[inline]
+    pub fn component_init_from_description(&mut self, description: ComponentDescription) -> ComponentId {
+        self.components.init_from_description(description)
+    }
+
+    #[inline]
+    pub fn component_id_from<T: Component>(&self) -> ComponentId {
+        self.components.get_id_from::<T>()
+    }
+
+    #[inline]
+    pub fn entity_create(&mut self) -> Entity {
+        self.entities.create()
+    }
+
+    #[inline]
+    pub fn entity_destroy(&mut self, entity: Entity) {
+        let meta = self.entities.destroy(entity);
+        todo!("Still got to delete the components with {:#?}", meta);
+    }
+
+    #[inline]
+    pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
+        let entity_meta = self.entities.get_mut(entity).expect("Entity was invalid!");
+        let bundle_info = self.bundles.init::<T>(&mut self.components);
+        let archetype = match self.archetypes.get_mut(bundle_info.id()) {
+            Some(archetype) => archetype,
+            None => {
+                let id = self.archetypes.create_with_capacity(bundle_info, &self.components, 1);
+
+                // SAFETY:
+                // Archetype was just created
+                unsafe { self.archetypes.get_unchecked_mut(id) }
+            }
+        };
+        entity_meta.index = archetype.len();
+        entity_meta.archetype_id = archetype.id();
+        archetype.set(&self.components, entity, data);
+    }
+
+    #[inline]
+    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) -> T {
+        let meta = self.entities.get_mut(entity);
+        let info = self.bundles.init::<T>(&mut self.components);
+        todo!("Still gotta unset using {:#?} and {:#?}", meta, info);
+    }
+
+    #[inline]
+    pub fn entity_get<T: Bundle>(&self, entity: Entity) -> &T {
+        let meta = self.entities.get(entity);
+        let info = self.bundles.get_id(TypeId::of::<T>());
+        todo!("Still gotta get using {:#?} and {:#?}", meta, info);
+    }
+
+    #[inline]
+    pub fn entity_get_mut<T: Bundle>(&mut self, entity: Entity) -> &mut T {
+        let meta = self.entities.get(entity);
+        let info = self.bundles.get_id(TypeId::of::<T>());
+        todo!("Still gotta get using {:#?} and {:#?}", meta, info);
     }
 }
 

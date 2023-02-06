@@ -1,34 +1,98 @@
+//! Some portions of this code have been looked from
+//! <https://github.com/bevyengine/bevy/blob/main/crates/bevy_ecs/macros/src/lib.rs>
+
+
 extern crate proc_macro;
 
-use std::sync::Mutex;
 use proc_macro::TokenStream;
-use quote::quote;
-use syn;
+use quote::{ format_ident, quote };
+use syn::{
+    parse::{ Parse, ParseStream },
+    parse_macro_input, parse_quote,
+    token::Comma,
+    DeriveInput, Ident, LitInt, Result
+};
 
-static mut COMPONENTCOUNTER: Mutex<usize> = Mutex::new(0);
 
-#[proc_macro_derive(Component)]
-pub fn derive_component(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
-    derive_component_impl(&ast)
+struct ForeachTuple {
+    macro_ident: Ident,
+    start: usize,
+    end: usize,
+    idents: Vec<Ident>,
 }
 
-fn derive_component_impl(ast: &syn::DeriveInput) -> TokenStream {
-    let t_ident = &ast.ident;
-    let id = unsafe {
-        let mut counter = COMPONENTCOUNTER.lock().unwrap();
-        let id: usize = *counter;
-        *counter += 1;
-        id
-    };
-    let gen = quote! {
-        impl Component for #t_ident {
-            #[inline]
-            fn id() -> ComponentId {
-                #id
-            }
+impl Parse for ForeachTuple {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let macro_ident = input.parse::<Ident>()?;
+        input.parse::<Comma>()?;
+        let start = input.parse::<LitInt>()?.base10_parse()?;
+        input.parse::<Comma>()?;
+        let end = input.parse::<LitInt>()?.base10_parse()?;
+        input.parse::<Comma>()?;
+        let mut idents = vec![input.parse::<Ident>()?];
+        while input.parse::<Comma>().is_ok() {
+            idents.push(input.parse::<Ident>()?);
         }
-    };    
-    gen.into()
+
+        Ok(ForeachTuple {
+            macro_ident,
+            start,
+            end,
+            idents,
+        })
+    }
+}
+
+#[proc_macro]
+pub fn foreach_tuple(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ForeachTuple);
+    let len = input.end - input.start;
+    let mut ident_tuples = Vec::with_capacity(len);
+    for i in input.start..=input.end {
+        let idents = input
+            .idents
+            .iter()
+            .map(|ident| format_ident!("{}{}", ident, i));
+        if input.idents.len() < 2 {
+            ident_tuples.push(quote! {
+                #(#idents)*
+            });
+        } else {
+            ident_tuples.push(quote! {
+                (#(#idents),*)
+            });
+        }
+    }
+
+    let macro_ident = &input.macro_ident;
+    let invocations = (input.start..=input.end).map(|i| {
+        let ident_tuples = &ident_tuples[..i];
+        quote! {
+            #macro_ident!(#(#ident_tuples),*);
+        }
+    });
+    TokenStream::from(quote! {
+        #(
+            #invocations
+        )*
+    })
+}
+
+
+#[proc_macro_derive(Component, attributes(component))]
+pub fn derive_component(input: TokenStream) -> TokenStream {
+    let mut ast = parse_macro_input!(input as DeriveInput);
+
+    ast.generics
+        .make_where_clause()
+        .predicates
+        .push(parse_quote! { Self: Send + Sync + 'static });
+
+    let struct_name = &ast.ident;
+    let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
+
+    TokenStream::from(quote! {
+        impl #impl_generics Component for #struct_name #type_generics #where_clause {}
+    })
 }
 
