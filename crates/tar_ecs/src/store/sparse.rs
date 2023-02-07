@@ -64,6 +64,16 @@ macro_rules! impl_sparse_array {
 impl_sparse_array!(SparseArray);
 impl_sparse_array!(MutSparseArray);
 
+impl<I: SparseSetIndex, V> SparseArray<I, V> {
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            values: Box::new([]),
+            marker: PhantomData
+        }
+    }
+}
+
 impl<I: SparseSetIndex, V> MutSparseArray<I, V> {
     #[inline]
     pub const fn new() -> Self {
@@ -176,6 +186,18 @@ macro_rules! impl_sparse_set {
 
 impl_sparse_set!(SparseSet);
 impl_sparse_set!(MutSparseSet);
+
+
+impl<I: SparseSetIndex, V> SparseSet<I, V> {
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            dense: Box::new([]),
+            indices: Box::new([]),
+            sparse: SparseArray::new()
+        }
+    }
+}
 
 
 impl<I: SparseSetIndex, V> MutSparseSet<I, V> {

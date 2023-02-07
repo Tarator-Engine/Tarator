@@ -52,19 +52,21 @@ impl Entities {
         }
     }
 
-    pub fn create(&mut self) -> Entity {
+    pub fn create(&mut self) -> (Entity, &mut EntityMeta) {
         if self.free_count == 0 {
-            let index = self.meta.len() as u32;
+            let index = self.meta.len();
             self.meta.push(EntityMeta {
                 archetype_id: ArchetypeId::EMPTY,
                 version: 0,
                 index: 0
             });
 
-            return Entity::new(index, 0);
+            // SAFETY:
+            // Meta was just pushed in
+            return (Entity::new(index as u32, 0), unsafe { self.meta.get_unchecked_mut(index) });
         }
 
-        let id = self.free_next as u32;
+        let index = self.free_next;
 
         let free = &mut self.meta[self.free_next];
         // Free entities should have an [`ArchetypeId`] variant [`ArchetypeId::INVALID`]
@@ -79,7 +81,9 @@ impl Entities {
         free.version += 1;
         free.index = 0;
 
-        Entity::new(id, free.version)
+        // SAFETY:
+        // Index was saved by free_next
+        (Entity::new(index as u32, free.version), unsafe { self.meta.get_unchecked_mut(index) })
     }
 
     /// Returns None if the entity was already destroyed or reoccupied
@@ -168,4 +172,5 @@ impl Entities {
         self.meta.iter_mut()
     }
 }
+
 

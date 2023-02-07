@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    component::{ ComponentId, Components, Component },
+    component::{ ComponentId, Components },
     store::{
         sparse::{ SparseSetIndex, SparseSet, MutSparseSet },
         raw_store::RawStore
@@ -44,38 +44,27 @@ impl SparseSetIndex for ArchetypeId {
 }
 
 
-/// Defines a relationship between [`Archetype`]s. See [`Archetype.edges`] to get a better glance
-/// at how it works with components
-#[derive(Debug)]
-pub struct Edge(ArchetypeId, ArchetypeId);
-
-impl Edge {
-    #[inline]
-    pub fn new(add: ArchetypeId, remove: ArchetypeId) -> Self {
-        Self(add, remove)
-    }
-
-    #[inline]
-    pub fn add(&self) -> ArchetypeId {
-        self.0
-    }
-
-    #[inline]
-    pub fn remove(&self) -> ArchetypeId {
-        self.0
-    }
-}
-
-
 #[derive(Debug)]
 pub struct Archetype {
     id: ArchetypeId,
     components: SparseSet<ComponentId, RawStore>,
-    edges: HashMap<ComponentId, Edge>,
+    parents: Vec<ArchetypeId>,
     entities: Vec<Entity>,
 }
 
 impl Archetype {
+    /// SAFETY:
+    /// - Function should only be used for the empty ArchetypeId
+    /// - Will mess with [`World`] if above is not regarded
+    pub unsafe fn empty(id: ArchetypeId) -> Self {
+        Self {
+            id,
+            components: SparseSet::new(),
+            parents: Vec::new(),
+            entities: Vec::new()
+        }
+    }
+
     pub fn with_capacity<'a>(
         id: ArchetypeId,
         component_ids: impl Iterator<Item = &'a ComponentId>,
@@ -94,13 +83,13 @@ impl Archetype {
         Self {
             id,
             components: component_set.lock(),
-            edges: HashMap::new(),
+            parents: Vec::new(),
             entities: Vec::with_capacity(capacity)
         }
     }
 
     #[inline]
-    pub fn set<T: Bundle>(&mut self, components: &Components, entity: Entity, data: T) {
+    pub fn set<'a, T: Bundle<'a>>(&mut self, components: &Components, entity: Entity, data: T) {
         self.entities.push(entity);
         data.get_components(components, &mut |id, component| {
             let store = self.components.get_mut(id).expect("Component is not part of this archetype!");
@@ -108,28 +97,45 @@ impl Archetype {
         });
     }
 
+    /// SAFETY:
+    /// - Function should only be used for the empty ArchetypeId
+    /// - Will mess with [`World`] if above is not regarded
     #[inline]
-    pub fn get<T: Component>(&self, components: &Components, index: usize) -> Option<&T> {
-        if index >= self.len() {
-            return None;
-        }
-
-        let component_id = *components.get_id_from::<T>()?;
-        let raw_store = self.components.get(component_id)?;
-        unsafe { Some(&*raw_store.get_unchecked(index).cast::<T>()) }
+    pub unsafe fn set_empty(&mut self, entity: Entity) {
+        self.entities.push(entity);
     }
 
     #[inline]
-    pub fn get_mut<T: Component>(&mut self, components: &Components, index: usize) -> Option<&mut T> {
+    pub fn get<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::Ref {
         if index >= self.len() {
-            return None;
+            return T::EMPTY_REF;
         }
 
-        let component_id = *components.get_id_from::<T>()?;
-        let raw_store = self.components.get_mut(component_id)?;
-        unsafe { Some(&mut *raw_store.get_unchecked_mut(index).cast::<T>()) }
+        // SAFETY:
+        // Already bounds checked
+        unsafe {
+            T::from_components::<T>(components, &mut |id| {
+                let raw_store = self.components.get(id)?;
+                Some(raw_store.get_unchecked(index))
+            })
+        }
     }
 
+    #[inline]
+    pub fn get_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::MutRef {
+        if index >= self.len() {
+            return T::EMPTY_MUTREF;
+        }
+
+        // SAFETY:
+        // Already bounds checked
+        unsafe {
+            T::from_components_mut::<T>(components, &mut |id| {
+                let raw_store = self.components.get_mut(id)?;
+                Some(raw_store.get_unchecked_mut(index))
+            })
+        }
+    }
 
     #[inline]
     pub fn id(&self) -> ArchetypeId {
@@ -147,8 +153,37 @@ impl Archetype {
     }
 
     #[inline]
-    pub fn insert_edge(&mut self, component_id: ComponentId, edge: Edge) {
-        self.edges.insert(component_id, edge);
+    pub fn contains(&self, component_id: ComponentId) -> bool {
+        self.components.contains(component_id)
+    }
+
+    #[inline]
+    pub fn component_ids(&self) -> impl Iterator<Item = ComponentId> + '_ {
+        self.components.indices()
+    }
+
+    #[inline]
+    pub fn init_parent(&mut self, archetype: &Archetype) {
+
+        // If `archetype` is already a set parent, ignore
+        if self.parents.contains(&archetype.id()) {
+            return;
+        }
+
+        for component_id in self.component_ids() {
+            // If the `archetype` does not contain every component_id of `self`, `archetype` is not
+            // a parent. We only care about parents for now.
+            if !archetype.contains(component_id) {
+                return;
+            }
+        }
+
+        self.parents.push(archetype.id());
+    }
+
+    #[inline]
+    pub fn is_empty_archetype(&self) -> bool {
+        self.components.len() == 0
     }
 }
 
@@ -162,8 +197,10 @@ pub struct Archetypes {
 impl Archetypes {
     #[inline]
     pub fn new() -> Self {
+        // Entities with no components will be assigned this archetype
+        let empty = unsafe { Archetype::empty(ArchetypeId::new(0)) };
         Self {
-            archetypes: Vec::new(),
+            archetypes: vec![empty],
             archetype_ids: HashMap::new()
         }
     }
@@ -175,7 +212,13 @@ impl Archetypes {
         capacity: usize
     ) -> ArchetypeId {
         let id = ArchetypeId::new(self.len());
-        let archetype = Archetype::with_capacity(id, bundle_info.iter(), components, capacity);
+        let mut archetype = Archetype::with_capacity(id, bundle_info.iter(), components, capacity);
+
+        // Check every current archetype and our newly created archetype if they are parents.
+        for other_archetype in &mut self.archetypes {
+            other_archetype.init_parent(&archetype);
+            archetype.init_parent(&other_archetype);
+        }
 
         self.archetypes.push(archetype);
         self.archetype_ids.insert(bundle_info.id(), id);

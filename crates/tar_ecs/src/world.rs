@@ -1,7 +1,4 @@
-use std::{
-    sync::atomic::{ AtomicUsize, Ordering },
-    any::TypeId
-};
+use std::sync::atomic::{ AtomicUsize, Ordering };
 
 use crate::{
     bundle::{ Bundles, Bundle },
@@ -96,7 +93,16 @@ impl World {
 
     #[inline]
     pub fn entity_create(&mut self) -> Entity {
-        self.entities.create()
+        let (entity, meta) = self.entities.create();
+        // SAFETY:
+        // - Getting the empty archetype is safe, as it should already exist
+        // - We know that we carry the empty archetype with us
+        unsafe {
+            let archetype = self.archetypes.get_unchecked_mut(meta.archetype_id.index());
+            archetype.set_empty(entity);
+        }
+
+        entity
     }
 
     #[inline]
@@ -105,8 +111,7 @@ impl World {
         todo!("Still got to delete the components with {:#?}", meta);
     }
 
-    #[inline]
-    pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
+    pub fn entity_set<'a, T: Bundle<'a>>(&mut self, entity: Entity, data: T) {
         let entity_meta = self.entities.get_mut(entity).expect("Entity was invalid!");
         let bundle_info = self.bundles.init::<T>(&mut self.components);
         let archetype = match self.archetypes.get_from_bundle_mut(bundle_info.id()) {
@@ -124,25 +129,33 @@ impl World {
         archetype.set(&self.components, entity, data);
     }
 
-    #[inline]
-    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) -> T {
+    /*#[inline]
+    pub fn entity_unset<'a, T: Bundle<'a>>(&mut self, entity: Entity) -> T {
         let meta = self.entities.get_mut(entity);
         let info = self.bundles.init::<T>(&mut self.components);
         todo!("Still gotta unset using {:#?} and {:#?}", meta, info);
+    }*/
+
+    #[inline]
+    pub fn entity_get<'a, T: Bundle<'a>>(&self, entity: Entity) -> T::Ref {
+        let Some(meta) = self.entities.get(entity) else {
+            return T::EMPTY_REF;
+        };
+        let Some(archetype) = self.archetypes.get(meta.archetype_id) else {
+            return T::EMPTY_REF;
+        };
+        archetype.get::<T>(&self.components, meta.index)
     }
 
     #[inline]
-    pub fn entity_get<T: Component>(&self, entity: Entity) -> Option<&T> {
-        let meta = self.entities.get(entity)?;
-        let archetype = self.archetypes.get(meta.archetype_id)?;
-        archetype.get(&self.components, meta.index)
-    }
-
-    #[inline]
-    pub fn entity_get_mut<T: Component>(&mut self, entity: Entity) -> &mut T {
-        let meta = self.entities.get(entity);
-        let info = self.components.get_id_from::<T>();
-        todo!("Still gotta get using {:#?} and {:#?}", meta, info);
+    pub fn entity_get_mut<'a, T: Bundle<'a>>(&mut self, entity: Entity) -> T::MutRef {
+        let Some(meta) = self.entities.get(entity) else {
+            return T::EMPTY_MUTREF;
+        };
+        let Some(archetype) = self.archetypes.get_mut(meta.archetype_id) else {
+            return T::EMPTY_MUTREF;
+        };
+        archetype.get_mut::<T>(&self.components, meta.index)
     }
 }
 

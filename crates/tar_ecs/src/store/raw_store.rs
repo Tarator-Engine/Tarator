@@ -1,3 +1,6 @@
+//! Big portions of this code where looked up from
+//! <https://docs.rs/bevy_ecs/latest/src/bevy_ecs/storage/blob_vec.rs.html>
+
 use std::alloc::{ Layout, handle_alloc_error };
 
 /// Type erased vector
@@ -11,7 +14,7 @@ pub struct RawStore {
 
 impl std::fmt::Debug for RawStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BlobVec")
+        f.debug_struct("RawStore")
             .field("item_layout", &self.item_layout)
             .field("capacity", &self.capacity)
             .field("len", &self.len)
