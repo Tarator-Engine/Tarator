@@ -108,8 +108,27 @@ impl World {
 
     #[inline]
     pub fn entity_destroy(&mut self, entity: Entity) {
-        let meta = self.entities.destroy(entity);
-        todo!("Still got to delete the components with {:#?}", meta);
+        let Some(entity_meta) = self.entities.destroy(entity) else {
+            return;
+        };
+
+        if entity_meta.is_empty() {
+            return;
+        }
+
+        // If [`Archetype`] of `entity` does change
+        let archetype = self.archetypes.get_mut(entity_meta.archetype_id).expect(format!("{:#?} is invalid!", entity_meta.archetype_id).as_str());
+
+        let replaced_entity = unsafe { archetype.drop_entity(entity_meta.index) };
+
+        // Set the index of the moved entity
+        //
+        // SAFETY:
+        // Entity definitely exists
+        if let Some(replaced_entity) = replaced_entity {
+            let replaced_entity_meta = unsafe { self.entities.get_unchecked_mut(replaced_entity.id() as usize) };
+            replaced_entity_meta.index = entity_meta.index;
+        }
     }
 
     pub fn entity_set<'a, T: Bundle<'a>>(&mut self, entity: Entity, data: T) {
@@ -221,7 +240,6 @@ impl World {
             let replaced_entity_meta = unsafe { entities.get_unchecked_mut(replaced_entity.id() as usize) };
             replaced_entity_meta.index = old_index;
         }
-
     }
 
     #[inline]

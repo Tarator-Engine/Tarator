@@ -265,6 +265,29 @@ impl Archetype {
 
         swapped_entity
     }
+
+    // SAFETY:
+    // - Drops all components at `index`
+    // - `index` has to be valid
+    pub unsafe fn drop_entity(&mut self, index: usize) -> Option<Entity> {
+        let is_last = index == self.len() - 1;
+
+        let swapped_entity = if is_last {
+            self.entities.pop();
+
+            None
+        } else {
+            let entity = self.entities.swap_remove(index);
+
+            Some(entity)
+        };
+
+        for (_, raw_store) in self.components.iter_mut() {
+            raw_store.swap_remove_and_drop_unchecked(index);
+        }
+
+        swapped_entity
+    }
 }
 
 
