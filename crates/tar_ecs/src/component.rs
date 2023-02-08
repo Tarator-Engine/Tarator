@@ -1,10 +1,14 @@
 use std::{
     alloc::Layout,
     any::{ Any, TypeId, type_name },
-    mem::needs_drop, collections::HashMap
+    mem::needs_drop, collections::HashMap, marker::PhantomData
 };
 
-use crate::store::sparse::SparseSetIndex;
+use crate::{
+    store::sparse::SparseSetIndex,
+    bundle::Bundle,
+    archetype::{ Archetypes, ArchetypeId }
+};
 
 /// A [`Component`] is just data. Additionally, an [`Entity`] is just a redirection to a set of
 /// multiple [`Component`]s.
@@ -226,5 +230,71 @@ impl Components {
     pub fn iter(&self) -> impl Iterator<Item = &ComponentInfo> {
         self.components.iter()
     }
+}
+
+
+pub struct ComponentQuery<'a, T: Bundle<'a>> {
+    marker: PhantomData<&'a T>
+}
+
+impl<'a, T: Bundle<'a>> Iterator for ComponentQuery<'a, T> {
+    type Item = T::Ref;
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    } 
+}
+
+
+pub struct ComponentQueryMut<'a, T: Bundle<'a>> {
+    archetypes: &'a mut Archetypes,
+    archetype_ids: Vec<ArchetypeId>,
+    components: &'a Components,
+    current: usize,
+    index: usize,
+    marker: PhantomData<&'a mut T>
+}
+
+impl<'a, T: Bundle<'a>> ComponentQueryMut<'a, T> {
+    pub fn new(
+        archetype_ids: Vec<ArchetypeId>,
+        archetypes: &'a mut Archetypes,
+        components: &'a Components
+    ) -> Self {
+        Self {
+            archetypes,
+            archetype_ids,
+            components,
+            current: 0,
+            index: 0,
+            marker: PhantomData
+        }
+    }
+}
+
+impl<'a, T: Bundle<'a>> Iterator for ComponentQueryMut<'a, T> {
+    type Item = T::MutRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(archetype_ids) = self.archetype_ids.get(self.current) {
+            let archetype = self.archetypes.get_mut(*archetype_ids)?;
+            
+            // TODO Make [`Store`] automatically bound check or something
+            if self.index == archetype.len() {
+                self.current += 1; 
+                self.index = 0;
+
+                return self.next();
+            }
+
+            let index = self.index;
+            self.index += 1;
+            
+            // SAFETY:
+            // Archetype is parent of `T: Bundle` archetype, value is safe to use
+            return Some(unsafe { archetype.get_unchecked_mut::<T>(self.components, index) });
+        }
+        
+        None
+    } 
 }
 

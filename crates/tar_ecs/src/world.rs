@@ -1,7 +1,7 @@
 use std::sync::atomic::{ AtomicUsize, Ordering };
 use crate::{
     bundle::{ Bundles, Bundle },
-    component::{ Component, Components, ComponentDescription, ComponentId },
+    component::{ Component, Components, ComponentDescription, ComponentId, ComponentQueryMut },
     entity::{ Entities, Entity },
     archetype::{ Archetypes, ArchetypeId },
 };
@@ -243,7 +243,7 @@ impl World {
     }
 
     #[inline]
-    pub fn entity_get<'a, T: Bundle<'a>>(&self, entity: Entity) -> T::Ref {
+    pub fn entity_get<'a, T: Bundle<'a>>(&self, entity: Entity) -> T::WrappedRef {
         let Some(meta) = self.entities.get(entity) else {
             return T::EMPTY_REF;
         };
@@ -254,7 +254,7 @@ impl World {
     }
 
     #[inline]
-    pub fn entity_get_mut<'a, T: Bundle<'a>>(&mut self, entity: Entity) -> T::MutRef {
+    pub fn entity_get_mut<'a, T: Bundle<'a>>(&mut self, entity: Entity) -> T::WrappedMutRef {
         let Some(meta) = self.entities.get(entity) else {
             return T::EMPTY_MUTREF;
         };
@@ -265,8 +265,6 @@ impl World {
         archetype.get_mut::<T>(&self.components, meta.index)
     }
 
-
-    #[inline]
     pub fn entity_query<'a, T: Bundle<'a>>(&mut self) -> Vec<Entity> {
         let bundle_info = self.bundles.init::<T>(&mut self.components);
         let archetype_id = self.archetypes.get_id_from_components_or_create_with_capacity(&self.components, bundle_info.components(), 1);
@@ -284,6 +282,24 @@ impl World {
         
         
         entities
+    }
+
+    #[inline]
+    pub fn component_query_mut<'a, T: Bundle<'a>>(&'a mut self) -> ComponentQueryMut<'a, T> {
+        let bundle_info = self.bundles.init::<T>(&mut self.components);
+        let archetype_id = self.archetypes.get_id_from_components_or_create_with_capacity(
+            &self.components,
+            bundle_info.components(),
+            1
+        );
+
+        // SAFETY:
+        // Archetype was just created or gotten
+        let archetype = unsafe { self.archetypes.get_unchecked(archetype_id.index()) };
+        let mut archetype_ids: Vec<_> = archetype.parents().map(|id| *id).collect();
+        archetype_ids.push(archetype_id);
+
+        ComponentQueryMut::new(archetype_ids, &mut self.archetypes, &self.components)
     }
 
 

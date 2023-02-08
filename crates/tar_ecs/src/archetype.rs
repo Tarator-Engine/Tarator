@@ -124,7 +124,7 @@ impl Archetype {
     }
 
     #[inline]
-    pub fn get<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::Ref {
+    pub fn get<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::WrappedRef {
         if index >= self.len() {
             debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
             return T::EMPTY_REF;
@@ -140,8 +140,23 @@ impl Archetype {
         }
     }
 
+    /// SAFETY:
+    /// - `index` has to be valid and in bounds
+    /// - Returned references may be invalid
     #[inline]
-    pub fn get_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::MutRef {
+    pub unsafe fn get_unchecked<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::Ref {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+
+        unsafe {
+            T::from_components_unchecked::<T>(components, &mut |id| {
+                let raw_store = self.components.get(id).unwrap();
+                raw_store.get_unchecked(index)
+            })
+        }
+    }
+
+    #[inline]
+    pub fn get_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::WrappedMutRef {
         if index >= self.len() {
             debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
             return T::EMPTY_MUTREF;
@@ -153,6 +168,21 @@ impl Archetype {
             T::from_components_mut::<T>(components, &mut |id| {
                 let raw_store = self.components.get_mut(id)?;
                 Some(raw_store.get_unchecked_mut(index))
+            })
+        }
+    }
+
+    /// SAFETY:
+    /// - `index` has to be valid and in bounds
+    /// - Returned mutable references may be invalid
+    #[inline]
+    pub unsafe fn get_unchecked_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::MutRef {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+
+        unsafe {
+            T::from_components_unchecked_mut::<T>(components, &mut |id| {
+                let raw_store = self.components.get_mut(id).unwrap();
+                raw_store.get_unchecked_mut(index)
             })
         }
     }
