@@ -109,6 +109,14 @@ impl RawStore {
         // this structure at index `self.len`
         self.get_ptr_mut().add(new_len * size)
     }
+    
+    #[inline]
+    pub unsafe fn swap_remove_and_drop_unchecked(&mut self, index: usize) {
+        let ptr = self.swap_remove_and_forget_unchecked(index);
+        if let Some(drop) = self.drop {
+            drop(ptr);
+        }
+    }
 
     /// SAFETY:
     /// - `index` is < `self.len`

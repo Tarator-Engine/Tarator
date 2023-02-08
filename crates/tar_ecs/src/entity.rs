@@ -139,12 +139,14 @@ impl Entities {
     }
 
     #[inline]
-    pub fn get_mut(&mut self, entity: Entity) -> &mut EntityMeta {
-        let meta = self.meta.get_mut(entity.id() as usize).expect("Entity is invalid!");
+    pub fn get_mut(&mut self, entity: Entity) -> Option<&mut EntityMeta> {
+        let meta = self.meta.get_mut(entity.id() as usize)?;
 
-        assert!(meta.version == entity.version() || meta.archetype_id != ArchetypeId::INVALID, "Entity was already destroyed!");
+        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+            return None;
+        }
 
-        meta
+        Some(meta)
     }
 
     #[inline]

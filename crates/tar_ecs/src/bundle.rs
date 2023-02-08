@@ -182,6 +182,12 @@ impl BundleComponents {
     }
 
     #[inline]
+    pub fn remove(&mut self, components: Vec<ComponentId>) {
+        let diff = self.components.clone().into_iter().filter(|id| !components.contains(id)).collect();
+        self.components = diff;
+    }
+
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &ComponentId> {
         self.components.iter()
     }

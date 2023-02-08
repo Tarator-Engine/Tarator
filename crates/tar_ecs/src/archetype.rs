@@ -126,7 +126,7 @@ impl Archetype {
     #[inline]
     pub fn get<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::Ref {
         if index >= self.len() {
-            debug_assert!(false, "Index is out of bounds! ({}>={})", index, self.len());
+            debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
             return T::EMPTY_REF;
         }
 
@@ -143,7 +143,7 @@ impl Archetype {
     #[inline]
     pub fn get_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::MutRef {
         if index >= self.len() {
-            debug_assert!(false, "Index is out of bounds! ({}>={})", index, self.len());
+            debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
             return T::EMPTY_MUTREF;
         }
 
@@ -213,6 +213,7 @@ impl Archetype {
 
     /// SAFETY:
     /// - Unset components in the parent have to be set immediately after this call
+    /// - `index` has to be valid
     pub unsafe fn move_into_parent(&mut self, parent: &mut Archetype, index: usize) -> Option<Entity> {
 
         let is_last = index == self.len() - 1;
@@ -228,9 +229,37 @@ impl Archetype {
         };
 
         for (component_id, parent_raw_store) in parent.components.iter_mut() {
-            if let Some(raw_store) =self.components.get_mut(*component_id) {
+            if let Some(raw_store) = self.components.get_mut(*component_id) {
                     let ptr = raw_store.swap_remove_and_forget_unchecked(index);
                     parent_raw_store.push(ptr);
+            }
+        }
+
+        swapped_entity
+    }
+
+    // SAFETY:
+    // - Drops the components which are not in the child
+    /// - `index` has to be valid
+    pub unsafe fn move_into_child(&mut self, child: &mut Archetype, index: usize) -> Option<Entity> {
+        let is_last = index == self.len() - 1;
+
+        let swapped_entity = if is_last {
+            self.entities.pop();
+
+            None
+        } else {
+            let entity = self.entities.swap_remove(index);
+
+            Some(entity)
+        };
+        
+        for (component_id, raw_store) in self.components.iter_mut() {
+            if let Some(child_raw_store) = child.components.get_mut(*component_id) {
+                let ptr = raw_store.swap_remove_and_forget_unchecked(index);
+                child_raw_store.push(ptr);
+            } else {
+                raw_store.swap_remove_and_drop_unchecked(index);
             }
         }
 
