@@ -1,7 +1,9 @@
 use std::{
     alloc::Layout,
     any::{ Any, TypeId, type_name },
-    mem::needs_drop, collections::HashMap, marker::PhantomData
+    mem::needs_drop,
+    collections::HashMap, 
+    marker::PhantomData
 };
 
 use crate::{
@@ -10,11 +12,17 @@ use crate::{
     archetype::{ Archetypes, ArchetypeId }
 };
 
-/// A [`Component`] is just data. Additionally, an [`Entity`] is just a redirection to a set of
-/// multiple [`Component`]s.
+/// A [`Component`] is nothing more but data, which can be stored in a given
+/// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can
+/// manually be implemented on a type, or via `#[derive(Component)]`.
+///
+/// Read further: [`Bundle`]
 pub trait Component: Send + Sync + 'static {}
 
 
+/// Every [`Component`] gets its own [`ComponentId`] per [`World`](crate::world::World). This
+/// [`ComponentId`] directly links to a [`ComponentDescription`], which contains some crutial
+/// information about a [`Component`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct ComponentId(u32);
 
@@ -43,6 +51,10 @@ impl SparseSetIndex for ComponentId {
 }
 
 
+/// Contains information about a [`Component`], most important its [`Layout`] and its [`Drop`]
+/// function, if any, which is crutial for [`RawStore`](crate::store::raw_store::RawStore)to drop a
+/// stored [`Component`] correctly, and not create any memory leaks because of some allocations
+/// from a [`Component`].
 pub struct ComponentDescription {
     name: &'static str,
     send_sync: bool,
@@ -75,6 +87,7 @@ impl ComponentDescription {
         ptr.cast::<T>().drop_in_place()
     }
 
+    /// New [`ComponentDescription`] from given [`Component`]
     pub fn new<T: Component>() -> Self {
         Self {
             name: type_name::<T>(),
@@ -86,7 +99,7 @@ impl ComponentDescription {
     }
 
     /// SAFETY:
-    /// - `layout` and `drop` correspond to the same type
+    /// - `layout` and `drop` must correspond to the same type
     /// - type must be `Send + Sync`
     pub unsafe fn new_raw(
         name: impl Into<&'static str>,
@@ -132,6 +145,7 @@ impl ComponentDescription {
         self.layout
     }
 
+    /// Returns the drop function of this [`ComponentDescription`]'s [`Component`]
     #[inline]
     pub fn drop(&self) -> Option<unsafe fn(*mut u8)> {
         self.drop
@@ -140,32 +154,8 @@ impl ComponentDescription {
 
 
 #[derive(Debug)]
-pub struct ComponentInfo {
-    id: ComponentId,
-    description: ComponentDescription
-}
-
-impl ComponentInfo {
-    #[inline]
-    pub fn new(id: ComponentId, description: ComponentDescription) -> Self {
-        Self { id, description }
-    }
-    
-    #[inline]
-    pub fn id(&self) -> ComponentId {
-        self.id
-    }
-
-    #[inline]
-    pub fn description(&self) -> &ComponentDescription {
-        &self.description
-    }
-}
-
-
-#[derive(Debug)]
 pub struct Components {
-    components: Vec<ComponentInfo>,
+    components: Vec<ComponentDescription>,
     indices: HashMap<TypeId, ComponentId>
 }
 
@@ -190,19 +180,19 @@ impl Components {
     }
 
     #[inline]
-    fn _init(components: &mut Vec<ComponentInfo>, description: ComponentDescription) -> ComponentId {
+    fn _init(components: &mut Vec<ComponentDescription>, description: ComponentDescription) -> ComponentId {
         let id = ComponentId::new(components.len());
-        components.push(ComponentInfo::new(id, description));
+        components.push(description);
         id
     }
 
     #[inline]
-    pub fn get_info(&self, id: ComponentId) -> Option<&ComponentInfo> {
+    pub fn get_description(&self, id: ComponentId) -> Option<&ComponentDescription> {
         self.components.get(id.index())
     }
 
     #[inline]
-    pub unsafe fn get_info_unchecked(&self, id: ComponentId) -> &ComponentInfo {
+    pub unsafe fn get_description_unchecked(&self, id: ComponentId) -> &ComponentDescription {
         self.components.get_unchecked(id.index())
     }
 
@@ -227,12 +217,15 @@ impl Components {
     }
 
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &ComponentInfo> {
+    pub fn iter(&self) -> impl Iterator<Item = &ComponentDescription> {
         self.components.iter()
     }
 }
 
 
+/// An [`Iterator`] for a given [`Bundle`], which iterates over all
+/// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
+/// [`Bundle`].
 pub struct ComponentQuery<'a, T: Bundle<'a>> {
     archetypes: &'a Archetypes,
     archetype_ids: Vec<ArchetypeId>,
@@ -286,7 +279,9 @@ impl<'a, T: Bundle<'a>> Iterator for ComponentQuery<'a, T> {
     } 
 }
 
-
+/// An [`Iterator`] for a given [`Bundle`], which iterates mutably over all
+/// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
+/// [`Bundle`].
 pub struct ComponentQueryMut<'a, T: Bundle<'a>> {
     archetypes: &'a mut Archetypes,
     archetype_ids: Vec<ArchetypeId>,

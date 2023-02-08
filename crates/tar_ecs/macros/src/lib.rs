@@ -1,4 +1,4 @@
-//! Some portions of this code have been looked from
+//! Big portions of this code have been looked from
 //! <https://github.com/bevyengine/bevy/blob/main/crates/bevy_ecs/macros/src/lib.rs>
 
 
@@ -43,6 +43,7 @@ impl Parse for ForeachTuple {
     }
 }
 
+/// Implements a given macro for each tuple (number of fields provided)
 #[proc_macro]
 pub fn foreach_tuple(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ForeachTuple);

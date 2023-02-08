@@ -7,7 +7,7 @@ use std::{
 };
 
 
-/// Something that can be stored in a [`SparceSet`]
+/// Something that can be stored in a [`SparseSet`]
 pub trait SparseSetIndex: Clone + Eq + PartialEq + Hash {
     fn as_usize(&self) -> usize;
     fn from_usize(value: usize) -> Self;

@@ -24,6 +24,9 @@ impl Entity {
 }
 
 
+/// Saves the component location of an [`Entity`], as well as it's current version. Every time an
+/// [`Entity`] gets deleted, the corresponding [`EntityMeta`] gets invalidated and the version gets
+/// incremented (in order to recycle it's existanse).
 #[derive(Debug)]
 pub struct EntityMeta {
     pub archetype_id: ArchetypeId,
@@ -48,12 +51,25 @@ impl EntityMeta {
 }
 
 
-/// Stores all the data information of our entities and checks if they are still alive.
+/// Stores all the data information of our entities and checks if they are still alive. The result
+/// of [`Entity::id()`] directly maps to a corresponding [`EntityMeta`], but
+/// [`EntityMeta.version`] has to match [`Entity::version()`] and [`EntityMeta.archetype_id`] has
+/// to be valid.
 ///
-/// The implementation is based on [this blog post](https://skypjack.github.io/2019-05-06-ecs-baf-part-3)
+/// Every corresponding [`EntityMeta`] gets set in the [`World`](crate::world::World) via a mutable
+/// reference.
+///
+/// # Links
+///
+/// [ECS back and forth - Part 3](https://skypjack.github.io/2019-05-06-ecs-baf-part-3)
 #[derive(Debug)]
 pub struct Entities {
     meta: Vec<EntityMeta>,
+    /// `free_next` is pointing to the next dead [`Entity`] that can get revived, and `free_count`
+    /// stores how many [`Entity`]s are currently dead. On dead [`Entity`]s, the corresponding
+    /// [`EntityMeta.index`] points to the next dead [`Entity`], making a linked list of sorts.
+    /// This way, [`Entity`]s can easily get reused after they get destroyed, without the need of
+    /// reallocating the array for every [`Entity`] that gets created.
     free_count: usize,
     free_next: usize
 }
@@ -68,6 +84,9 @@ impl Entities {
         }
     }
 
+    /// Instantiates a new [`EntityMeta`] or revives one, and returns a mutable reference which can
+    /// be used to set the location to the [`Entity`]'s [`Component`](crate::component::Component)
+    /// in the [`World`](crate::world::World).
     pub fn create(&mut self) -> (Entity, &mut EntityMeta) {
         if self.free_count == 0 {
             let index = self.meta.len();
@@ -90,7 +109,6 @@ impl Entities {
 
         // Set our freed [`EntityMeta`]
         free.archetype_id = ArchetypeId::EMPTY;
-        free.version += 1;
         free.index = 0;
 
         // SAFETY:
@@ -98,7 +116,9 @@ impl Entities {
         (Entity::new(index as u32, free.version), unsafe { self.meta.get_unchecked_mut(index) })
     }
 
-    /// Returns None if the entity was already destroyed or reoccupied
+    /// Returns the destroyed [`EntityMeta`] which can be used to drop all
+    /// [`Component`](crate::component::Component)s of given [`Entity`]. Will return [`None`] if
+    /// the [`Entity`] was already destroyed or revived.
     pub fn destroy(&mut self, entity: Entity) -> Option<EntityMeta> {
         let index = entity.id() as usize;
         let meta = &mut self.meta[index];
@@ -116,9 +136,11 @@ impl Entities {
             index: meta.index
         };
 
-        // Set the index of our `EntityMeta` that we want to destory to the current `free_next`,
-        // and set `free_next` to our index, as well as increment `free_count`
+        // Set the index of our [`EntityMeta`] that we want to destory to the current `free_next`,
+        // and set `free_next` to our index, as well as increment `free_count`. Also increment the
+        // current version of our [`EntityMeta`].
         meta.index = self.free_next;
+        meta.version += 1;
         self.free_next = index;
         self.free_count += 1;
 
@@ -127,6 +149,7 @@ impl Entities {
         Some(old_meta)
     }
 
+    /// Returns [`None`] if the [`Entity`] was already destroyed or revived.
     #[inline]
     pub fn get(&self, entity: Entity) -> Option<&EntityMeta> {
         let meta = &self.meta[entity.id() as usize];
@@ -138,6 +161,7 @@ impl Entities {
         Some(meta)
     }
 
+    /// Returns [`None`] if the [`Entity`] was already destroyed or revived.
     #[inline]
     pub fn get_mut(&mut self, entity: Entity) -> Option<&mut EntityMeta> {
         let meta = self.meta.get_mut(entity.id() as usize)?;
@@ -159,6 +183,7 @@ impl Entities {
         self.meta.get_unchecked_mut(index) 
     }
 
+    /// Returns how many [`Entity`]s are currently dead
     #[inline]
     pub fn free_count(&self) -> usize {
         self.free_count

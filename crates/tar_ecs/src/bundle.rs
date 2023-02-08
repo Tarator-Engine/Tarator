@@ -1,3 +1,7 @@
+//! Some portions of this code where looked up from
+//! <https://docs.rs/bevy_ecs/latest/src/bevy_ecs/bundle.rs.html>
+
+
 use std::{
     collections::HashMap,
     any::{ TypeId, type_name },
@@ -11,10 +15,55 @@ use crate::{
 };
 
 /// Bundle is implemented for every type implementing[`Component`], as well as for every tuple
-/// consisting [`Bundle`]s.
+/// consisting [`Bundle`]s. This means that a tuple of multiple [`Component`]s is also a
+/// [`Bundle`].
 /// 
+/// # Examples
+///
+/// ```ignore
+/// #[derive(Component)]
+/// struct MyComponent(u64);
+///
+/// #[derive(Component)]
+/// struct YourComponent(u32);
+/// ```
+///
+/// Both structs are [`Component`]s now, which results in them also being [`Bundle`]s. But there's
+/// more:
+///
+/// ```ignore
+/// (MyComponent, YourComponent)
+/// (YourComponent, MyComponent)
+/// ```
+///
+/// These tuples are also [`Bundle`]s.
+///
+/// This is isefull to set and get [`Component`]s on a [`World`](crate::world::World), as setting
+/// or deleting every [`Component`] one by one can get a bit slow. It also following generics work:
+///
+/// ```ignore
+/// //                       \               HERE                 /
+/// world.entity_set(entity, (MyComponent(42), YourComponent(16)) );
+/// ```
+///
+/// ```ignore
+/// //                                         \            HERE             /
+/// let (mine, yours) = world.entity_get_mut::<(MyComponent, YourComponent)>(entity);
+/// ```
+/// 
+/// ```ignore
+/// //                                 \           HERE             /
+/// for entity in world.entity_query::<(MyComponent, YourComponent)>() {
+/// ```
+///
+/// ```ignore
+/// //                                          \             HERE           /
+/// for (yours, mine) in world.component_query::<(YourComponent, MyComponent)>(entity) {
+/// ```
+///
 /// SAFETY:
 /// - Manual implementations are discouraged
+/// - [`Bundle::WrappedRef`] and [`Bundle::WrappedMutRef`] are supposed to be wrapped in[`Option`]
 pub unsafe trait Bundle<'a>: Send + Sync + 'static {
     /// Implemented as a tuple of [`Component`] references
     type Ref;
@@ -81,7 +130,6 @@ pub unsafe trait Bundle<'a>: Send + Sync + 'static {
 }
 
 unsafe impl<'a, C: Component> Bundle<'a> for C {
-
     type Ref = &'a Self;
     type MutRef = &'a mut Self;
 
@@ -116,11 +164,9 @@ unsafe impl<'a, C: Component> Bundle<'a> for C {
     }
 }
 
-
 macro_rules! component_tuple_impl {
     ($($c:ident),*) => {
         unsafe impl<'a, $($c: Bundle<'a>),*> Bundle<'a> for ($($c,)*) {
-
             type Ref = ($($c::Ref,)*);
             type MutRef = ($($c::MutRef,)*);
 
@@ -201,6 +247,8 @@ impl SparseSetIndex for BundleId {
 }
 
 
+/// Stores a sorted [`Vec`] of [`ComponentId`]s, used in [`Archetypes`](crate::archetype::Archetypes)
+/// to to easily identify an [`Archetype`](crate::archetype::Archetype).
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct BundleComponents {
     components: Vec<ComponentId>
@@ -270,7 +318,7 @@ impl BundleInfo {
 }
 
 
-/// Manages every [`Bundle`] that gets used on a [`World`].
+/// Manages every [`Bundle`] that gets used on a [`World`](crate::world::World).
 #[derive(Debug)]
 pub struct Bundles {
     bundles: Vec<BundleInfo>,

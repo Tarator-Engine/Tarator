@@ -11,6 +11,7 @@ use crate::{
 };
 
 
+/// Each [`Archetype`] gets its own unique [`ArchetypeId`]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct ArchetypeId(u32);
 
@@ -44,6 +45,11 @@ impl SparseSetIndex for ArchetypeId {
 }
 
 
+/// Stores an unique set of [`Component`](crate::component::Component)s ([`Bundle`]) and keeps all
+/// stored [`Component`](crate::componen::Component) packed, with no empty indices between them.
+///
+/// Every function that returns an [`Entity`] relocated some [`Component`]s of another [`Entity`],
+/// which means that its [`EntityMeta`](crate::entity::EntityMeta) must get updated!
 #[derive(Debug)]
 pub struct Archetype {
     id: ArchetypeId,
@@ -55,7 +61,7 @@ pub struct Archetype {
 impl Archetype {
     /// SAFETY:
     /// - Function should only be used for the empty ArchetypeId
-    /// - Will mess with [`World`] if above is not regarded
+    /// - Will mess with [`World`](crate::world::World) if above is not regarded
     pub unsafe fn empty(id: ArchetypeId) -> Self {
         Self {
             id,
@@ -65,6 +71,8 @@ impl Archetype {
         }
     }
 
+    /// SAFETY:
+    /// - Should be called with `capacity` > 0, could else lead to possible problems
     pub fn with_capacity<'a>(
         id: ArchetypeId,
         component_ids: impl Iterator<Item = &'a ComponentId>,
@@ -74,10 +82,9 @@ impl Archetype {
         let mut component_set = MutSparseSet::new();
 
         for component_id in component_ids {
-            let info = components.get_info(*component_id).unwrap();
-            let description = info.description();
+            let description = components.get_description(*component_id).unwrap();
             let store = unsafe { RawStore::with_capacity(description.layout(), description.drop(), capacity) };
-            component_set.insert(info.id(), store);
+            component_set.insert(*component_id, store);
         }
 
         Self {
@@ -88,12 +95,17 @@ impl Archetype {
         }
     }
 
+    /// Pushes given `data` for `entity` into its [`RawStore`]. This means the related
+    /// [`EntityMeta`](crate::entity::EntityMeta) index can just be set using [`Archetype::len()`].
+    ///
+    /// SAFETY:
+    /// - `data` must contain all components of this [`Archetype`]
     #[inline]
     pub fn init<'a, T: Bundle<'a>>(&mut self, components: &Components, entity: Entity, data: T) {
         self.entities.push(entity);
 
         // SAFETY:
-        // We initialize `component` in our store via [`RawStore::push`]
+        // We initialize `component` in our store via [`RawStore::push()`]
         unsafe {
             data.get_components(components, &mut |component_id, component| {
                 let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
@@ -102,6 +114,10 @@ impl Archetype {
         }
     }
 
+    /// Initializes  given `data` for `entity` in its [`RawStore`].
+    ///
+    /// SAFETY:
+    /// - `data` must contain all components of this [`Archetype`]
     #[inline]
     pub fn set<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize, data: T) {
         debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
@@ -217,6 +233,8 @@ impl Archetype {
         self.components.indices()
     }
 
+    /// Checks if `archetype` is contains at least all [`Component`](crate::component::Component)s,
+    /// and if so, add them to the list of parents.
     #[inline]
     pub fn init_parent(&mut self, archetype: &Archetype) {
 
@@ -256,9 +274,13 @@ impl Archetype {
         self.components.len() == 0
     }
 
+    /// Performs a swap_remove and moves the removed into the parent. The returned [`Entity`] is
+    /// the [`Entity`] that may have been relocated by the process.
+    ///
     /// SAFETY:
     /// - Unset components in the parent have to be set immediately after this call
     /// - `index` has to be valid
+    #[must_use = "The returned variant may contain a relocated Entity!"]
     pub unsafe fn move_into_parent(&mut self, parent: &mut Archetype, index: usize) -> Option<Entity> {
 
         let is_last = index == self.len() - 1;
@@ -285,6 +307,9 @@ impl Archetype {
         swapped_entity
     }
 
+    /// Performs a swap_remove and moves the removed into the child. The returned [`Entity`] is
+    /// the [`Entity`] that may have been relocated by the process.
+    ///
     // SAFETY:
     // - Drops the components which are not in the child
     /// - `index` has to be valid
@@ -315,6 +340,9 @@ impl Archetype {
         swapped_entity
     }
 
+    /// Performs a swap_remove. The returned [`Entity`] is the [`Entity`] that may have been
+    /// relocated by the process.
+    ///
     // SAFETY:
     // - Drops all components at `index`
     // - `index` has to be valid
@@ -342,6 +370,8 @@ impl Archetype {
 }
 
 
+/// Manages all [`Archetype`]s of a [`World`](crate::world::World), as well as each one's parent
+/// [`Archetype`]s.
 #[derive(Debug)]
 pub struct Archetypes {
     archetypes: Vec<Archetype>,
@@ -359,6 +389,8 @@ impl Archetypes {
         }
     }
 
+    /// Automatically initializes all the parent [`ArchetypeId`]s in the new [`Archetype`], as well
+    /// as in all the other [`Archetype`]s.
     pub fn create_with_capacity(
         &mut self,
         bundle_components: &BundleComponents,
