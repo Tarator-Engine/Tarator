@@ -10,28 +10,57 @@ use crate::{
     store::sparse::SparseSetIndex
 };
 
-/// Bundle is implemented for every Component, as well as for every tuple consisting of Components
+/// Bundle is implemented for every type implementing[`Component`], as well as for every tuple
+/// consisting [`Bundle`]s.
 /// 
 /// SAFETY:
 /// - Manual implementations are discouraged
 pub unsafe trait Bundle<'a>: Send + Sync + 'static {
-    type Ptr;
-    type MutPtr;
+    /// Implemented as a tuple of [`Component`] references wrapped in [`Option`]
     type Ref;
+
+    /// Implemented as a tuple of mutable [`Component`] references wrapped in [`Option`]
     type MutRef;
 
+    /// Implemented as a tuple of [`None`] values, used to return from a function, if for example an
+    /// [`Entity`] doesn't exist.
     const EMPTY_REF: Self::Ref;
+
+    /// Implemented as a tuple of [`None`] values, used to return from a function, if for example an
+    /// [`Entity`] doesn't exist.
     const EMPTY_MUTREF: Self::MutRef;
 
+    /// Initializes and gets the [`ComponentId`]s via `func`.
     fn component_ids(components: &mut Components, func: &mut impl FnMut(ComponentId));
+
+    /// Returns a tuple of references to the components in the order of `Self`. The references are
+    /// set using the return value of `func`.
+    ///
+    /// SAFETY:
+    /// - Returning [`None`] from `func` is always safe
+    /// - If the return value of `func` is [`Some`], the pointer has to point to valid data of
+    /// [`ComponentId`] type
     unsafe fn from_components<T>(components: &Components, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::Ref;
+
+    /// Returns a tuple of mutable references to the components in the order of `Self`. The mutable
+    /// references are set using the return value of `func`.
+    ///
+    /// SAFETY:
+    /// - Returning [`None`] from `func` is always safe
+    /// - If the return value of `func` is [`Some`], the pointer has to point to valid data of
+    /// [`ComponentId`] type
     unsafe fn from_components_mut<T>(components: &Components, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::MutRef;
-    fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8));
+
+    /// Get the components of this [`Bundle`] with a corresponding [`ComponentId`]. This passes
+    /// ownership to `func`.
+    ///
+    /// SAFETY:
+    /// - pointer in `func` must be used, else will create memory leak if data has to be dropped
+    /// - data in `func` must be manually dropped
+    unsafe fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8));
 }
 
 unsafe impl<'a, C: Component> Bundle<'a> for C {
-    type Ptr = *const Self;
-    type MutPtr = *mut Self;
     type Ref = Option<&'a Self>;
     type MutRef = Option<&'a mut Self>;
 
@@ -50,9 +79,8 @@ unsafe impl<'a, C: Component> Bundle<'a> for C {
         Some(&mut *func(*components.get_id_from::<C>()?)?.cast::<Self>())
     }
 
-    fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8)) {
-        let mut temp = ManuallyDrop::new(self);
-        func(*components.get_id_from::<C>().unwrap(), &mut temp as *mut ManuallyDrop<Self> as *mut u8)
+    unsafe fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8)) {
+        func(*components.get_id_from::<C>().unwrap(), &mut ManuallyDrop::new(self) as *mut ManuallyDrop<Self> as *mut u8)
     }
 }
 
@@ -60,8 +88,6 @@ unsafe impl<'a, C: Component> Bundle<'a> for C {
 macro_rules! component_tuple_impl {
     ($($c:ident),*) => {
         unsafe impl<'a, $($c: Bundle<'a>),*> Bundle<'a> for ($($c,)*) {
-            type Ptr = ($($c::Ptr,)*);
-            type MutPtr = ($($c::MutPtr,)*);
             type Ref = ($($c::Ref,)*);
             type MutRef = ($($c::MutRef,)*);
 
@@ -86,32 +112,35 @@ macro_rules! component_tuple_impl {
 
 
             #[allow(unused_variables, unused_mut)]
-            fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8)) {
+            unsafe fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8)) {
                 #[allow(non_snake_case)]
                 let ($(mut $c,)*) = self;
                 $(
-                    $c.get_components(components, &mut *func);
+                    $c.get_components(components, func);
                 )*
             }
         }
     };
 }
 
-foreach_tuple!(component_tuple_impl, 0, 2, B);
+foreach_tuple!(component_tuple_impl, 0, 15, B);
 
 
+/// Every [`Bundle`] variation gets its own [`BundleId`], which gets managed by [`Bundles`]. It is
+/// also used the map to an [`ArchetypeId`], which points to an [`Archetype`] with an _exact_ same
+/// set of [`Component`]s.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct BundleId(u32);
+pub struct BundleId(usize);
 
 impl BundleId {
     #[inline]
     pub fn new(index: usize) -> Self {
-        Self(index as u32)
+        Self(index)
     }
 
     #[inline]
     pub fn index(self) -> usize {
-        self.0 as usize
+        self.0
     }
 }
 
@@ -128,10 +157,49 @@ impl SparseSetIndex for BundleId {
 }
 
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct BundleComponents {
+    components: Vec<ComponentId>
+}
+
+impl BundleComponents {
+    #[inline]
+    pub fn new(components: Vec<ComponentId>) -> Self {
+        Self { components }
+    }
+
+    #[inline]
+    pub fn insert(&mut self, mut components: Vec<ComponentId>) {
+        self.components.append(&mut components);
+        // let old_len = self.components.len();
+        self.components.sort();
+        self.components.dedup();
+        /*assert!(
+            self.components.len() == old_len,
+            "Bundle {:#?} has duplicate components",
+            self.components
+        );*/ // May not need to check for duplicates in this case
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &ComponentId> {
+        self.components.iter()
+    }
+}
+
+impl From<Vec<ComponentId>> for BundleComponents {
+    fn from(value: Vec<ComponentId>) -> Self {
+        Self::new(value)
+    } 
+}
+
+
+/// Contains both the [`BundleId`] and [`ComponentId`]s of a [`Bundle`]. [`Bundle`]s with same sets
+/// of [`Component`]s will still have the same [`BundleInfo`] as well as [`BundleId`].
 #[derive(Debug)]
 pub struct BundleInfo {
     id: BundleId,
-    components: Vec<ComponentId>
+    components: BundleComponents
 }
 
 impl BundleInfo {
@@ -144,9 +212,15 @@ impl BundleInfo {
     pub fn iter(&self) -> impl Iterator<Item = &ComponentId> {
         self.components.iter()
     }
+
+    #[inline]
+    pub fn components(&self) -> &BundleComponents {
+        &self.components
+    }
 }
 
 
+/// Manages every [`Bundle`] that gets used on a [`World`].
 #[derive(Debug)]
 pub struct Bundles {
     bundles: Vec<BundleInfo>,
@@ -162,6 +236,7 @@ impl Bundles {
         }
     }
 
+    /// Initializes given [`Bundle`], as well as all of its [`Component`]s.
     #[inline]
     pub fn init<'a, 'b, T: Bundle<'b>>(&'a mut self, components: &mut Components) -> &'a BundleInfo {
         let id = self.indices.entry(TypeId::of::<T>()).or_insert_with(|| {
@@ -172,23 +247,25 @@ impl Bundles {
             self.bundles.push(info);
             id
         });
+        // SAFETY:
+        // Already initialized or inserted
         unsafe { self.bundles.get_unchecked(id.index()) }
     }
-
+    
     #[inline]
-    fn _init(name: &'static str, components: Vec<ComponentId>, id: BundleId) -> BundleInfo {
-        let mut deduped = components.clone();
-        deduped.sort();
-        deduped.dedup();
+    fn _init(name: &'static str, mut components: Vec<ComponentId>, id: BundleId) -> BundleInfo {
+        let old_len = components.len();
+        components.sort();
+        components.dedup();
         assert!(
-            deduped.len() == components.len(),
+            components.len() == old_len,
             "Bundle {} has duplicate components",
             name
         );
 
         BundleInfo {
             id,
-            components
+            components: BundleComponents::new(components)
         } 
     }
 

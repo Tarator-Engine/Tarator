@@ -7,7 +7,7 @@ use crate::{
         raw_store::RawStore
     },
     entity::Entity,
-    bundle::{ BundleId, BundleInfo, Bundle }
+    bundle::{ BundleInfo, Bundle, BundleComponents }
 };
 
 
@@ -89,12 +89,30 @@ impl Archetype {
     }
 
     #[inline]
-    pub fn set<'a, T: Bundle<'a>>(&mut self, components: &Components, entity: Entity, data: T) {
+    pub fn init<'a, T: Bundle<'a>>(&mut self, components: &Components, entity: Entity, data: T) {
         self.entities.push(entity);
-        data.get_components(components, &mut |id, component| {
-            let store = self.components.get_mut(id).expect("Component is not part of this archetype!");
-            unsafe { store.push(component); }
-        });
+
+        // SAFETY:
+        // We initialize `component` in our store via [`RawStore::push`]
+        unsafe {
+            data.get_components(components, &mut |component_id, component| {
+                let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
+                store.push(component);
+            });
+        }
+    }
+
+    #[inline]
+    pub fn set<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize, data: T) {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+        // SAFETY:
+        // We initialize `component` in our store via [`RawStore::push`]
+        unsafe {
+            data.get_components(components, &mut |component_id, component| {
+                let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
+                store.replace_unchecked(index, component);
+            });
+        }
     }
 
     /// SAFETY:
@@ -108,6 +126,7 @@ impl Archetype {
     #[inline]
     pub fn get<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::Ref {
         if index >= self.len() {
+            debug_assert!(false, "Index is out of bounds! ({}>={})", index, self.len());
             return T::EMPTY_REF;
         }
 
@@ -124,6 +143,7 @@ impl Archetype {
     #[inline]
     pub fn get_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::MutRef {
         if index >= self.len() {
+            debug_assert!(false, "Index is out of bounds! ({}>={})", index, self.len());
             return T::EMPTY_MUTREF;
         }
 
@@ -182,8 +202,39 @@ impl Archetype {
     }
 
     #[inline]
+    pub fn get_parent(&self, component_id: ComponentId) -> Option<ArchetypeId> {
+        self.parents.get(component_id.index()).map(|v| *v)
+    }
+
+    #[inline]
     pub fn is_empty_archetype(&self) -> bool {
         self.components.len() == 0
+    }
+
+    /// SAFETY:
+    /// - Unset components in the parent have to be set immediately after this call
+    pub unsafe fn move_into_parent(&mut self, parent: &mut Archetype, index: usize) -> Option<Entity> {
+
+        let is_last = index == self.len() - 1;
+
+        let swapped_entity = if is_last {
+            self.entities.pop();
+
+            None
+        } else {
+            let entity = self.entities.swap_remove(index);
+
+            Some(entity)
+        };
+
+        for (component_id, parent_raw_store) in parent.components.iter_mut() {
+            if let Some(raw_store) =self.components.get_mut(*component_id) {
+                    let ptr = raw_store.swap_remove_and_forget_unchecked(index);
+                    parent_raw_store.push(ptr);
+            }
+        }
+
+        swapped_entity
     }
 }
 
@@ -191,7 +242,7 @@ impl Archetype {
 #[derive(Debug)]
 pub struct Archetypes {
     archetypes: Vec<Archetype>,
-    archetype_ids: HashMap<BundleId, ArchetypeId>
+    archetype_ids: HashMap<BundleComponents, ArchetypeId>
 }
 
 impl Archetypes {
@@ -207,12 +258,12 @@ impl Archetypes {
 
     pub fn create_with_capacity(
         &mut self,
-        bundle_info: &BundleInfo,
+        bundle_components: &BundleComponents,
         components: &Components,
         capacity: usize
     ) -> ArchetypeId {
         let id = ArchetypeId::new(self.len());
-        let mut archetype = Archetype::with_capacity(id, bundle_info.iter(), components, capacity);
+        let mut archetype = Archetype::with_capacity(id, bundle_components.iter(), components, capacity);
 
         // Check every current archetype and our newly created archetype if they are parents.
         for other_archetype in &mut self.archetypes {
@@ -221,20 +272,36 @@ impl Archetypes {
         }
 
         self.archetypes.push(archetype);
-        self.archetype_ids.insert(bundle_info.id(), id);
+        self.archetype_ids.insert(bundle_components.clone(), id);
 
         id
     }
 
     #[inline]
-    pub fn get_from_bundle(&self, id: BundleId) -> Option<&Archetype> {
-        let id = *self.archetype_ids.get(&id)?;
+    pub fn get_id_from_components(&self, components: &BundleComponents) -> Option<ArchetypeId> {
+        self.archetype_ids.get(components).map(|v| *v)
+    }
+
+    pub fn get_id_from_components_or_create_with_capacity(
+        &mut self,
+        components: &Components,
+        bundle_components: &BundleComponents,
+        capacity: usize
+    ) -> ArchetypeId {
+        self.get_id_from_components(bundle_components).unwrap_or_else(|| {
+            self.create_with_capacity(bundle_components, components, capacity)
+        })
+    }
+
+    #[inline]
+    pub fn get_from_bundle(&self, info: &BundleInfo) -> Option<&Archetype> {
+        let id = self.get_id_from_components(info.components())?;
         self.archetypes.get(id.index())
     }
 
     #[inline]
-    pub fn get_from_bundle_mut(&mut self, id: BundleId) -> Option<&mut Archetype> {
-        let id = *self.archetype_ids.get(&id)?;
+    pub fn get_from_bundle_mut(&mut self,info: &BundleInfo) -> Option<&mut Archetype> {
+        let id = self.get_id_from_components(info.components())?;
         self.archetypes.get_mut(id.index())
     }
 
@@ -246,6 +313,17 @@ impl Archetypes {
     #[inline]
     pub fn get_mut(&mut self, id: ArchetypeId) -> Option<&mut Archetype> {
         self.archetypes.get_mut(id.index())
+    }
+
+    #[inline]
+    pub fn get_2_mut(&mut self, a: ArchetypeId, b: ArchetypeId) -> (&mut Archetype, &mut Archetype) {
+        if a.index() > b.index() {
+            let (b_slice, a_slice) = self.archetypes.split_at_mut(a.index());
+            (&mut a_slice[0], &mut b_slice[b.index()])
+        } else {
+            let (a_slice, b_slice) = self.archetypes.split_at_mut(b.index());
+            (&mut a_slice[a.index()], &mut b_slice[0])
+        }
     }
 
     #[inline]

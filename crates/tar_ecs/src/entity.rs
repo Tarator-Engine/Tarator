@@ -31,6 +31,22 @@ pub struct EntityMeta {
     pub version: u32
 }
 
+impl EntityMeta {
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            archetype_id: ArchetypeId::INVALID,
+            version: 0,
+            index: 0
+        }
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.archetype_id == ArchetypeId::EMPTY
+    }
+}
+
 
 /// Stores all the data information of our entities and checks if they are still alive.
 ///
@@ -55,11 +71,7 @@ impl Entities {
     pub fn create(&mut self) -> (Entity, &mut EntityMeta) {
         if self.free_count == 0 {
             let index = self.meta.len();
-            self.meta.push(EntityMeta {
-                archetype_id: ArchetypeId::EMPTY,
-                version: 0,
-                index: 0
-            });
+            self.meta.push(EntityMeta::new());
 
             // SAFETY:
             // Meta was just pushed in
@@ -127,14 +139,12 @@ impl Entities {
     }
 
     #[inline]
-    pub fn get_mut(&mut self, entity: Entity) -> Option<&mut EntityMeta> {
-        let meta = &mut self.meta[entity.id() as usize];
+    pub fn get_mut(&mut self, entity: Entity) -> &mut EntityMeta {
+        let meta = self.meta.get_mut(entity.id() as usize).expect("Entity is invalid!");
 
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
-            return None;
-        }
+        assert!(meta.version == entity.version() || meta.archetype_id != ArchetypeId::INVALID, "Entity was already destroyed!");
 
-        Some(meta)
+        meta
     }
 
     #[inline]

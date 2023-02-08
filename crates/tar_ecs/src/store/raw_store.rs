@@ -54,28 +54,18 @@ impl RawStore {
                 data: std::ptr::null_mut(),
                 drop
             };
-            store.init_self_with_capacity(capacity);
+            store.reserve_exact(capacity);
 
             store
         }
     }
 
-    /// SAFETY:
-    /// - Should not be called on zero-sized items
-    /// - `self.capacity` should equal 0
-    pub unsafe fn init_self_with_capacity(&mut self, capacity: usize) {
-        debug_assert!(self.item_layout.size() != 0);
-        debug_assert!(self.capacity == 0);
-    
-        let array_layout = Self::array_layout(&self.item_layout, capacity);
-        let data = std::alloc::alloc(array_layout);
-
-        if data.is_null() {
-            handle_alloc_error(array_layout);
-        }
-
-        self.data = data;
-        self.capacity = capacity;
+    #[inline]
+    pub unsafe fn alloc(&mut self) -> *mut u8 {
+        self.reserve_exact(1);
+        let index = self.len;
+        self.len += 1;
+        self.get_unchecked_mut(index)
     }
 
     #[inline]
@@ -86,14 +76,48 @@ impl RawStore {
         self.initialize_unchecked(index, data);
     }
 
+    #[inline]
+    pub unsafe fn swap_remove_unchecked(&mut self, index: usize, ptr: *mut u8) {
+        debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
+
+        let last = self.get_unchecked_mut(self.len - 1);
+        let target = self.get_unchecked_mut(index);
+        let size = self.item_layout.size();
+        std::ptr::copy_nonoverlapping(target, ptr, size);
+        std::ptr::copy(last, target, size);
+        self.len -= 1;
+    }
+
+    #[inline]
+    pub unsafe fn swap_remove_and_forget_unchecked(&mut self, index: usize) -> *mut u8 {
+        debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
+
+        let new_len = self.len - 1;
+        let size = self.item_layout.size();
+
+        if index != new_len {
+            std::ptr::swap_nonoverlapping::<u8>(
+                self.get_unchecked_mut(index),
+                self.get_unchecked_mut(new_len),
+                size
+            );
+        }
+
+        self.len = new_len;
+        
+        // Cannot use `Self::get_unchecked_mut`, as the forgotten value is stored out of bounds of
+        // this structure at index `self.len`
+        self.get_ptr_mut().add(new_len * size)
+    }
+
     /// SAFETY:
     /// - `index` is < `self.len`
     /// - `data` is valid
     #[inline]
     pub unsafe fn initialize_unchecked(&mut self, index: usize, data: *mut u8) {
-        debug_assert!(index < self.len);
-        let ptr = self.get_unchecked_mut(index);
+        debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
         let size = self.item_layout.size();
+        let ptr = self.get_ptr_mut().add(index * size);
         std::ptr::copy_nonoverlapping::<u8>(data, ptr, size);
     }
 
@@ -119,7 +143,11 @@ impl RawStore {
         let capacity = self.capacity + increment;
         let array_layout = Self::array_layout(&self.item_layout, capacity);
         let old_array_layout = Self::array_layout(&self.item_layout, self.capacity);
-        let data = std::alloc::realloc(self.get_ptr_mut(), old_array_layout, array_layout.size());
+        let data = if self.data.is_null() {
+            std::alloc::alloc(array_layout)
+        } else {
+            std::alloc::realloc(self.get_ptr_mut(), old_array_layout, array_layout.size())
+        };
 
         if data.is_null() {
             handle_alloc_error(array_layout);
@@ -128,21 +156,6 @@ impl RawStore {
         self.data = data;
         self.capacity = capacity;
 
-    }
-
-    fn array_layout(layout: &Layout, n: usize) -> Layout {
-        let align = layout.align();
-        let size = layout.size();
-        let padding_needed = (size.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1)).wrapping_sub(size);
-        let padded_size = size + padding_needed;
-        let alloc_size = padded_size.checked_mul(n).expect("Layout must be valid!");
-
-        debug_assert!(size == padded_size);
-
-        // SAFETY:
-        // - align has been checked to be valid
-        // alloc_size has been padded
-        unsafe { Layout::from_size_align_unchecked(alloc_size, align) }
     }
 
     pub unsafe fn clear(&mut self) {
@@ -186,7 +199,7 @@ impl RawStore {
     /// - `index` is < `self.len`
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> *const u8 {
-        debug_assert!(index < self.len);
+        debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
         let size = self.item_layout.size();
         self.get_ptr().add(index * size)
     }
@@ -195,9 +208,54 @@ impl RawStore {
     /// - `index` is < `self.len`
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> *mut u8 {
-        debug_assert!(index < self.len);
+        debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
         let size = self.item_layout.size();
         self.get_ptr_mut().add(index * size)
+    }
+
+    /// SAFETY:
+    /// - `index` is < `self.len`
+    /// - `data` points to valid data of `self.item_layout` type
+    /// - data at `index` has been initialized
+    pub unsafe fn replace_unchecked(&mut self, index: usize, data: *mut u8) {
+        debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
+
+        // Drop panic prevention
+        let old_len = self.len;
+        self.len = 0;
+        let ptr = self.get_unchecked_mut(index);
+
+        if let Some(drop) = self.drop {
+            // In case drop on `ptr` panics, drop `data` aswell
+            struct OnDrop<F: FnMut()>(F);
+            impl<F: FnMut()> Drop for OnDrop<F> {
+                fn drop(&mut self) {
+                    (self.0)();
+                }
+            }
+            
+            let on_unwind = OnDrop(|| drop(data));
+            drop(ptr);
+            std::mem::forget(on_unwind);
+        }
+
+        std::ptr::copy_nonoverlapping(data, ptr, self.item_layout.size());
+        self.len = old_len;
+    }
+
+    fn array_layout(layout: &Layout, n: usize) -> Layout {
+        let align = layout.align();
+        let size = layout.size();
+        let padding_needed = (size.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1)).wrapping_sub(size);
+        let padded_size = size + padding_needed;
+        let alloc_size = padded_size.checked_mul(n).expect("Layout must be valid!");
+
+        debug_assert!(size == padded_size);
+
+        // SAFETY:
+        // - align has been checked to be valid
+        // alloc_size has been padded
+        unsafe { Layout::from_size_align_unchecked(alloc_size, align) }
     }
 }
 

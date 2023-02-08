@@ -6,8 +6,8 @@ use std::{
 
 use crate::store::sparse::SparseSetIndex;
 
-/// A `Component` is just data. Additionally, an [`Entity`] is just a redirection to a set of
-/// multiple `Component`s.
+/// A [`Component`] is just data. Additionally, an [`Entity`] is just a redirection to a set of
+/// multiple [`Component`]s.
 pub trait Component: Send + Sync + 'static {}
 
 

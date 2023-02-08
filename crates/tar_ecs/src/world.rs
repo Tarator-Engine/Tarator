@@ -1,10 +1,9 @@
-use std::sync::atomic::{ AtomicUsize, Ordering };
-
+use std::{sync::atomic::{ AtomicUsize, Ordering }, any::type_name};
 use crate::{
     bundle::{ Bundles, Bundle },
     component::{ Component, Components, ComponentDescription, ComponentId },
     entity::{ Entities, Entity },
-    archetype::Archetypes
+    archetype::{ Archetypes, ArchetypeId },
 };
 
 
@@ -93,12 +92,14 @@ impl World {
 
     #[inline]
     pub fn entity_create(&mut self) -> Entity {
-        let (entity, meta) = self.entities.create();
+        let (entity, entity_meta) = self.entities.create();
         // SAFETY:
         // - Getting the empty archetype is safe, as it should already exist
         // - We know that we carry the empty archetype with us
         unsafe {
-            let archetype = self.archetypes.get_unchecked_mut(meta.archetype_id.index());
+            let archetype = self.archetypes.get_unchecked_mut(0);
+            entity_meta.index = archetype.len();
+            entity_meta.archetype_id = archetype.id();
             archetype.set_empty(entity);
         }
 
@@ -112,29 +113,76 @@ impl World {
     }
 
     pub fn entity_set<'a, T: Bundle<'a>>(&mut self, entity: Entity, data: T) {
-        let entity_meta = self.entities.get_mut(entity).expect("Entity was invalid!");
-        let bundle_info = self.bundles.init::<T>(&mut self.components);
-        let archetype = match self.archetypes.get_from_bundle_mut(bundle_info.id()) {
-            Some(archetype) => archetype,
-            None => {
-                let id = self.archetypes.create_with_capacity(bundle_info, &self.components, 1);
 
-                // SAFETY:
-                // Archetype was just created
-                unsafe { self.archetypes.get_unchecked_mut(id.index()) }
+        let Self { archetypes, bundles, components, entities, .. } = self;
+
+        let entity_meta = entities.get_mut(entity);
+
+        let archetype_id = 'relocate: {
+            if entity_meta.is_empty() {
+                let bundle_info = bundles.init::<T>(components);
+
+                let archetype = archetypes.get_from_bundle_mut(bundle_info);
+                break 'relocate if let Some(archetype) = archetype {
+                    archetype.id()
+                } else {
+                    archetypes.create_with_capacity(bundle_info.components(), components, 1)
+                };
             }
+
+            // SAFETY:
+            // Function is unsafe in order go around the borrow checker, as well as to ignore some
+            // bound checks on indices which are already checked by `self.entities` to be valid
+            let archetype_id = unsafe {
+                Self::get_archetype_id::<T>(
+                    archetypes,
+                    entity_meta.archetype_id,
+                    bundles,
+                    components,
+                    1
+                )
+            };
+
+            // If [`Archetype`] of `entity` does not need to change
+            if archetype_id == entity_meta.archetype_id {
+                // SAFETY:
+                // `self.entities` guarantees that the archetype does exist
+                let archetype = unsafe { archetypes.get_unchecked_mut(archetype_id.index()) };
+                archetype.set(components, entity_meta.index, data);
+                return;
+            }
+
+            break 'relocate archetype_id;
         };
-        entity_meta.index = archetype.len();
-        entity_meta.archetype_id = archetype.id();
-        archetype.set(&self.components, entity, data);
+
+        // If [`Archetype`] of `entity` does change
+        let (old_archetype, new_archetype) = archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
+        let (old_index, new_index) = (entity_meta.index, new_archetype.len());
+
+        entity_meta.index = new_index;
+        entity_meta.archetype_id = new_archetype.id();
+
+        // SAFETY:
+        // We initialize the remaining components right after
+        let replaced_entity = unsafe { old_archetype.move_into_parent(new_archetype, old_index) };
+        new_archetype.init(components, entity, data);
+        
+        // Set the index of the moved entity
+        //
+        // SAFETY:
+        // Entity definitely exists
+        if let Some(replaced_entity) = replaced_entity {
+            let replaced_entity_meta = unsafe { entities.get_unchecked_mut(replaced_entity.id() as usize) };
+            replaced_entity_meta.index = old_index;
+        }
     }
 
-    /*#[inline]
+    #[inline]
     pub fn entity_unset<'a, T: Bundle<'a>>(&mut self, entity: Entity) -> T {
         let meta = self.entities.get_mut(entity);
         let info = self.bundles.init::<T>(&mut self.components);
         todo!("Still gotta unset using {:#?} and {:#?}", meta, info);
-    }*/
+    }
 
     #[inline]
     pub fn entity_get<'a, T: Bundle<'a>>(&self, entity: Entity) -> T::Ref {
@@ -155,7 +203,25 @@ impl World {
         let Some(archetype) = self.archetypes.get_mut(meta.archetype_id) else {
             return T::EMPTY_MUTREF;
         };
+
         archetype.get_mut::<T>(&self.components, meta.index)
+    }
+
+
+    /// SAFETY:
+    /// - `archetype_id` needs to point to a valid [`Archetype`]
+    pub unsafe fn get_archetype_id<'a, T: Bundle<'a>>(
+        archetypes: *mut Archetypes,
+        archetype_id: ArchetypeId,
+        bundles: *mut Bundles,
+        components: *mut Components,
+        on_create_capacity: usize
+    ) -> ArchetypeId {
+        let bundle_info = (*bundles).init::<T>(&mut*components);
+        let archetype = (*archetypes).get_unchecked(archetype_id.index());
+        let mut bundle_components = bundle_info.components().clone();
+        bundle_components.insert(archetype.component_ids().collect());
+        (*archetypes).get_id_from_components_or_create_with_capacity(&*components, &bundle_components, on_create_capacity)
     }
 }
 
