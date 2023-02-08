@@ -32,6 +32,7 @@ fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &Wi
             renderer.mouse_pressed = *state == ElementState::Pressed;
             true
         }
+
         _ => false,
     }
 }
@@ -73,7 +74,7 @@ pub fn render_fn(
     };
 
     game_renderer
-        .add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"))
+        .add_object(tar_render::GameObject::ModelPath("res/Box/Box.gltf", "box"))
         .unwrap();
 
     game_renderer
@@ -94,6 +95,15 @@ pub fn render_fn(
         for event in state.events {
             input(&mut game_renderer, &event);
         }
+
+        if game_renderer.mouse_pressed {
+            game_renderer.cameras[game_renderer.active_camera.unwrap() as usize]
+                .controller
+                .process_mouse(state.mouse_movement.0, state.mouse_movement.1);
+        }
+        game_renderer.cameras[game_renderer.active_camera.unwrap() as usize]
+            .controller
+            .sensitivity = state.cam_sensitivity;
 
         update(&mut game_renderer, state.dt);
 

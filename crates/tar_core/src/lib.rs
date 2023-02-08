@@ -1,6 +1,5 @@
 mod double_buffer;
 mod error_msg;
-mod pre_render;
 mod render;
 // mod state;
 
@@ -9,7 +8,7 @@ use std::sync::{Arc, Barrier};
 use egui::ClippedPrimitive;
 use instant::Duration;
 
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::MutexGuard;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -23,11 +22,13 @@ pub struct EngineState {
     fps: u32,
     size: winit::dpi::PhysicalSize<u32>,
     halt: bool,
+    #[allow(unused)]
     view_rect: winit::dpi::PhysicalSize<u32>,
     cam_sensitivity: f32,
     paint_jobs: Vec<ClippedPrimitive>,
     egui_textures_delta: egui::epaint::textures::TexturesDelta,
     events: Vec<winit::event::WindowEvent<'static>>,
+    mouse_movement: (f64, f64),
 }
 
 async fn build_renderer_extras(
@@ -36,7 +37,6 @@ async fn build_renderer_extras(
     tar_render::render::forward::ForwardRenderer,
     Arc<wgpu::Device>,
     Arc<wgpu::Queue>,
-    winit::dpi::PhysicalSize<u32>,
     wgpu::Surface,
     wgpu::SurfaceConfiguration,
     wgpu::Adapter,
@@ -87,7 +87,7 @@ async fn build_renderer_extras(
     )
     .await;
 
-    return (game_renderer, device, queue, size, surface, config, adapter);
+    return (game_renderer, device, queue, surface, config, adapter);
 }
 
 pub async fn run() {
@@ -101,6 +101,7 @@ pub async fn run() {
         paint_jobs: vec![],
         egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
         events: vec![],
+        mouse_movement: (0.0, 0.0),
     });
     let db = Arc::new(db);
 
@@ -143,7 +144,7 @@ pub async fn run() {
 
     let pre_render_finished = Arc::new(Barrier::new(2));
 
-    let (game_renderer, device, queue, size, surface, config, adapter) =
+    let (game_renderer, device, queue, surface, config, adapter) =
         build_renderer_extras(&window).await;
 
     let surface = Arc::new(surface);
@@ -186,6 +187,8 @@ pub async fn run() {
             Event::RedrawRequested(..) => {
                 let mut state = db.lock();
                 state.events = vec![];
+                state.mouse_movement.0 = 0.0;
+                state.mouse_movement.1 = 0.0;
 
                 let now = instant::Instant::now();
                 state.dt = now - last_render_time;
@@ -233,6 +236,13 @@ pub async fn run() {
 
                                     _ => (),
                                 }
+                            },
+                            Event::DeviceEvent {
+                                event: DeviceEvent::MouseMotion{ delta, },
+                                .. // We're not using device_id currently
+                            } => {
+                                state.mouse_movement.0 += delta.0;
+                                state.mouse_movement.1 += delta.1;
                             }
                             _ => (),
                         }
@@ -307,15 +317,7 @@ pub async fn run() {
             Event::MainEventsCleared => {
                 window.request_redraw();
             }
-            // Event::DeviceEvent {
-            //     event: DeviceEvent::MouseMotion{ delta, },
-            //     .. // We're not using device_id currently
-            // } => if game_renderer.mouse_pressed {
-            //     game_renderer.cameras[game_renderer.active_camera.unwrap() as usize].controller.process_mouse(delta.0, delta.1)
-            // }
             e => winit_events.push(e.to_static().clone()),
         }
     });
-
-    render_thread.join();
 }
