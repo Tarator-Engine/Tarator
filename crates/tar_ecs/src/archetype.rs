@@ -268,9 +268,11 @@ impl Archetype {
 
             None
         } else {
-            let entity = self.entities.swap_remove(index);
+            self.entities.swap_remove(index);
 
-            Some(entity)
+            // SAFETY:
+            // We just moved in a new entity
+            Some(unsafe { *self.entities.get_unchecked(index) })
         };
 
         for (component_id, parent_raw_store) in parent.components.iter_mut() {
@@ -294,9 +296,11 @@ impl Archetype {
 
             None
         } else {
-            let entity = self.entities.swap_remove(index);
+            self.entities.swap_remove(index);
 
-            Some(entity)
+            // SAFETY:
+            // We just moved in a new entity
+            Some(unsafe { *self.entities.get_unchecked(index) })
         };
         
         for (component_id, raw_store) in self.components.iter_mut() {
@@ -322,9 +326,11 @@ impl Archetype {
 
             None
         } else {
-            let entity = self.entities.swap_remove(index);
+            self.entities.swap_remove(index);
 
-            Some(entity)
+            // SAFETY:
+            // We just moved in a new entity
+            Some(unsafe { *self.entities.get_unchecked(index) })
         };
 
         for (_, raw_store) in self.components.iter_mut() {

@@ -1,7 +1,10 @@
 use std::sync::atomic::{ AtomicUsize, Ordering };
 use crate::{
     bundle::{ Bundles, Bundle },
-    component::{ Component, Components, ComponentDescription, ComponentId, ComponentQueryMut },
+    component::{
+        Component, Components, ComponentDescription, ComponentId,
+        ComponentQuery, ComponentQueryMut
+    },
     entity::{ Entities, Entity },
     archetype::{ Archetypes, ArchetypeId },
 };
@@ -282,6 +285,24 @@ impl World {
         
         
         entities
+    }
+
+    #[inline]
+    pub fn component_query<'a, T: Bundle<'a>>(&'a mut self) -> ComponentQuery<'a, T> {
+        let bundle_info = self.bundles.init::<T>(&mut self.components);
+        let archetype_id = self.archetypes.get_id_from_components_or_create_with_capacity(
+            &self.components,
+            bundle_info.components(),
+            1
+        );
+
+        // SAFETY:
+        // Archetype was just created or gotten
+        let archetype = unsafe { self.archetypes.get_unchecked(archetype_id.index()) };
+        let mut archetype_ids: Vec<_> = archetype.parents().map(|id| *id).collect();
+        archetype_ids.push(archetype_id);
+
+        ComponentQuery::new(archetype_ids, &self.archetypes, &self.components)
     }
 
     #[inline]

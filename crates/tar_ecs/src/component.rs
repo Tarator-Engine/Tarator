@@ -234,12 +234,54 @@ impl Components {
 
 
 pub struct ComponentQuery<'a, T: Bundle<'a>> {
+    archetypes: &'a Archetypes,
+    archetype_ids: Vec<ArchetypeId>,
+    components: &'a Components,
+    current: usize,
+    index: usize,
     marker: PhantomData<&'a T>
+}
+
+impl<'a, T: Bundle<'a>> ComponentQuery<'a, T> {
+    pub fn new(
+        archetype_ids: Vec<ArchetypeId>,
+        archetypes: &'a Archetypes,
+        components: &'a Components
+    ) -> Self {
+        Self {
+            archetypes,
+            archetype_ids,
+            components,
+            current: 0,
+            index: 0,
+            marker: PhantomData
+        }
+    }
 }
 
 impl<'a, T: Bundle<'a>> Iterator for ComponentQuery<'a, T> {
     type Item = T::Ref;
+
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(archetype_ids) = self.archetype_ids.get(self.current) {
+            let archetype = self.archetypes.get(*archetype_ids)?;
+            
+            // TODO Make [`Store`] automatically bound check or something
+            if self.index == archetype.len() {
+                self.current += 1; 
+                self.index = 0;
+
+                return self.next();
+            }
+
+            let index = self.index;
+            self.index += 1;
+            
+            // SAFETY:
+            // Archetype is parent of `T: Bundle` archetype, value is safe to use
+            return Some(unsafe { archetype.get_unchecked::<T>(self.components, index) });
+        }
+        
         None
     } 
 }
