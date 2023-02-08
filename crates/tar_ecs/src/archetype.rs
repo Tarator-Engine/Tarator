@@ -158,6 +158,11 @@ impl Archetype {
     }
 
     #[inline]
+    pub fn get_entity(&self, index: usize) -> Option<Entity> {
+        self.entities.get(index).map(|entity| *entity)
+    }
+
+    #[inline]
     pub fn id(&self) -> ArchetypeId {
         self.id
     }
@@ -202,8 +207,18 @@ impl Archetype {
     }
 
     #[inline]
-    pub fn get_parent(&self, component_id: ComponentId) -> Option<ArchetypeId> {
-        self.parents.get(component_id.index()).map(|v| *v)
+    pub fn get_parent(&self, component_id: usize) -> Option<ArchetypeId> {
+        self.parents.get(component_id).map(|v| *v)
+    }
+
+    #[inline]
+    pub fn has_parents(&self) -> bool {
+        self.parents.len() != 0
+    }
+
+    #[inline]
+    pub fn parents(&self) -> impl Iterator<Item = &ArchetypeId> {
+        self.parents.iter() 
     }
 
     #[inline]

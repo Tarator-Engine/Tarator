@@ -266,6 +266,27 @@ impl World {
     }
 
 
+    #[inline]
+    pub fn entity_query<'a, T: Bundle<'a>>(&mut self) -> Vec<Entity> {
+        let bundle_info = self.bundles.init::<T>(&mut self.components);
+        let archetype_id = self.archetypes.get_id_from_components_or_create_with_capacity(&self.components, bundle_info.components(), 1);
+        // SAFETY:
+        // [`Archetype`] was just created
+        let archetype = unsafe { self.archetypes.get_unchecked(archetype_id.index()) };
+        let mut entities: Vec<_> = archetype.entities().map(|entity| *entity).collect();
+
+        for parent_id in archetype.parents() {
+            // SAFETY:
+            // Parent definitely exists
+            let parent = unsafe { self.archetypes.get_unchecked(parent_id.index()) };
+            entities.append(&mut parent.entities().map(|entity| *entity).collect());
+        }
+        
+        
+        entities
+    }
+
+
     /// SAFETY:
     /// - `archetype_id` needs to point to a valid [`Archetype`]
     pub unsafe fn get_add_archetype_id<'a, T: Bundle<'a>>(
