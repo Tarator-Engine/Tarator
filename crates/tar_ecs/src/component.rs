@@ -226,7 +226,7 @@ impl Components {
 /// An [`Iterator`] for a given [`Bundle`], which iterates over all
 /// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
 /// [`Bundle`].
-pub struct ComponentQuery<'a, T: Bundle<'a>> {
+pub struct ComponentQuery<'a, T: Bundle> {
     archetypes: &'a Archetypes,
     archetype_ids: Vec<ArchetypeId>,
     components: &'a Components,
@@ -235,7 +235,7 @@ pub struct ComponentQuery<'a, T: Bundle<'a>> {
     marker: PhantomData<&'a T>
 }
 
-impl<'a, T: Bundle<'a>> ComponentQuery<'a, T> {
+impl<'a, T: Bundle> ComponentQuery<'a, T> {
     pub fn new(
         archetype_ids: Vec<ArchetypeId>,
         archetypes: &'a Archetypes,
@@ -252,8 +252,8 @@ impl<'a, T: Bundle<'a>> ComponentQuery<'a, T> {
     }
 }
 
-impl<'a, T: Bundle<'a>> Iterator for ComponentQuery<'a, T> {
-    type Item = T::Ref;
+impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
+    type Item = T::Ref<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(archetype_ids) = self.archetype_ids.get(self.current) {
@@ -282,7 +282,7 @@ impl<'a, T: Bundle<'a>> Iterator for ComponentQuery<'a, T> {
 /// An [`Iterator`] for a given [`Bundle`], which iterates mutably over all
 /// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
 /// [`Bundle`].
-pub struct ComponentQueryMut<'a, T: Bundle<'a>> {
+pub struct ComponentQueryMut<'a, T: Bundle> {
     archetypes: &'a mut Archetypes,
     archetype_ids: Vec<ArchetypeId>,
     components: &'a Components,
@@ -291,7 +291,7 @@ pub struct ComponentQueryMut<'a, T: Bundle<'a>> {
     marker: PhantomData<&'a mut T>
 }
 
-impl<'a, T: Bundle<'a>> ComponentQueryMut<'a, T> {
+impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
     pub fn new(
         archetype_ids: Vec<ArchetypeId>,
         archetypes: &'a mut Archetypes,
@@ -308,8 +308,8 @@ impl<'a, T: Bundle<'a>> ComponentQueryMut<'a, T> {
     }
 }
 
-impl<'a, T: Bundle<'a>> Iterator for ComponentQueryMut<'a, T> {
-    type Item = T::MutRef;
+impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
+    type Item = T::MutRef<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(archetype_ids) = self.archetype_ids.get(self.current) {

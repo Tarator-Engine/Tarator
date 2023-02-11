@@ -101,15 +101,23 @@ impl Archetype {
     /// SAFETY:
     /// - `data` must contain all components of this [`Archetype`]
     #[inline]
-    pub fn init<'a, T: Bundle<'a>>(&mut self, components: &Components, entity: Entity, data: T) {
+    pub fn init<T: Bundle>(&mut self, components: &Components, entity: Entity, data: T) {
         self.entities.push(entity);
+
+        let len = self.len();
 
         // SAFETY:
         // We initialize `component` in our store via [`RawStore::push()`]
         unsafe {
             data.get_components(components, &mut |component_id, component| {
                 let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
-                store.push(component);
+
+                // If the [`Component`] already has been initialized, drop/replace the last index
+                if store.len() == len {
+                    store.replace_unchecked(len - 1, component);
+                } else {
+                    store.push(component);
+                }
             });
         }
     }
@@ -119,7 +127,7 @@ impl Archetype {
     /// SAFETY:
     /// - `data` must contain all components of this [`Archetype`]
     #[inline]
-    pub fn set<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize, data: T) {
+    pub fn set<T: Bundle>(&mut self, components: &Components, index: usize, data: T) {
         debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
         // SAFETY:
         // We initialize `component` in our store via [`RawStore::push`]
@@ -140,16 +148,16 @@ impl Archetype {
     }
 
     #[inline]
-    pub fn get<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::WrappedRef {
+    pub fn get<'a, T: Bundle>(&self, components: &Components, index: usize) -> T::WrappedRef<'a> {
         if index >= self.len() {
             debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
-            return T::EMPTY_REF;
+            return T::empty_ref();
         }
 
         // SAFETY:
         // Already bounds checked
         unsafe {
-            T::from_components::<T>(components, &mut |id| {
+            T::from_components(components, &mut |id| {
                 let raw_store = self.components.get(id)?;
                 Some(raw_store.get_unchecked(index))
             })
@@ -160,11 +168,11 @@ impl Archetype {
     /// - `index` has to be valid and in bounds
     /// - Returned references may be invalid
     #[inline]
-    pub unsafe fn get_unchecked<'a, T: Bundle<'a>>(&self, components: &Components, index: usize) -> T::Ref {
+    pub unsafe fn get_unchecked<'a, T: Bundle>(&self, components: &Components, index: usize) -> T::Ref<'a> {
         debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
 
         unsafe {
-            T::from_components_unchecked::<T>(components, &mut |id| {
+            T::from_components_unchecked(components, &mut |id| {
                 let raw_store = self.components.get(id).unwrap();
                 raw_store.get_unchecked(index)
             })
@@ -172,16 +180,16 @@ impl Archetype {
     }
 
     #[inline]
-    pub fn get_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::WrappedMutRef {
+    pub fn get_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::WrappedMutRef<'a> {
         if index >= self.len() {
             debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
-            return T::EMPTY_MUTREF;
+            return T::empty_mut_ref();
         }
 
         // SAFETY:
         // Already bounds checked
         unsafe {
-            T::from_components_mut::<T>(components, &mut |id| {
+            T::from_components_mut(components, &mut |id| {
                 let raw_store = self.components.get_mut(id)?;
                 Some(raw_store.get_unchecked_mut(index))
             })
@@ -192,11 +200,11 @@ impl Archetype {
     /// - `index` has to be valid and in bounds
     /// - Returned mutable references may be invalid
     #[inline]
-    pub unsafe fn get_unchecked_mut<'a, T: Bundle<'a>>(&mut self, components: &Components, index: usize) -> T::MutRef {
+    pub unsafe fn get_unchecked_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::MutRef<'a> {
         debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
 
         unsafe {
-            T::from_components_unchecked_mut::<T>(components, &mut |id| {
+            T::from_components_unchecked_mut(components, &mut |id| {
                 let raw_store = self.components.get_mut(id).unwrap();
                 raw_store.get_unchecked_mut(index)
             })

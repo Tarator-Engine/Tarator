@@ -1,10 +1,8 @@
 use crate::{
     archetype::{ArchetypeId, Archetypes},
     bundle::{Bundle, Bundles},
-    component::{
-        Component, ComponentDescription, ComponentId, ComponentQuery, ComponentQueryMut, Components,
-    },
-    entity::{Entities, Entity},
+    component::{ ComponentQuery, ComponentQueryMut, Components },
+    entity::{ Entities, Entity },
     store::sparse::SparseSetIndex,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -222,7 +220,7 @@ impl World {
     /// # Todo
     ///
     /// Reconsider if this function should panic or not
-    pub fn entity_set<'a, T: Bundle<'a>>(&mut self, entity: Entity, data: T) {
+    pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
         let Self {
             archetypes,
             bundles,
@@ -296,12 +294,12 @@ impl World {
         }
     }
 
-    /// Unsets a given [`Bundle`] on `entity`. This will move `data` into this [`World`]'s storage.
+    /// Unsets a given [`Bundle`] on `entity`.
     ///
     /// Using this function may result in some memory relocations, so calling this often may result
     /// in fairly poor performance.
     #[inline]
-    pub fn entity_unset<'a, T: Bundle<'a>>(&mut self, entity: Entity) {
+    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
         let Self {
             archetypes,
             bundles,
@@ -360,12 +358,12 @@ impl World {
     /// doesn't have [`Component`] from the given [`Bundle`], the returned tuple field will be
     /// [`None`].
     #[inline]
-    pub fn entity_get<'a, T: Bundle<'a>>(&self, entity: Entity) -> T::WrappedRef {
+    pub fn entity_get<'a, T: Bundle>(&self, entity: Entity) -> T::WrappedRef<'a> {
         let Some(meta) = self.entities.get(entity) else {
-            return T::EMPTY_REF;
+            return T::empty_ref();
         };
         let Some(archetype) = self.archetypes.get(meta.archetype_id) else {
-            return T::EMPTY_REF;
+            return T::empty_ref();
         };
         archetype.get::<T>(&self.components, meta.index)
     }
@@ -374,19 +372,19 @@ impl World {
     /// doesn't have [`Component`] from the given [`Bundle`], the returned tuple field will be
     /// [`None`].
     #[inline]
-    pub fn entity_get_mut<'a, T: Bundle<'a>>(&mut self, entity: Entity) -> T::WrappedMutRef {
+    pub fn entity_get_mut<'a, T: Bundle>(&mut self, entity: Entity) -> T::WrappedMutRef<'a> {
         let Some(meta) = self.entities.get(entity) else {
-            return T::EMPTY_MUTREF;
+            return T::empty_mut_ref();
         };
         let Some(archetype) = self.archetypes.get_mut(meta.archetype_id) else {
-            return T::EMPTY_MUTREF;
+            return T::empty_mut_ref();
         };
 
         archetype.get_mut::<T>(&self.components, meta.index)
     }
 
     /// Returns a [`Vec<Entity>`] with every [`Entity`] that has given [`Bundle`].
-    pub fn entity_query<'a, T: Bundle<'a>>(&mut self) -> Vec<Entity> {
+    pub fn entity_query<T: Bundle>(&mut self) -> Vec<Entity> {
         let bundle_info = self.bundles.init::<T>(&mut self.components);
         let archetype_id = self
             .archetypes
@@ -412,7 +410,7 @@ impl World {
 
     /// Iterates over every stored [`Bundle`].
     #[inline]
-    pub fn component_query<'a, T: Bundle<'a>>(&'a mut self) -> ComponentQuery<'a, T> {
+    pub fn component_query<'a, T: Bundle>(&'a mut self) -> ComponentQuery<'a, T> {
         let bundle_info = self.bundles.init::<T>(&mut self.components);
         let archetype_id = self
             .archetypes
@@ -433,7 +431,7 @@ impl World {
 
     /// Iterates mutably over every stored [`Bundle`].
     #[inline]
-    pub fn component_query_mut<'a, T: Bundle<'a>>(&'a mut self) -> ComponentQueryMut<'a, T> {
+    pub fn component_query_mut<'a, T: Bundle>(&'a mut self) -> ComponentQueryMut<'a, T> {
         let bundle_info = self.bundles.init::<T>(&mut self.components);
         let archetype_id = self
             .archetypes
@@ -458,7 +456,7 @@ impl World {
     /// # Safety
     ///
     /// `archetype_id` needs to point to a valid [`Archetype`]
-    pub unsafe fn get_add_archetype_id<'a, T: Bundle<'a>>(
+    pub unsafe fn get_add_archetype_id<T: Bundle>(
         archetypes: &mut Archetypes,
         archetype_id: ArchetypeId,
         bundles: &mut Bundles,
@@ -484,7 +482,7 @@ impl World {
     /// # Safety
     ///
     /// `archetype_id` needs to point to a valid [`Archetype`]
-    pub unsafe fn get_sub_archetype_id<'a, T: Bundle<'a>>(
+    pub unsafe fn get_sub_archetype_id<T: Bundle>(
         archetypes: &mut Archetypes,
         archetype_id: ArchetypeId,
         bundles: &mut Bundles,
