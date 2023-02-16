@@ -1,8 +1,10 @@
 [package]
-name = "tar_render"
+name = "tar_scripting"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+libc = "0.2.137"
+
