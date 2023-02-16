@@ -40,6 +40,9 @@ impl Color {
     }
 }
 
+#[derive(Component, Eq, PartialEq)]
+struct Zst;
+
 
 #[test]
 fn single_entity_single_component() {
@@ -102,5 +105,64 @@ fn single_entity_multiple_components_multi() {
     assert!(color.g == 0.0);   
     assert!(color.b == 1.0);   
     assert!(color.a == 1.0);   
+}
+
+#[test]
+fn entity_query() {
+    let mut world = World::new();
+
+    for _ in 0..5 {
+        let entity = world.entity_create();
+        world.entity_set(entity, UUID::new(19700101000000));
+    }
+
+    for entity in world.entity_query::<UUID>() {
+        let uuid = world.entity_get::<UUID>(entity).unwrap();
+        assert!(uuid.id == 19700101000000);
+    }
+}
+
+#[test]
+fn component_query() {
+    let mut world = World::new();
+    
+    for n in 5..10 {
+        let entity = world.entity_create();
+        world.entity_set(entity, UUID::new(n));
+    }
+
+    for n in 0..5 {
+        let entity = world.entity_create();
+        world.entity_set(entity, (UUID::new(n), Position::new(16.0, 16.0, 42.0)));
+    }
+
+    let mut n = 0;
+    for uuid in world.component_query::<UUID>() {
+        assert!(uuid.id == n, "{} : {}", uuid.id, n);
+        n += 1;
+    }
+    assert!(n == 10);
+
+    for position in world.component_query::<Position>() {
+        assert!(position.x == 16.0);   
+        assert!(position.y == 16.0);   
+        assert!(position.z == 42.0);   
+    }
+}
+
+#[test]
+fn zst() {
+    let mut world = World::new();
+
+    let entity = world.entity_create();
+    world.entity_set(entity, Zst);
+
+    for query_entity in world.entity_query::<Zst>() {
+        assert!(entity == query_entity);
+    }
+
+    for zst in world.component_query::<Zst>() {
+        assert!(*zst == Zst);
+    }
 }
 
