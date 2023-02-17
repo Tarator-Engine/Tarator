@@ -1,23 +1,17 @@
-mod component;
-mod entity;
-mod error;
-mod id;
+pub mod archetype;
+pub mod bundle;
+pub mod component;
+pub mod entity;
+pub mod store;
+pub mod world;
+
 #[cfg(test)]
 mod tests;
-mod world;
-
 
 pub mod prelude {
-    pub use super::{
-        entity::Entity,
-        error::EcsError,
-        component::{
-            Component,
-            ComponentId
-        },
-        id::Id,
-        world::*
-    };
-    pub use macros::Component;
+    pub use tar_ecs_macros::Component;
+    pub use super::component::Component;
+    pub use super::entity::Entity;
+    pub use super::world::World;
 }
 
