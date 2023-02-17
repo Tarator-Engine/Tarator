@@ -133,8 +133,8 @@ struct PBRInfo {
     v_UV_1: vec2<f32>
 }
 
-let M_PI: f32 = 3.141592653589793;
-let c_MinRoughness: f32 = 0.04;
+const M_PI: f32 = 3.141592653589793;
+const c_MinRoughness: f32 = 0.04;
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
@@ -169,8 +169,8 @@ fn getNormal(info: PBRInfo, ) -> vec3<f32>
 
     //!ifdef HAS_NORMALMAP 
         // TODO: replace constant v_UV with array
-        let n = textureSample(normal_tex, normal_sampler, info.v_UV_0).xyz;
-        let n = normalize(tbn * ((2.0 * n - 1.0) * vec3<f32>(material_normal_scale, material_normal_scale, 1.0)));
+        let no = textureSample(normal_tex, normal_sampler, info.v_UV_0).xyz;
+        let n = normalize(tbn * ((2.0 * no - 1.0) * vec3<f32>(material_normal_scale, material_normal_scale, 1.0)));
     //!else
         let n = normalize(tbn[2].xyz);
     //!endif
@@ -252,9 +252,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let f0 = vec3<f32>(0.04);
 
-    let diffuse_color = base_color.rgb * (vec3<f32>(1.0) - f0);
+    let diffuse_color_o = base_color.rgb * (vec3<f32>(1.0) - f0);
 
-    let diffuse_color: vec3<f32> = (diffuse_color * (1.0 - metallic)).xyz;
+    let diffuse_color: vec3<f32> = (diffuse_color_o * (1.0 - metallic)).xyz;
 
     let specular_color = mix(f0, base_color.rgb, metallic);
 
@@ -317,19 +317,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Calculation of analytical lighting contribution
     let diffuse_contrib = (1.0 - F) * diffuse(pbr_info);
     let spec_contrib = F * G * D / (4.0 * NdotL * NdotV);
-    let color = NdotL * u_light_color * (diffuse_contrib + spec_contrib);
+    let color_o = NdotL * u_light_color * (diffuse_contrib + spec_contrib);
 
     // Add simple ambient light
-    let color = color + (u_ambient_light_color * u_ambient_light_intensity * base_color.rgb);
+    var color = color_o + (u_ambient_light_color * u_ambient_light_intensity * base_color.rgb);
 
     //!ifdef HAS_OCCLUSIONMAP
         let ao = textureSample(occlusion_tex, occlusion_sampler, in.v_UV_0).r;
-        let color = mix(color, color * ao, material_occlusion_strength);
+        color = mix(color, color * ao, material_occlusion_strength);
     //!endif
 
     //!ifdef HAS_EMISSIVEMAP
         let emissive = textureSample(emissive_tex, emissive_sampler, in.v_UV_0).rgb * material_emissive_factor;
-        let color = color + emissive;
+        color = color + emissive;
     //!endif
 
     var alpha = mix(1.0, base_color.a, u_alpha_blend);

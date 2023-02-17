@@ -3,7 +3,6 @@ use winit::{dpi::PhysicalSize, window::Window};
 use crate::GameObject;
 use async_trait::async_trait;
 
-pub mod deferred;
 pub mod forward;
 
 #[async_trait]

@@ -438,6 +438,7 @@ fn build_texture(
         dimension: wgpu::TextureDimension::D2,
         format,
         usage: wgpu::TextureUsages::all(),
+        view_formats: &[],
     });
 
     w_info.queue.write_texture(
