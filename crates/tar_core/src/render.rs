@@ -74,7 +74,7 @@ pub fn render_fn(
     };
 
     game_renderer
-        .add_object(tar_render::GameObject::ModelPath("res/Box/Box.gltf", "box"))
+        .add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"))
         .unwrap();
 
     game_renderer
