@@ -41,8 +41,12 @@ async fn build_renderer_extras(
     wgpu::SurfaceConfiguration,
     wgpu::Adapter,
 ) {
-    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-    let surface = unsafe { instance.create_surface(&window) };
+    let desc = wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+    };
+    let instance = wgpu::Instance::new(desc);
+    let surface = unsafe { instance.create_surface(&window).unwrap() };
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -71,11 +75,12 @@ async fn build_renderer_extras(
     let size = window.inner_size();
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_supported_formats(&adapter)[0],
+        format: surface.get_capabilities(&adapter).formats[0],
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::AutoNoVsync,
-        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
+        alpha_mode: surface.get_capabilities(&adapter).alpha_modes[0],
+        view_formats: vec![],
     };
     surface.configure(&device, &config);
 
@@ -149,8 +154,12 @@ pub async fn run() {
 
     let surface = Arc::new(surface);
 
-    let egui_renderer =
-        egui_wgpu::Renderer::new(&device, surface.get_supported_formats(&adapter)[0], None, 1);
+    let egui_renderer = egui_wgpu::Renderer::new(
+        &device,
+        surface.get_capabilities(&adapter).formats[0],
+        None,
+        1,
+    );
 
     let mut egui_state = egui_winit::State::new(&event_loop);
 

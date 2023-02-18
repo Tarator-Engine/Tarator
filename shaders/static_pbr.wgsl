@@ -62,34 +62,23 @@ fn vs_main(
     model: VertexInput,
     instance: InstanceInput,
 ) -> VertexOutput {
-    let model_matrix = mat4x4<f32>(
-        instance.model_matrix_0,
-        instance.model_matrix_1,
-        instance.model_matrix_2,
-        instance.model_matrix_3,
-    );
-    let normal_matrix = mat3x3<f32>(
-        instance.normal_matrix_0,
-        instance.normal_matrix_1,
-        instance.normal_matrix_2,
-    );
-    let world_position = model_matrix * vec4<f32>(model.position, 1.0);
-    
     var out: VertexOutput;
 
+    let pos = u_model_matrix * vec4<f32>(model.position, 1.0);
+    out.v_Position = pos.xyz / pos.w;
+    
     //!ifdef HAS_NORMALS
         //!ifdef HAS_TANGENTS
-            let normalW = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
-            let tangentW = normalize((model_matrix * vec4<f32>(model.tangent.xyz, 0.0)).xyz);
+            let normalW = normalize((u_model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
+            let tangentW = normalize((u_model_matrix * vec4<f32>(model.tangent.xyz, 0.0)).xyz);
             let bitangentW = cross(normalW, tangentW) * model.tangent.w;
             out.v_TBN_0 = tangentW;
             out.v_TBN_1 = bitangentW;
             out.v_TBN_2 = normalW;
         //!else
-            out.v_Normal = normalize((model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
+            out.v_Normal = normalize((u_model_matrix * vec4<f32>(model.normal.xyz, 0.0)).xyz);
         //!endif
     //!endif
-
 
     //!ifdef HAS_UV
     out.v_UV_0 = model.tex_coord_0;
@@ -99,8 +88,13 @@ fn vs_main(
     out.v_UV_1 = vec2<f32>(0.0, 0.0);
     //!endif
 
+    //!ifdef HAS_COLORS
+    out.v_Color = model.color_0;
+    //!else
+    out.v_Color = vec4<f32>(vec3<f32>(0.8), 1.0);
+    //!endif
+
     out.gl_Position = u_mpv_matrix * vec4<f32>(model.position, 1.0);
-    out.v_Position = model.position;
 
     return out;
 }
@@ -130,11 +124,12 @@ struct PBRInfo {
     v_Normal: vec3<f32>,
     //!endif
     //!endif
-    v_UV_1: vec2<f32>
+    v_UV_1: vec2<f32>,
+    debug_col: vec3<f32>
 }
 
-let M_PI: f32 = 3.141592653589793;
-let c_MinRoughness: f32 = 0.04;
+const M_PI: f32 = 3.141592653589793;
+const c_MinRoughness: f32 = 0.04;
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
@@ -151,7 +146,7 @@ fn getNormal(info: PBRInfo, ) -> vec3<f32>
         // stpq
         // rgba
         // all are valid for some reason
-        let t = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
+        let to = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
 
         //!ifdef HAS_NORMALS
             let ng = normalize(info.v_Normal);
@@ -159,7 +154,7 @@ fn getNormal(info: PBRInfo, ) -> vec3<f32>
             let ng = cross(pos_dx, pos_dy);
         //!endif
 
-        let t = normalize(t - ng * dot(ng, t));
+        let t = normalize(to - ng * dot(ng, to));
 
         let b = normalize(cross(ng, t));
         let tbn = mat3x3<f32>(t, b, ng);
@@ -169,14 +164,15 @@ fn getNormal(info: PBRInfo, ) -> vec3<f32>
 
     //!ifdef HAS_NORMALMAP 
         // TODO: replace constant v_UV with array
-        let n = textureSample(normal_tex, normal_sampler, info.v_UV_0).xyz;
-        let n = normalize(tbn * ((2.0 * n - 1.0) * vec3<f32>(material_normal_scale, material_normal_scale, 1.0)));
+        let no = textureSample(normal_tex, normal_sampler, info.v_UV_0).xyz;
+        let n = normalize(tbn * ((2.0 * no - 1.0) * vec3<f32>(material_normal_scale, material_normal_scale, 1.0)));
     //!else
         let n = normalize(tbn[2].xyz);
     //!endif
 
     // reverse backface normals
     // TODO!: correct/best place? -> https://github.com/KhronosGroup/glTF-WebGL-PBR/issues/51
+    
     return n;
 }
 
@@ -242,19 +238,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Roughness is authored as perceptual roughness; as is convention,
     // convert to material roughness by squaring the perceptual roughness [2].
     let alphaRoughness = perceptualRoughness * perceptualRoughness;
+
+    // the albedo may be defined from a base texture or a flat color
     //!ifdef HAS_BASECOLORMAP
         let base_color = textureSample(base_color_tex, base_color_sampler, in.v_UV_0) * material_base_color_factor;
     //!else
         let base_color = material_base_color_factor;
     //!endif
 
-    // let base_color = base_color * in.v_Color;
+    // spec: COLOR_0 ... acts as an additional linear multiplier to baseColor
+    // let base_color = base_color_o * in.v_Color;
 
     let f0 = vec3<f32>(0.04);
 
-    let diffuse_color = base_color.rgb * (vec3<f32>(1.0) - f0);
+    let diffuse_color_o = base_color.rgb * (vec3<f32>(1.0) - f0);
 
-    let diffuse_color: vec3<f32> = (diffuse_color * (1.0 - metallic)).xyz;
+    let diffuse_color = diffuse_color_o * (1.0 - metallic);
 
     let specular_color = mix(f0, base_color.rgb, metallic);
 
@@ -268,7 +267,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var pbr_info: PBRInfo;
 
-    pbr_info.v_Position = in.gl_Position.xyz;
+    pbr_info.v_Position = in.v_Position;
     pbr_info.v_UV_0 = in.v_UV_0;
     pbr_info.v_UV_1 = in.v_UV_1;
     //!ifdef HAS_NORMALS
@@ -285,10 +284,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 
     let n = getNormal(pbr_info);                        // normal at surface point
-    let v = normalize(u_camera - in.gl_Position.xyz);   // Vector from surface point to camera
-    let l = normalize(u_light_direction);                // Vector from surface point to light
+    let v = normalize(u_camera - pbr_info.v_Position);  // Vector from surface point to camera
+    let l = normalize(u_light_direction);               // Vector from surface point to light
     let h = normalize(l+v);                             // Half vector between both l and v
-    // let reflection = -normalize(reflect(v, n));
+    let reflection = -normalize(reflect(v, n));
 
     let NdotL = clamp(dot(n, l), 0.001, 1.0);
     let NdotV = clamp(abs(dot(n, v)), 0.001, 1.0);
@@ -317,19 +316,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Calculation of analytical lighting contribution
     let diffuse_contrib = (1.0 - F) * diffuse(pbr_info);
     let spec_contrib = F * G * D / (4.0 * NdotL * NdotV);
-    let color = NdotL * u_light_color * (diffuse_contrib + spec_contrib);
+    let color_o = NdotL * u_light_color * (diffuse_contrib + spec_contrib);
 
     // Add simple ambient light
-    let color = color + (u_ambient_light_color * u_ambient_light_intensity * base_color.rgb);
+    var color = color_o + (u_ambient_light_color * u_ambient_light_intensity * base_color.rgb);
 
     //!ifdef HAS_OCCLUSIONMAP
         let ao = textureSample(occlusion_tex, occlusion_sampler, in.v_UV_0).r;
-        let color = mix(color, color * ao, material_occlusion_strength);
+        color = mix(color, color * ao, material_occlusion_strength);
     //!endif
 
     //!ifdef HAS_EMISSIVEMAP
         let emissive = textureSample(emissive_tex, emissive_sampler, in.v_UV_0).rgb * material_emissive_factor;
-        let color = color + emissive;
+        color = color + emissive;
     //!endif
 
     var alpha = mix(1.0, base_color.a, u_alpha_blend);
@@ -342,6 +341,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     
 
-    return base_color;
-    // return mrSample;
+    // return base_color;
+    return vec4<f32>(color, alpha);
+    // return vec4<f32>(material_base_color_factor, material_base_color_factor, material_base_color_factor, 1.0);
+    // return vec4<f32>(in.v_UV_0, 1.0, 1.0);
 }
