@@ -14,6 +14,8 @@ winit = "0.28.1"
 eframe = { version = "0.21.3", features = ["wgpu"] }
 tar_render = { path = "../tar_render" }
 tar_res = { path = "../tar_res" }
+tar_gui = { path = "../tar_gui" }
+tar_types = { path = "../tar_types" }
 cfg-if = "1"
 env_logger = "0.10.0"
 log = "0.4.17"

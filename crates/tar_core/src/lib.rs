@@ -16,20 +16,7 @@ use winit::{
 
 use crate::double_buffer::DoubleBuffer;
 
-#[derive(Clone)]
-pub struct EngineState {
-    dt: Duration,
-    fps: u32,
-    size: winit::dpi::PhysicalSize<u32>,
-    halt: bool,
-    #[allow(unused)]
-    view_rect: winit::dpi::PhysicalSize<u32>,
-    cam_sensitivity: f32,
-    paint_jobs: Vec<ClippedPrimitive>,
-    egui_textures_delta: egui::epaint::textures::TexturesDelta,
-    events: Vec<winit::event::WindowEvent<'static>>,
-    mouse_movement: (f64, f64),
-}
+pub use tar_types::EngineState;
 
 async fn build_renderer_extras(
     window: &winit::window::Window,
@@ -272,39 +259,7 @@ pub async fn run() {
                     errors.remove(*r);
                 }
 
-                egui::Window::new("Timings")
-                    .resizable(false)
-                    .show(&context, |ui| {
-                        ui.label("Here you can see different frame timings");
-                        ui.label(format!("Frame time: {:?}", state.dt));
-                        ui.label(format!("FPS: {}", state.fps));
-                    });
-                egui::SidePanel::right("right panel")
-                    .resizable(true)
-                    .default_width(300.0)
-                    .show(&context, |ui| {
-                        ui.vertical_centered(|ui| ui.heading("right panel"))
-                    });
-                egui::SidePanel::left("left panel")
-                    .resizable(true)
-                    .default_width(300.0)
-                    .show(&context, |ui| {
-                        ui.vertical_centered(|ui| ui.heading("left panel"));
-                        ui.label("sensitvity");
-                        ui.add(egui::Slider::new(&mut state.cam_sensitivity, 0.0..=5.0));
-                    });
-                egui::TopBottomPanel::bottom("bottom panel")
-                    .resizable(true)
-                    .default_height(200.0)
-                    .show(&context, |ui| {
-                        ui.vertical_centered(|ui| ui.heading("bottom panel"))
-                    });
-                egui::TopBottomPanel::top("top panel")
-                    .resizable(false)
-                    .default_height(50.0)
-                    .show(&context, |ui| {
-                        ui.vertical_centered(|ui| ui.heading("controls"))
-                    });
+                tar_gui::gui(&context, &mut state);
 
                 let output = context.end_frame();
 
