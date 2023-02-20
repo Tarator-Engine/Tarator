@@ -5,7 +5,11 @@ use winit::event::{ElementState, KeyboardInput, MouseButton, WindowEvent};
 
 use crate::{DoubleBuffer, EngineState};
 
-fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &WindowEvent) -> bool {
+fn input(
+    renderer: &mut tar_render::render::forward::ForwardRenderer,
+    event: &WindowEvent,
+    cam: &uuid::Uuid,
+) -> bool {
     match event {
         WindowEvent::KeyboardInput {
             input:
@@ -15,11 +19,17 @@ fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &Wi
                     ..
                 },
             ..
-        } => renderer.cameras[renderer.active_camera.unwrap() as usize]
+        } => renderer
+            .cameras
+            .get_mut(cam)
+            .unwrap()
             .controller
             .process_keyboard(*key, *state),
         WindowEvent::MouseWheel { delta, .. } => {
-            renderer.cameras[renderer.active_camera.unwrap() as usize]
+            renderer
+                .cameras
+                .get_mut(cam)
+                .unwrap()
                 .controller
                 .process_scroll(delta);
             true
@@ -37,8 +47,12 @@ fn input(renderer: &mut tar_render::render::forward::ForwardRenderer, event: &Wi
     }
 }
 
-fn update(renderer: &mut tar_render::render::forward::ForwardRenderer, dt: std::time::Duration) {
-    let cam = &mut renderer.cameras[renderer.active_camera.unwrap() as usize];
+fn update(
+    renderer: &mut tar_render::render::forward::ForwardRenderer,
+    dt: std::time::Duration,
+    cam: &uuid::Uuid,
+) {
+    let cam = &mut renderer.cameras.get_mut(cam).unwrap();
     cam.controller.update_camera(&mut cam.cam, dt);
     cam.uniform.update_view_proj(&cam.cam, &cam.proj);
 }
@@ -77,10 +91,8 @@ pub fn render_fn(
         .add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"))
         .unwrap();
 
-    game_renderer
-        .add_object(tar_render::GameObject::Camera(camera))
-        .unwrap();
-    game_renderer.select_camera(0);
+    let cam = game_renderer.add_camera(camera);
+    game_renderer.select_camera(cam);
 
     loop {
         r_barrier.wait();
@@ -93,19 +105,25 @@ pub fn render_fn(
         }
 
         for event in state.events {
-            input(&mut game_renderer, &event);
+            input(&mut game_renderer, &event, &cam);
         }
 
         if game_renderer.mouse_pressed {
-            game_renderer.cameras[game_renderer.active_camera.unwrap() as usize]
+            game_renderer
+                .cameras
+                .get_mut(&cam)
+                .unwrap()
                 .controller
                 .process_mouse(state.mouse_movement.0, state.mouse_movement.1);
         }
-        game_renderer.cameras[game_renderer.active_camera.unwrap() as usize]
+        game_renderer
+            .cameras
+            .get_mut(&cam)
+            .unwrap()
             .controller
             .sensitivity = state.cam_sensitivity;
 
-        update(&mut game_renderer, state.dt);
+        update(&mut game_renderer, state.dt, &cam);
 
         let output_frame = match surface.get_current_texture() {
             Ok(frame) => Some(frame),

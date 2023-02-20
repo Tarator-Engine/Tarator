@@ -1,18 +1,18 @@
-use std::{sync::Arc, vec};
+use std::{collections::HashMap, sync::Arc};
 
 use tar_res::{material::PerFrameData, texture::Texture, WgpuInfo};
 
 use crate::{
-    camera::{self, CameraUniform},
+    camera::{self, Camera, CameraUniform},
     GameObject,
 };
 
 pub struct ForwardRenderer {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
-    pub cameras: Vec<crate::camera::RawCamera>,
-    pub objects: Vec<tar_res::object::Object>,
-    pub active_camera: Option<u32>,
+    pub cameras: HashMap<uuid::Uuid, crate::camera::RawCamera>,
+    pub objects: HashMap<uuid::Uuid, tar_res::object::Object>,
+    pub active_camera: Option<uuid::Uuid>,
     pub depth_texture: tar_res::texture::Texture,
     pub format: wgpu::TextureFormat,
 
@@ -31,8 +31,8 @@ impl ForwardRenderer {
         Self {
             device,
             queue,
-            cameras: vec![],
-            objects: vec![],
+            cameras: HashMap::new(),
+            objects: HashMap::new(),
             active_camera: None,
             depth_texture,
             mouse_pressed: false,
@@ -48,7 +48,7 @@ impl ForwardRenderer {
         if new_size.width > 0 && new_size.height > 0 {
             config.width = new_size.width;
             config.height = new_size.height;
-            for camera in &mut self.cameras {
+            for (_, camera) in &mut self.cameras {
                 camera.proj.resize(new_size.width, new_size.height);
             }
             self.depth_texture =
@@ -56,27 +56,13 @@ impl ForwardRenderer {
         }
     }
 
-    pub fn select_camera(&mut self, cam: u32) {
+    pub fn select_camera(&mut self, cam: uuid::Uuid) {
         self.active_camera = Some(cam);
     }
 
-    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<()> {
+    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<uuid::Uuid> {
+        let id = uuid::Uuid::new_v4();
         match obj {
-            GameObject::Camera(cam) => {
-                let camera = cam.cam;
-                let projection = cam.proj;
-                let cam_cont = cam.controller;
-                let mut camera_uniform = CameraUniform::new();
-                camera_uniform.update_view_proj(&camera, &projection);
-
-                self.cameras.push(camera::RawCamera {
-                    cam: camera,
-                    proj: projection,
-                    controller: cam_cont,
-                    uniform: camera_uniform,
-                });
-            }
-
             GameObject::ModelPath(p, name) => {
                 let path = tar_res::import_gltf(p, name)?;
                 let w_info = Arc::new(WgpuInfo {
@@ -85,7 +71,7 @@ impl ForwardRenderer {
                     surface_format: self.format,
                 });
                 let object = tar_res::load_object(path, w_info)?;
-                self.objects.push(object);
+                self.objects.insert(id, object);
             }
 
             GameObject::ImportedPath(p) => {
@@ -95,15 +81,32 @@ impl ForwardRenderer {
                     surface_format: self.format,
                 });
                 let object = tar_res::load_object(p.into(), w_info)?;
-                self.objects.push(object);
-            }
-
-            GameObject::Object(obj) => {
-                self.objects.push(obj);
+                self.objects.insert(id, object);
             }
         }
 
-        Ok(())
+        Ok(id)
+    }
+
+    pub fn add_camera(&mut self, cam: Camera) -> uuid::Uuid {
+        let id = uuid::Uuid::new_v4();
+        let camera = cam.cam;
+        let projection = cam.proj;
+        let cam_cont = cam.controller;
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera, &projection);
+
+        self.cameras.insert(
+            id,
+            camera::RawCamera {
+                cam: camera,
+                proj: projection,
+                controller: cam_cont,
+                uniform: camera_uniform,
+            },
+        );
+
+        id
     }
 
     pub fn render(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
@@ -132,13 +135,13 @@ impl ForwardRenderer {
             }),
         });
         if let Some(cam) = self.active_camera {
-            let cam_params = self.cameras[cam as usize].params();
+            let cam_params = self.cameras.get(&cam).unwrap().params();
             let mut data = PerFrameData::default();
             data.u_ambient_light_color = [1.0, 1.0, 1.0];
-            data.u_ambient_light_intensity = 1.0;
-            data.u_light_color = [1.0, 1.0, 1.0];
+            data.u_ambient_light_intensity = 0.2;
+            data.u_light_color = [5.0, 5.0, 5.0];
             data.u_light_direction = [0.0, 0.5, 0.5];
-            for o in &mut self.objects {
+            for (_, o) in &mut self.objects {
                 o.update_per_frame(&cam_params, &data, &self.queue);
                 o.draw(&mut render_pass);
             }

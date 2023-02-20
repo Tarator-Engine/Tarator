@@ -340,6 +340,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     
+    // do gamma correction
+    // color = pow(color, vec3<f32>(1.0/2.2));
+
+    // reinhard tone mapping
+    color = color / (color + vec3<f32>(1.0));
 
     // return base_color;
     return vec4<f32>(color, alpha);
