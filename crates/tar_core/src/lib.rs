@@ -5,7 +5,6 @@ mod render;
 
 use std::sync::{Arc, Barrier};
 
-use egui::ClippedPrimitive;
 use instant::Duration;
 
 use parking_lot::MutexGuard;

@@ -87,9 +87,8 @@ pub fn render_fn(
         controller: camera_controller,
     };
 
-    game_renderer
-        .add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"))
-        .unwrap();
+    let test_id =
+        game_renderer.add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"));
 
     let cam = game_renderer.add_camera(camera);
     game_renderer.select_camera(cam);
@@ -99,6 +98,8 @@ pub fn render_fn(
         let state = engine_state.lock().update_read();
 
         // do rendering here
+
+        game_renderer.check_done(test_id).unwrap();
 
         if state.halt {
             return;
