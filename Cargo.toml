@@ -11,6 +11,8 @@ members = [
   "crates/tar_entry",
   "crates/tar_utils",
   "crates/tar_ecs/macros",
+  "crates/tar_gui",
+  "crates/tar_types",
 ]
 
 
