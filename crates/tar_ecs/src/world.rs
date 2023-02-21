@@ -1,8 +1,8 @@
 use crate::{
     archetype::{ArchetypeId, Archetypes},
     bundle::{Bundle, Bundles},
-    component::{ ComponentQuery, ComponentQueryMut, Components },
-    entity::{ Entities, Entity },
+    component::{ComponentQuery, ComponentQueryMut, Components},
+    entity::{Entities, Entity},
     store::sparse::SparseSetIndex,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -156,8 +156,8 @@ impl World {
     }
 
     /// Instantiate an [`Entity`] on this [`World`]. The returned [`Entity`] can be used to assign
-    /// [`Component`]s on it using [`World::entity_set()`], or again destroyed using
-    /// [`World::entity_destroy()`].
+    /// [`Component`]s on it using [`World::entity_set`], or again destroyed using
+    /// [`World::entity_destroy`].
     ///
     /// # Safety
     ///
@@ -205,7 +205,8 @@ impl World {
             // SAFETY:
             // Entity definitely exists
             let replaced_entity_meta = unsafe {
-                self.entities.get_unchecked_mut(replaced_entity.id() as usize)
+                self.entities
+                    .get_unchecked_mut(replaced_entity.id() as usize)
             };
             replaced_entity_meta.index = entity_meta.index;
         }
@@ -287,9 +288,8 @@ impl World {
             //
             // SAFETY:
             // Entity definitely exists
-            let replaced_entity_meta = unsafe {
-                entities.get_unchecked_mut(replaced_entity.id() as usize)
-            };
+            let replaced_entity_meta =
+                unsafe { entities.get_unchecked_mut(replaced_entity.id() as usize) };
             replaced_entity_meta.index = old_index;
         }
     }
@@ -347,9 +347,8 @@ impl World {
             //
             // SAFETY:
             // Entity definitely exists
-            let replaced_entity_meta = unsafe {
-                entities.get_unchecked_mut(replaced_entity.id() as usize)
-            };
+            let replaced_entity_meta =
+                unsafe { entities.get_unchecked_mut(replaced_entity.id() as usize) };
             replaced_entity_meta.index = old_index;
         }
     }
@@ -502,4 +501,3 @@ impl World {
         )
     }
 }
-

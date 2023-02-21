@@ -87,19 +87,30 @@ pub fn render_fn(
         controller: camera_controller,
     };
 
-    let test_id =
-        game_renderer.add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"));
+    // let test_id =
+    //     game_renderer.add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"));
 
     let cam = game_renderer.add_camera(camera);
     game_renderer.select_camera(cam);
+
+    let mut pending_objects = vec![];
 
     loop {
         r_barrier.wait();
         let state = engine_state.lock().update_read();
 
         // do rendering here
+        for obj in &pending_objects {
+            game_renderer.check_done(*obj).unwrap();
+        }
 
-        game_renderer.check_done(test_id).unwrap();
+        if state.add_object {
+            pending_objects.push(
+                game_renderer.add_object(tar_render::GameObject::ImportedPath(
+                    &state.add_object_string,
+                )),
+            );
+        }
 
         if state.halt {
             return;

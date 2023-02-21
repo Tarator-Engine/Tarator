@@ -1,3 +1,5 @@
+use egui::Color32;
+
 pub fn gui(context: &egui::Context, state: &mut tar_types::EngineState) {
     egui::Window::new("Timings")
         .resizable(false)
@@ -19,6 +21,10 @@ pub fn gui(context: &egui::Context, state: &mut tar_types::EngineState) {
             ui.vertical_centered(|ui| ui.heading("left panel"));
             ui.label("sensitvity");
             ui.add(egui::Slider::new(&mut state.cam_sensitivity, 0.0..=5.0));
+            ui.text_edit_singleline(&mut state.add_object_string);
+            state.add_object = ui.button("Add Object").clicked();
+            ui.label(format!("{:?}", state.mouse_pos));
+            ui.label(format!("{:?}", state.view_rect));
         });
     egui::TopBottomPanel::bottom("bottom panel")
         .resizable(true)
@@ -32,4 +38,10 @@ pub fn gui(context: &egui::Context, state: &mut tar_types::EngineState) {
         .show(&context, |ui| {
             ui.vertical_centered(|ui| ui.heading("controls"))
         });
+
+    state.view_rect = egui::CentralPanel::default()
+        .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+        .show(&context, |_| {})
+        .response
+        .rect;
 }
