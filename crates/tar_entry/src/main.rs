@@ -1,4 +1,4 @@
 #[tokio::main]
 async fn main() {
-    tar_gui::run().await
+    tar_core::run().await;
 }

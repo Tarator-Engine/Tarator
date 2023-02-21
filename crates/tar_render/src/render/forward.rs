@@ -1,23 +1,26 @@
-use std::{
-    sync::{Arc, Mutex},
-    vec,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use tar_res::{material::PerFrameData, texture::Texture, WgpuInfo};
 
+use crossbeam_channel::bounded;
+
 use crate::{
-    camera::{self, CameraUniform},
+    camera::{self, Camera, CameraUniform},
     GameObject,
 };
+
+const THREAD_NUM: usize = 2;
 
 pub struct ForwardRenderer {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
-    pub cameras: Vec<crate::camera::RawCamera>,
-    pub objects: Vec<tar_res::object::Object>,
-    pub active_camera: Option<u32>,
+    pub cameras: HashMap<uuid::Uuid, crate::camera::RawCamera>,
+    pub objects: HashMap<uuid::Uuid, tar_res::object::Object>,
+    pub active_camera: Option<uuid::Uuid>,
     pub depth_texture: tar_res::texture::Texture,
     pub format: wgpu::TextureFormat,
+    pub threadpool: threadpool::ThreadPool,
+    pub receivers: HashMap<uuid::Uuid, crossbeam_channel::Receiver<tar_res::object::Object>>,
 
     // DEVELOPMENT PURPOSES ONLY // TODO!: REMOVE //
     pub mouse_pressed: bool,
@@ -34,59 +37,54 @@ impl ForwardRenderer {
         Self {
             device,
             queue,
-            cameras: vec![],
-            objects: vec![],
+            cameras: HashMap::new(),
+            objects: HashMap::new(),
             active_camera: None,
             depth_texture,
             mouse_pressed: false,
             format,
+            threadpool: threadpool::ThreadPool::new(THREAD_NUM),
+            receivers: HashMap::new(),
         }
     }
 
     pub fn resize(
         &mut self,
         new_size: winit::dpi::PhysicalSize<u32>,
-        config: &wgpu::SurfaceConfiguration,
+        config: &mut wgpu::SurfaceConfiguration,
     ) {
         if new_size.width > 0 && new_size.height > 0 {
-            for camera in &mut self.cameras {
+            config.width = new_size.width;
+            config.height = new_size.height;
+            for (_, camera) in &mut self.cameras {
                 camera.proj.resize(new_size.width, new_size.height);
-                self.depth_texture =
-                    Texture::create_depth_texture(&self.device, config, "depth_texture");
             }
+            self.depth_texture =
+                Texture::create_depth_texture(&self.device, config, "depth_texture");
         }
     }
 
-    pub fn select_camera(&mut self, cam: u32) {
+    pub fn select_camera(&mut self, cam: uuid::Uuid) {
         self.active_camera = Some(cam);
     }
 
-    pub async fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<()> {
+    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> uuid::Uuid {
+        let id = uuid::Uuid::new_v4();
+        let (tx, rx) = bounded(1);
         match obj {
-            GameObject::Camera(cam) => {
-                let camera = cam.cam;
-                let projection = cam.proj;
-                let cam_cont = cam.controller;
-                let mut camera_uniform = CameraUniform::new();
-                camera_uniform.update_view_proj(&camera, &projection);
-
-                self.cameras.push(camera::RawCamera {
-                    cam: camera,
-                    proj: projection,
-                    controller: cam_cont,
-                    uniform: camera_uniform,
-                });
-            }
-
             GameObject::ModelPath(p, name) => {
-                let path = tar_res::import_gltf(p, name)?;
+                let path: String = p.into();
+                let name: String = name.into();
                 let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
                     surface_format: self.format,
                 });
-                let object = tar_res::load_object(path, w_info)?;
-                self.objects.push(object);
+                self.threadpool.execute(move || {
+                    let path = tar_res::import_gltf(&path, &name).unwrap();
+                    let object = tar_res::load_object(path, w_info).unwrap();
+                    tx.send(object).unwrap();
+                });
             }
 
             GameObject::ImportedPath(p) => {
@@ -95,66 +93,87 @@ impl ForwardRenderer {
                     queue: self.queue.clone(),
                     surface_format: self.format,
                 });
-                let object = tar_res::load_object(p.into(), w_info)?;
-                self.objects.push(object);
-            }
-
-            GameObject::Object(obj) => {
-                self.objects.push(obj);
+                let path = p.into();
+                self.threadpool.execute(move || {
+                    let object = tar_res::load_object(path, w_info).unwrap();
+                    tx.send(object).unwrap();
+                });
             }
         }
+        self.receivers.insert(id, rx);
 
-        Ok(())
+        id
     }
 
-    pub fn render(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) -> Result<(), wgpu::SurfaceError> {
-        // let output = surface.get_current_texture()?;
-        // let view = output
-        //     .texture
-        //     .create_view(&wgpu::TextureViewDescriptor::default());
-
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 0.0,
-                        }),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
-            if let Some(cam) = self.active_camera {
-                let cam_params = self.cameras[cam as usize].params();
-                let mut data = PerFrameData::default();
-                data.u_ambient_light_color = [1.0, 1.0, 1.0];
-                data.u_ambient_light_intensity = 1.0;
-                data.u_light_color = [1.0, 1.0, 1.0];
-                data.u_light_direction = [0.0, 0.5, 0.5];
-                for o in &mut self.objects {
-                    o.update_per_frame(&cam_params, &data, &self.queue);
-                    o.draw(&mut render_pass);
-                }
+    pub fn check_done(&mut self, id: uuid::Uuid) -> Result<bool, crossbeam_channel::RecvError> {
+        if let Some(recv) = self.receivers.get(&id) {
+            if recv.is_full() {
+                let object = recv.recv()?;
+                self.objects.insert(id, object);
+                self.receivers.remove(&id);
+                return Ok(true);
             }
         }
-        Ok(())
+        Ok(false)
+    }
+
+    pub fn add_camera(&mut self, cam: Camera) -> uuid::Uuid {
+        let id = uuid::Uuid::new_v4();
+        let camera = cam.cam;
+        let projection = cam.proj;
+        let cam_cont = cam.controller;
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera, &projection);
+
+        self.cameras.insert(
+            id,
+            camera::RawCamera {
+                cam: camera,
+                proj: projection,
+                controller: cam_cont,
+                uniform: camera_uniform,
+            },
+        );
+
+        id
+    }
+
+    pub fn render(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    }),
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        });
+        if let Some(cam) = self.active_camera {
+            let cam_params = self.cameras.get(&cam).unwrap().params();
+            let mut data = PerFrameData::default();
+            data.u_ambient_light_color = [1.0, 1.0, 1.0];
+            data.u_ambient_light_intensity = 0.2;
+            data.u_light_color = [5.0, 5.0, 5.0];
+            data.u_light_direction = [0.0, 0.5, 0.5];
+            for (_, o) in &mut self.objects {
+                o.update_per_frame(&cam_params, &data, &self.queue);
+                o.draw(&mut render_pass);
+            }
+        }
     }
 }

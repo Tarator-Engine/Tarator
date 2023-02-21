@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::path::Path;
 
+use base64::Engine;
 use gltf::image::Source;
 use serde::{Deserialize, Serialize};
 
@@ -70,7 +71,8 @@ impl StoreTexture {
             Source::Uri { uri, mime_type } => {
                 if uri.starts_with("data:") {
                     let encoded = uri.split(',').nth(1).unwrap();
-                    let data = base64::decode(&encoded).unwrap();
+                    let decoder = base64::prelude::BASE64_STANDARD;
+                    let data = decoder.decode(&encoded).unwrap();
                     let mime_type = if let Some(ty) = mime_type {
                         ty
                     } else {
