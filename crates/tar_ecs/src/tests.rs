@@ -14,7 +14,7 @@ impl Position {
 }
 
 
-#[derive(Component)]
+#[derive(Clone, Component)]
 struct UUID {
     id: u128 
 }
@@ -163,6 +163,25 @@ fn zst() {
 
     for zst in world.component_query::<Zst>() {
         assert!(*zst == Zst);
+    }
+}
+
+#[test]
+fn component_clone() {
+    let mut world = World::new();
+
+    for _ in 0..10 {
+        let entity = world.entity_create();
+        world.entity_set(entity, UUID::new(16));
+    }
+
+    for mut uuid in world.component_collect::<UUID>() {
+        assert!(uuid.id == 16);
+        uuid.id = 42;
+    }
+
+    for uuid in world.component_query::<UUID>() {
+        assert!(uuid.id == 16);
     }
 }
 
