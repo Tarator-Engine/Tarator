@@ -138,7 +138,12 @@ impl ForwardRenderer {
         id
     }
 
-    pub fn render(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    pub fn render(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        rendered_objects: Vec<uuid::Uuid>,
+    ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -170,9 +175,15 @@ impl ForwardRenderer {
             data.u_ambient_light_intensity = 0.2;
             data.u_light_color = [5.0, 5.0, 5.0];
             data.u_light_direction = [0.0, 0.5, 0.5];
-            for (_, o) in &mut self.objects {
-                o.update_per_frame(&cam_params, &data, &self.queue);
-                o.draw(&mut render_pass);
+
+            //TODO!: this is horrible but the other way round the borrow checker hates it
+            // valve pls fix
+
+            for (id, obj) in &mut self.objects {
+                if rendered_objects.contains(id) {
+                    obj.update_per_frame(&cam_params, &data, &self.queue);
+                    obj.draw(&mut render_pass);
+                }
             }
         }
     }

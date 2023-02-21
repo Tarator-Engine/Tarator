@@ -1,6 +1,8 @@
 use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
+use parking_lot::Mutex;
+use tar_types::components::{Rendering, Transform};
 use winit::event::{ElementState, KeyboardInput, MouseButton, WindowEvent};
 
 use crate::{DoubleBuffer, EngineState};
@@ -66,6 +68,7 @@ pub fn render_fn(
     surface: Arc<wgpu::Surface>,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    world: Arc<Mutex<tar_ecs::world::World>>,
 ) {
     let int_camera = tar_render::camera::IntCamera::new(
         (0.0, 5.0, 10.0),
@@ -93,19 +96,29 @@ pub fn render_fn(
     let cam = game_renderer.add_camera(camera);
     game_renderer.select_camera(cam);
 
-    let mut pending_objects = vec![];
+    let mut objects = vec![];
 
     loop {
         r_barrier.wait();
         let state = engine_state.lock().update_read();
+        let components = world.lock().component_collect::<(Transform, Rendering)>();
 
         // do rendering here
-        for obj in &pending_objects {
+        for obj in &objects {
             game_renderer.check_done(*obj).unwrap();
         }
 
+        for (t, r) in &components {
+            if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
+                //TODO!: implementation for multiple nodes
+                obj.nodes[0].translation = t.pos;
+                obj.nodes[0].rotation = t.rot;
+                obj.nodes[0].scale = t.scale;
+            }
+        }
+
         if state.add_object {
-            pending_objects.push(
+            objects.push(
                 game_renderer.add_object(tar_render::GameObject::ImportedPath(
                     &state.add_object_string,
                 )),
@@ -163,7 +176,8 @@ pub fn render_fn(
 
             // My rendering
             {
-                game_renderer.render(&mut encoder, &view);
+                let rendered_objects = components.iter().map(|(_, c)| c.model_id).collect();
+                game_renderer.render(&mut encoder, &view, rendered_objects);
             }
 
             // Egui rendering now

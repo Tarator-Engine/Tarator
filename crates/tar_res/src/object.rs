@@ -4,7 +4,7 @@ pub struct Object {
     pub nodes: Vec<Node>,
 }
 
-impl Object {
+impl<'a> Object {
     pub fn update_per_frame(
         &mut self,
         cam_params: &CameraParams,
@@ -16,7 +16,7 @@ impl Object {
         }
     }
 
-    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+    pub fn draw<'b: 'a>(&'b self, render_pass: &mut wgpu::RenderPass<'a>) {
         for node in &self.nodes {
             node.draw(render_pass);
         }

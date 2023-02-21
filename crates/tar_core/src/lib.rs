@@ -5,7 +5,7 @@ mod render;
 
 use std::sync::{Arc, Barrier};
 
-use parking_lot::MutexGuard;
+use parking_lot::{MutexGuard, Mutex};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -136,11 +136,15 @@ pub async fn run() {
 
     let mut egui_state = egui_winit::State::new(&event_loop);
 
+
+    let world = Arc::new(Mutex::new(tar_ecs::world::World::new()));
+
     let r_barrier = pre_render_finished.clone();
     let s_clone = surface.clone();
     let d_clone = device.clone();
     let q_clone = queue.clone();
     let engine_state = db.clone();
+    let w_clone = world.clone();
     let render_thread = std::thread::spawn(move || {
         render::render_fn(
             r_barrier,
@@ -151,6 +155,7 @@ pub async fn run() {
             s_clone,
             d_clone,
             q_clone,
+            w_clone,
         );
     });
     let mut errors: Vec<Box<dyn std::error::Error>> = vec![];

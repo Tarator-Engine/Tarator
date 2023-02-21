@@ -16,6 +16,7 @@ tar_render = { path = "../tar_render" }
 tar_res = { path = "../tar_res" }
 tar_gui = { path = "../tar_gui" }
 tar_types = { path = "../tar_types" }
+tar_ecs = { path = "../tar_ecs" }
 cfg-if = "1"
 env_logger = "0.10.0"
 log = "0.4.17"
