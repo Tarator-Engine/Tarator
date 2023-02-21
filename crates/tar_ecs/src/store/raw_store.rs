@@ -280,3 +280,6 @@ impl Drop for RawStore {
     }
 }
 
+unsafe impl Send for RawStore {}
+unsafe impl Sync for RawStore {}
+
