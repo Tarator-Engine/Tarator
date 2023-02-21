@@ -2,10 +2,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use tar_res::{material::PerFrameData, texture::Texture, WgpuInfo};
 
+use crossbeam_channel::bounded;
+
 use crate::{
     camera::{self, Camera, CameraUniform},
     GameObject,
 };
+
+const THREAD_NUM: usize = 2;
 
 pub struct ForwardRenderer {
     pub device: Arc<wgpu::Device>,
@@ -15,6 +19,8 @@ pub struct ForwardRenderer {
     pub active_camera: Option<uuid::Uuid>,
     pub depth_texture: tar_res::texture::Texture,
     pub format: wgpu::TextureFormat,
+    pub threadpool: threadpool::ThreadPool,
+    pub receivers: HashMap<uuid::Uuid, crossbeam_channel::Receiver<tar_res::object::Object>>,
 
     // DEVELOPMENT PURPOSES ONLY // TODO!: REMOVE //
     pub mouse_pressed: bool,
@@ -37,6 +43,8 @@ impl ForwardRenderer {
             depth_texture,
             mouse_pressed: false,
             format,
+            threadpool: threadpool::ThreadPool::new(THREAD_NUM),
+            receivers: HashMap::new(),
         }
     }
 
@@ -60,18 +68,23 @@ impl ForwardRenderer {
         self.active_camera = Some(cam);
     }
 
-    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> tar_res::Result<uuid::Uuid> {
+    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> uuid::Uuid {
         let id = uuid::Uuid::new_v4();
+        let (tx, rx) = bounded(1);
         match obj {
             GameObject::ModelPath(p, name) => {
-                let path = tar_res::import_gltf(p, name)?;
+                let path: String = p.into();
+                let name: String = name.into();
                 let w_info = Arc::new(WgpuInfo {
                     device: self.device.clone(),
                     queue: self.queue.clone(),
                     surface_format: self.format,
                 });
-                let object = tar_res::load_object(path, w_info)?;
-                self.objects.insert(id, object);
+                self.threadpool.execute(move || {
+                    let path = tar_res::import_gltf(&path, &name).unwrap();
+                    let object = tar_res::load_object(path, w_info).unwrap();
+                    tx.send(object).unwrap();
+                });
             }
 
             GameObject::ImportedPath(p) => {
@@ -80,12 +93,28 @@ impl ForwardRenderer {
                     queue: self.queue.clone(),
                     surface_format: self.format,
                 });
-                let object = tar_res::load_object(p.into(), w_info)?;
-                self.objects.insert(id, object);
+                let path = p.into();
+                self.threadpool.execute(move || {
+                    let object = tar_res::load_object(path, w_info).unwrap();
+                    tx.send(object).unwrap();
+                });
             }
         }
+        self.receivers.insert(id, rx);
 
-        Ok(id)
+        id
+    }
+
+    pub fn check_done(&mut self, id: uuid::Uuid) -> Result<bool, crossbeam_channel::RecvError> {
+        if let Some(recv) = self.receivers.get(&id) {
+            if recv.is_full() {
+                let object = recv.recv()?;
+                self.objects.insert(id, object);
+                self.receivers.remove(&id);
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn add_camera(&mut self, cam: Camera) -> uuid::Uuid {

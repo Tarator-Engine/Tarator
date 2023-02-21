@@ -5,9 +5,6 @@ mod render;
 
 use std::sync::{Arc, Barrier};
 
-use egui::ClippedPrimitive;
-use instant::Duration;
-
 use parking_lot::MutexGuard;
 use winit::{
     event::*,
@@ -83,18 +80,7 @@ async fn build_renderer_extras(
 }
 
 pub async fn run() {
-    let db = DoubleBuffer::new(EngineState {
-        dt: Duration::from_secs(0),
-        fps: 0,
-        size: winit::dpi::PhysicalSize::new(0, 0),
-        halt: false,
-        view_rect: winit::dpi::PhysicalSize::new(0, 0),
-        cam_sensitivity: 0.4,
-        paint_jobs: vec![],
-        egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
-        events: vec![],
-        mouse_movement: (0.0, 0.0),
-    });
+    let db = DoubleBuffer::new(EngineState::default());
     let db = Arc::new(db);
 
     cfg_if::cfg_if! {
@@ -111,7 +97,7 @@ pub async fn run() {
     let title = env!("CARGO_PKG_NAME");
     let window = winit::window::WindowBuilder::new()
         .with_title(title)
-        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
+        // .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
         .build(&event_loop)
         .unwrap();
 
@@ -204,9 +190,10 @@ pub async fn run() {
                                 ref event,
                                 window_id,
                             } if window_id == &window.id() => {
-                                // TODO! use for seeing if egui wanted this event or not
+
                                 let res = egui_state.on_event(&context, &event);
-                                if !res.consumed {
+
+                                if state.mouse_in_view || !res.consumed {
                                     state.events.push(event.clone().to_static().unwrap());
                                 }
                                 match event {
@@ -239,6 +226,10 @@ pub async fn run() {
                             } => {
                                 state.mouse_movement.0 += delta.0;
                                 state.mouse_movement.1 += delta.1;
+                                state.mouse_pos.x += delta.0 as f32;
+                                state.mouse_pos.y += delta.1 as f32;
+                                
+                                state.mouse_in_view = state.view_rect.contains(state.mouse_pos);
                             }
                             _ => (),
                         }
