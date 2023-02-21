@@ -1,6 +1,6 @@
 use crate::{
     archetype::{ArchetypeId, Archetypes},
-    bundle::{Bundle, Bundles},
+    bundle::{Bundle, Bundles, CloneBundle},
     component::{ ComponentQuery, ComponentQueryMut, Components },
     entity::{ Entities, Entity },
     store::sparse::SparseSetIndex,
@@ -448,6 +448,16 @@ impl World {
         archetype_ids.push(archetype_id);
 
         ComponentQueryMut::new(archetype_ids, &mut self.archetypes, &self.components)
+    }
+
+    /// Clones every [`CloneBundle`] into a [`Vec`]
+    pub fn component_collect<'a, T: CloneBundle>(&mut self) -> Vec<T> {
+        let mut bundles = Vec::new();
+        for bundle in self.component_query::<T>() {
+            bundles.push(<T as CloneBundle>::clone(bundle));
+        }
+
+        bundles
     }
 
     /// Returns the [`ArchetypeId`] from given [`ArchetypeId`], which calculates in addition what
