@@ -1,3 +1,4 @@
-fn main() {
-    pollster::block_on(tar_gui::run());
+#[tokio::main]
+async fn main() {
+    tar_core::run().await;
 }

@@ -1,0 +1,15 @@
+[package]
+name = "tar_types"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit = "0.28.1"
+egui = "0.21.0"
+egui-wgpu = "0.21.0"
+wgpu = "0.15.1"
+cgmath = { version = "0.18.0", features = ["serde"] }
+uuid = "1.3.0"
+tar_ecs = { path = "../tar_ecs" }
