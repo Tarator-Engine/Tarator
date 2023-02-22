@@ -1,6 +1,11 @@
 use egui::Color32;
+use egui_file::FileDialog;
 
-pub fn gui(context: &egui::Context, state: &mut tar_types::EngineState) {
+pub fn gui(
+    context: &egui::Context,
+    state: &mut tar_types::EngineState,
+    file_dialogue: &mut FileDialog,
+) {
     egui::Window::new("Timings")
         .resizable(false)
         .show(&context, |ui| {
@@ -21,10 +26,24 @@ pub fn gui(context: &egui::Context, state: &mut tar_types::EngineState) {
             ui.vertical_centered(|ui| ui.heading("left panel"));
             ui.label("sensitvity");
             ui.add(egui::Slider::new(&mut state.cam_sensitivity, 0.0..=5.0));
-            ui.text_edit_singleline(&mut state.add_object_string);
-            state.add_object = ui.button("Add Object").clicked();
-            ui.label(format!("{:?}", state.mouse_pos));
-            ui.label(format!("{:?}", state.view_rect));
+            // ui.text_edit_singleline(&mut state.add_object_string);
+            if ui.button("Add Object").clicked() {
+                file_dialogue.open();
+            }
+            if file_dialogue.state() == egui_file::State::Open {}
+
+            match file_dialogue.state() {
+                egui_file::State::Open => {
+                    file_dialogue.show(&context);
+                }
+                egui_file::State::Selected => {
+                    state.add_object_string =
+                        file_dialogue.path().unwrap().to_str().unwrap().into();
+                }
+                _ => (),
+            }
+
+            ui.label(state.add_object_string.clone());
         });
     egui::TopBottomPanel::bottom("bottom panel")
         .resizable(true)

@@ -24,6 +24,7 @@ pub struct EngineState {
     pub mouse_in_view: bool,
     pub add_object_string: String,
     pub add_object: bool,
+    pub adding_object: bool,
     pub editing: bool,
 }
 
@@ -44,6 +45,7 @@ impl Default for EngineState {
             mouse_in_view: false,
             add_object: false,
             add_object_string: String::new(),
+            adding_object: false,
             editing: false,
         }
     }

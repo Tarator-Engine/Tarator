@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 egui = "0.21.0"
 tar_types = { path = "../tar_types" }
+egui_file = "0.8.0"

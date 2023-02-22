@@ -5,6 +5,7 @@ mod render;
 
 use std::sync::{Arc, Barrier};
 
+use egui_file::FileDialog;
 use parking_lot::{MutexGuard, Mutex};
 use winit::{
     event::*,
@@ -169,6 +170,8 @@ pub async fn run() {
     let mut since_start = 0;
     let mut frames = 0;
 
+    let mut file_dialogue = FileDialog::open_file(None);
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
@@ -255,7 +258,7 @@ pub async fn run() {
                     errors.remove(*r);
                 }
 
-                tar_gui::gui(&context, &mut state);
+                tar_gui::gui(&context, &mut state, &mut file_dialogue);
 
                 let output = context.end_frame();
 
