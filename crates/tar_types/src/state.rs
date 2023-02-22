@@ -2,6 +2,12 @@ use std::time::Duration;
 
 use egui::ClippedPrimitive;
 
+#[allow(unused)]
+use tar_ecs::world::World;
+
+/// This struct stores all the important state of the engine.
+///
+/// it and a [`World`] is stored as state
 #[derive(Clone)]
 pub struct EngineState {
     pub dt: Duration,
@@ -12,12 +18,13 @@ pub struct EngineState {
     pub cam_sensitivity: f32,
     pub paint_jobs: Vec<ClippedPrimitive>,
     pub egui_textures_delta: egui::epaint::textures::TexturesDelta,
-    pub events: Vec<winit::event::WindowEvent<'static>>,
+    // pub events: Vec<winit::event::WindowEvent<'static>>,
     pub mouse_movement: (f64, f64),
     pub mouse_pos: egui::Pos2,
     pub mouse_in_view: bool,
     pub add_object_string: String,
     pub add_object: bool,
+    pub editing: bool,
 }
 
 impl Default for EngineState {
@@ -31,12 +38,13 @@ impl Default for EngineState {
             cam_sensitivity: 0.4,
             paint_jobs: vec![],
             egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
-            events: vec![],
+            // events: vec![],
             mouse_movement: (0.0, 0.0),
             mouse_pos: egui::Pos2::ZERO,
             mouse_in_view: false,
             add_object: false,
             add_object_string: String::new(),
+            editing: false,
         }
     }
 }

@@ -2,62 +2,62 @@ use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
 use parking_lot::Mutex;
-use tar_types::components::{Rendering, Transform};
-use winit::event::{ElementState, KeyboardInput, MouseButton, WindowEvent};
+use tar_types::components::{Camera, Rendering, Transform};
 
 use crate::{DoubleBuffer, EngineState};
 
-fn input(
-    renderer: &mut tar_render::render::forward::ForwardRenderer,
-    event: &WindowEvent,
-    cam: &uuid::Uuid,
-) -> bool {
-    match event {
-        WindowEvent::KeyboardInput {
-            input:
-                KeyboardInput {
-                    virtual_keycode: Some(key),
-                    state,
-                    ..
-                },
-            ..
-        } => renderer
-            .cameras
-            .get_mut(cam)
-            .unwrap()
-            .controller
-            .process_keyboard(*key, *state),
-        WindowEvent::MouseWheel { delta, .. } => {
-            renderer
-                .cameras
-                .get_mut(cam)
-                .unwrap()
-                .controller
-                .process_scroll(delta);
-            true
-        }
-        WindowEvent::MouseInput {
-            button: MouseButton::Left,
-            state,
-            ..
-        } => {
-            renderer.mouse_pressed = *state == ElementState::Pressed;
-            true
-        }
+// /// Takes a window event and a renderer and an event
+// fn input(
+//     renderer: &mut tar_render::render::forward::ForwardRenderer,
+//     event: &WindowEvent,
+//     cam: &uuid::Uuid,
+// ) -> bool {
+//     match event {
+//         WindowEvent::KeyboardInput {
+//             input:
+//                 KeyboardInput {
+//                     virtual_keycode: Some(key),
+//                     state,
+//                     ..
+//                 },
+//             ..
+//         } => renderer
+//             .cameras
+//             .get_mut(cam)
+//             .unwrap()
+//             .controller
+//             .process_keyboard(*key, *state),
+//         WindowEvent::MouseWheel { delta, .. } => {
+//             renderer
+//                 .cameras
+//                 .get_mut(cam)
+//                 .unwrap()
+//                 .controller
+//                 .process_scroll(delta);
+//             true
+//         }
+//         WindowEvent::MouseInput {
+//             button: MouseButton::Left,
+//             state,
+//             ..
+//         } => {
+//             renderer.mouse_pressed = *state == ElementState::Pressed;
+//             true
+//         }
 
-        _ => false,
-    }
-}
+//         _ => false,
+//     }
+// }
 
-fn update(
-    renderer: &mut tar_render::render::forward::ForwardRenderer,
-    dt: std::time::Duration,
-    cam: &uuid::Uuid,
-) {
-    let cam = &mut renderer.cameras.get_mut(cam).unwrap();
-    cam.controller.update_camera(&mut cam.cam, dt);
-    cam.uniform.update_view_proj(&cam.cam, &cam.proj);
-}
+// fn update(
+//     renderer: &mut tar_render::render::forward::ForwardRenderer,
+//     dt: std::time::Duration,
+//     cam: &uuid::Uuid,
+// ) {
+//     let cam = &mut renderer.cameras.get_mut(cam).unwrap();
+//     cam.controller.update_camera(&mut cam.cam, dt);
+//     cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+// }
 
 pub fn render_fn(
     r_barrier: Arc<Barrier>,
@@ -70,45 +70,46 @@ pub fn render_fn(
     queue: Arc<wgpu::Queue>,
     world: Arc<Mutex<tar_ecs::world::World>>,
 ) {
-    let int_camera = tar_render::camera::IntCamera::new(
-        (0.0, 5.0, 10.0),
-        cgmath::Deg(-90.0),
-        cgmath::Deg(-20.0),
-    );
-    let projection = tar_render::camera::Projection::new(
-        config.width,
-        config.height,
-        cgmath::Deg(45.0),
-        0.1,
-        100.0,
-    );
-    let camera_controller = tar_render::camera::CameraController::new(4.0, 0.4);
+    // let int_camera = tar_render::camera::IntCamera::new(
+    //     (0.0, 5.0, 10.0),
+    //     cgmath::Deg(-90.0),
+    //     cgmath::Deg(-20.0),
+    // );
+    // let projection = tar_render::camera::Projection::new(
+    //     config.width,
+    //     config.height,
+    //     cgmath::Deg(45.0),
+    //     0.1,
+    //     100.0,
+    // );
+    // let camera_controller = tar_render::camera::CameraController::new(4.0, 0.4);
 
-    let camera = tar_render::camera::Camera {
-        cam: int_camera,
-        proj: projection,
-        controller: camera_controller,
-    };
+    // let camera = tar_render::camera::Camera {
+    //     cam: int_camera,
+    //     proj: projection,
+    //     controller: camera_controller,
+    // };
 
     // let test_id =
     //     game_renderer.add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"));
 
-    let cam = game_renderer.add_camera(camera);
-    game_renderer.select_camera(cam);
+    // let cam = game_renderer.add_camera(camera);
+    // game_renderer.select_camera(cam);
 
-    let mut objects = vec![];
+    let mut loaded_objects = vec![];
 
     loop {
         r_barrier.wait();
         let state = engine_state.lock().update_read();
-        let components = world.lock().component_collect::<(Transform, Rendering)>();
+        let objects_state = world.lock().component_collect::<(Transform, Rendering)>();
+        let cameras_state = world.lock().component_collect::<(Transform, Camera)>();
 
         // do rendering here
-        for obj in &objects {
+        for obj in &loaded_objects {
             game_renderer.check_done(*obj).unwrap();
         }
 
-        for (t, r) in &components {
+        for (t, r) in &objects_state {
             if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
                 //TODO!: implementation for multiple nodes
                 obj.nodes[0].translation = t.pos;
@@ -118,7 +119,7 @@ pub fn render_fn(
         }
 
         if state.add_object {
-            objects.push(
+            loaded_objects.push(
                 game_renderer.add_object(tar_render::GameObject::ImportedPath(
                     &state.add_object_string,
                 )),
@@ -129,26 +130,26 @@ pub fn render_fn(
             return;
         }
 
-        for event in state.events {
-            input(&mut game_renderer, &event, &cam);
-        }
+        // for event in state.events {
+        //     input(&mut game_renderer, &event, &cam);
+        // }
 
-        if game_renderer.mouse_pressed {
-            game_renderer
-                .cameras
-                .get_mut(&cam)
-                .unwrap()
-                .controller
-                .process_mouse(state.mouse_movement.0, state.mouse_movement.1);
-        }
-        game_renderer
-            .cameras
-            .get_mut(&cam)
-            .unwrap()
-            .controller
-            .sensitivity = state.cam_sensitivity;
+        // if game_renderer.mouse_pressed {
+        //     game_renderer
+        //         .cameras
+        //         .get_mut(&cam)
+        //         .unwrap()
+        //         .controller
+        //         .process_mouse(state.mouse_movement.0, state.mouse_movement.1);
+        // }
+        // game_renderer
+        //     .cameras
+        //     .get_mut(&cam)
+        //     .unwrap()
+        //     .controller
+        //     .sensitivity = state.cam_sensitivity;
 
-        update(&mut game_renderer, state.dt, &cam);
+        // update(&mut game_renderer, state.dt, &cam);
 
         let output_frame = match surface.get_current_texture() {
             Ok(frame) => Some(frame),
@@ -174,10 +175,9 @@ pub fn render_fn(
                 label: Some("encoder"),
             });
 
-            // My rendering
-            {
-                let rendered_objects = components.iter().map(|(_, c)| c.model_id).collect();
-                game_renderer.render(&mut encoder, &view, rendered_objects);
+            // Game rendering
+            if let Some(cam) = cameras_state.into_iter().find(|cam| cam.1.active) {
+                game_renderer.render(&mut encoder, &view, objects_state, cam, state.size);
             }
 
             // Egui rendering now

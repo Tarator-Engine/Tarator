@@ -1,4 +1,6 @@
-use crate::{material::PerFrameData, node::Node, CameraParams};
+use tar_types::camera::CameraParams;
+
+use crate::{material::PerFrameData, node::Node};
 
 pub struct Object {
     pub nodes: Vec<Node>,

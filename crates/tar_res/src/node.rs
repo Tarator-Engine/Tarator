@@ -1,6 +1,7 @@
 use cgmath::{Matrix4, Quaternion, Vector3};
+use tar_types::camera::CameraParams;
 
-use crate::{material::PerFrameData, mesh::Mesh, CameraParams, Result};
+use crate::{material::PerFrameData, mesh::Mesh, Result};
 
 pub struct Node {
     pub index: usize,

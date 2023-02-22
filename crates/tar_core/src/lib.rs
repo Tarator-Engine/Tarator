@@ -173,7 +173,7 @@ pub async fn run() {
         match event {
             Event::RedrawRequested(..) => {
                 let mut state = db.lock();
-                state.events = vec![];
+                // state.events = vec![];
                 state.mouse_movement.0 = 0.0;
                 state.mouse_movement.1 = 0.0;
 
@@ -196,11 +196,11 @@ pub async fn run() {
                                 window_id,
                             } if window_id == &window.id() => {
 
-                                let res = egui_state.on_event(&context, &event);
+                                let _res = egui_state.on_event(&context, &event);
 
-                                if state.mouse_in_view || !res.consumed {
-                                    state.events.push(event.clone().to_static().unwrap());
-                                }
+                                // if state.mouse_in_view || !res.consumed {
+                                //     state.events.push(event.clone().to_static().unwrap());
+                                // }
                                 match event {
                                     #[cfg(not(target_arch = "wasm32"))]
                                     WindowEvent::CloseRequested
