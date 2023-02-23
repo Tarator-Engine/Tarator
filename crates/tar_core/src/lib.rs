@@ -3,10 +3,12 @@ mod error_msg;
 mod render;
 // mod state;
 
-use std::sync::{Arc, Barrier};
+use std::{sync::{Arc, Barrier}, f32::consts::FRAC_2_PI};
 
+use cgmath::{InnerSpace};
 use parking_lot::{MutexGuard, Mutex};
-use tar_types::components::{Transform, Rendering, Camera};
+use tar_ecs::{prelude::Entity, world::World};
+use tar_types::{components::{Transform, Rendering, Camera}, prims::{Vec3}};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -15,6 +17,118 @@ use winit::{
 use crate::double_buffer::DoubleBuffer;
 
 pub use tar_types::EngineState;
+
+const SAFE_FRAC_PI_2: f32 = FRAC_2_PI - 0.0001;
+
+
+/// Takes a window event and a renderer and an event
+fn input(
+    event: &WindowEvent,
+    cam: &Entity,
+    world: &mut World
+) {
+    let (_, cam) = world.entity_get_mut::<(Transform, Camera)>(*cam);
+    let mut cam = cam.unwrap();
+    match event {
+        WindowEvent::KeyboardInput {
+            input:
+                KeyboardInput {
+                    virtual_keycode: Some(key),
+                    state,
+                    ..
+                },
+            ..
+        } => {
+            
+
+            let amount = if *state == ElementState::Pressed {
+                1.0
+            } else {
+                0.0
+            };
+            match key {
+                VirtualKeyCode::W | VirtualKeyCode::Up => {
+                    cam.amount_forward = amount;
+                    
+                }
+                VirtualKeyCode::S | VirtualKeyCode::Down => {
+                    cam.amount_backward = amount;
+                    
+                }
+                VirtualKeyCode::A | VirtualKeyCode::Left => {
+                    cam.amount_left = amount;
+                    
+                }
+                VirtualKeyCode::D | VirtualKeyCode::Right => {
+                    cam.amount_right = amount;
+                    
+                }
+                VirtualKeyCode::Space => {
+                    cam.amount_up = amount;
+                }
+                VirtualKeyCode::LShift => {
+                    cam.amount_down = amount;
+                }
+                _ => (),
+            }
+    
+        },
+        WindowEvent::MouseInput {
+            button: MouseButton::Left,
+            state,
+            ..
+        } => {
+            cam.mouse_pressed = *state == ElementState::Pressed;
+        }
+        _ => (),
+    }
+}
+
+fn update(
+    cam: &Entity,
+    world: &mut World,
+    dt: std::time::Duration,
+) {
+    let (t, cam) = world.entity_get_mut::<(Transform, Camera)>(*cam);
+    let mut t = t.unwrap();
+    let mut cam = cam.unwrap();
+    // UPDATE CAMERA
+    let dt = dt.as_secs_f32();
+
+    // Move forward/backward and left/right
+    let (yaw_sin, yaw_cos) = t.rot.y.0.sin_cos();
+    let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+    let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+    t.pos += forward * (cam.amount_forward - cam.amount_backward) * cam.speed * dt;
+    t.pos += right * (cam.amount_right - cam.amount_left) * cam.speed * dt;
+
+    // Move up/down. Since we don't use roll, we can just
+    // modify the y coordinate directly.
+    t.pos.y += (cam.amount_up - cam.amount_down) * cam.speed * dt;
+
+    // Rotate
+    t.rot.y += cgmath::Rad(cam.rotate_horizontal) * cam.sensitivity * dt;
+    t.rot.x += cgmath::Rad(-cam.rotate_vertical) * cam.sensitivity * dt;
+
+    // If process_mouse isn't called every frame, these values
+    // will not get set to zero, and the camera will rotate
+    // when moving in a non cardinal direction.
+    cam.rotate_horizontal = 0.0;
+    cam.rotate_vertical = 0.0;
+
+    // Keep the camera's angle from going too high/low.
+    if t.rot.x < -cgmath::Rad(SAFE_FRAC_PI_2) {
+        t.rot.x = -cgmath::Rad(SAFE_FRAC_PI_2);
+    } else if t.rot.x > cgmath::Rad(SAFE_FRAC_PI_2) {
+        t.rot.x = cgmath::Rad(SAFE_FRAC_PI_2);
+    }
+
+    // not necessary I think 
+    // TODO!: find out if this is needed
+    // UPDATE VIEW PROJECTION MATRIX
+    // cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+}
+
 
 async fn build_renderer_extras(
     window: &winit::window::Window,
@@ -212,6 +326,8 @@ pub async fn run() {
 
                                 let _res = egui_state.on_event(&context, &event);
 
+                                input(event, &cam, &mut world);
+
                                 // if state.mouse_in_view || !res.consumed {
                                 //     state.events.push(event.clone().to_static().unwrap());
                                 // }
@@ -255,6 +371,17 @@ pub async fn run() {
                     }
                 }
                 winit_events = vec![];
+
+                {
+                    let (_, cam) = world.entity_get_mut::<(Transform, Camera)>(cam);
+                    let mut cam = cam.unwrap();
+
+                    cam.rotate_horizontal = state.mouse_movement.0 as f32;
+                    cam.rotate_vertical = state.mouse_movement.1 as f32;
+            
+                }
+
+                update(&cam, &mut world, state.dt);
 
                 let input = egui_state.take_egui_input(&window);
                 context.begin_frame(input);

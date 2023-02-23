@@ -2,7 +2,10 @@ use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
 use parking_lot::Mutex;
-use tar_types::components::{Camera, Rendering, Transform};
+use tar_types::{
+    components::{Camera, Rendering, Transform},
+    prims::Quat,
+};
 
 use crate::{DoubleBuffer, EngineState};
 
@@ -113,7 +116,7 @@ pub fn render_fn(
             if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
                 //TODO!: implementation for multiple nodes
                 obj.nodes[0].translation = t.pos;
-                obj.nodes[0].rotation = t.rot;
+                obj.nodes[0].rotation = Quat::from(t.rot);
                 obj.nodes[0].scale = t.scale;
             }
         }

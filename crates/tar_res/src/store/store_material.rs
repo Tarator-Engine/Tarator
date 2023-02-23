@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use tar_types::prims::{Vec3, Vec4};
 
-use crate::{scene::ImportData, shader::ShaderFlags, Result, Vec3, Vec4};
+use crate::{scene::ImportData, shader::ShaderFlags, Result};
 
 use super::store_texture::{StoreTexture, TextureType};
 /// The alpha rendering mode of a material.
@@ -147,7 +148,7 @@ impl StoreMaterial {
         Ok(Self {
             index: g_material.index().unwrap_or(0),
             name: g_material.name().map(|s| s.into()),
-            base_color_factor: pbr.base_color_factor().into(),
+            base_color_factor: Vec4::from(pbr.base_color_factor()),
             base_color_texture,
             metallic_factor: pbr.metallic_factor(),
             roughness_factor: pbr.roughness_factor(),

@@ -24,45 +24,6 @@ use object::Object;
 use store::store_object::StoreObject;
 use uuid::Uuid;
 
-trait Vec2Slice<T> {
-    fn as_slice(self) -> [T; 2];
-}
-
-impl<T> Vec2Slice<T> for cgmath::Vector2<T> {
-    fn as_slice(self) -> [T; 2] {
-        [self.x, self.y]
-    }
-}
-
-trait Vec3Slice<T> {
-    fn as_slice(self) -> [T; 3];
-}
-
-impl<T> Vec3Slice<T> for cgmath::Vector3<T> {
-    fn as_slice(self) -> [T; 3] {
-        [self.x, self.y, self.z]
-    }
-}
-
-trait Vec4Slice<T> {
-    fn as_slice(self) -> [T; 4];
-}
-
-impl<T> Vec4Slice<T> for cgmath::Vector4<T> {
-    fn as_slice(self) -> [T; 4] {
-        [self.x, self.y, self.z, self.w]
-    }
-}
-
-pub type Vec1 = cgmath::Vector1<f32>;
-pub type Vec2 = cgmath::Vector2<f32>;
-pub type Vec3 = cgmath::Vector3<f32>;
-pub type Vec4 = cgmath::Vector4<f32>;
-pub type Quat = cgmath::Quaternion<f32>;
-pub type Mat2 = cgmath::Matrix2<f32>;
-pub type Mat3 = cgmath::Matrix3<f32>;
-pub type Mat4 = cgmath::Matrix4<f32>;
-
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("IO Error {e}")]
