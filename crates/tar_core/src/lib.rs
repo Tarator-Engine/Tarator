@@ -375,10 +375,18 @@ pub async fn run() {
                 {
                     let (_, cam) = world.entity_get_mut::<(Transform, Camera)>(cam);
                     let mut cam = cam.unwrap();
+                    if cam.mouse_pressed {
+                        cam.rotate_horizontal = state.mouse_movement.0 as f32;
+                        cam.rotate_vertical = state.mouse_movement.1 as f32;
+                    }
+                }
 
-                    cam.rotate_horizontal = state.mouse_movement.0 as f32;
-                    cam.rotate_vertical = state.mouse_movement.1 as f32;
-            
+                {
+                    if entities.len() > 0{
+                        let (t, _) = world.entity_get_mut::<(Transform, Rendering)>(entities[0]);
+                        let mut t = t.unwrap();
+                        t.pos.x = f32::sin(start_time.elapsed().as_secs_f32());
+                    }
                 }
 
                 update(&cam, &mut world, state.dt);

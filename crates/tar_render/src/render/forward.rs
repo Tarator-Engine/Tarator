@@ -23,9 +23,6 @@ pub struct ForwardRenderer {
     pub format: wgpu::TextureFormat,
     pub threadpool: threadpool::ThreadPool,
     pub receivers: HashMap<uuid::Uuid, crossbeam_channel::Receiver<tar_res::object::Object>>,
-
-    // DEVELOPMENT PURPOSES ONLY // TODO!: REMOVE //
-    pub mouse_pressed: bool,
 }
 
 impl ForwardRenderer {
@@ -43,7 +40,6 @@ impl ForwardRenderer {
             objects: HashMap::new(),
             active_camera: None,
             depth_texture,
-            mouse_pressed: false,
             format,
             threadpool: threadpool::ThreadPool::new(THREAD_NUM),
             receivers: HashMap::new(),
