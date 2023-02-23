@@ -5,8 +5,8 @@ mod render;
 
 use std::sync::{Arc, Barrier};
 
-use egui_file::FileDialog;
 use parking_lot::{MutexGuard, Mutex};
+use tar_types::components::{Transform, Rendering, Camera};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -138,7 +138,14 @@ pub async fn run() {
     let mut egui_state = egui_winit::State::new(&event_loop);
 
 
-    let world = Arc::new(Mutex::new(tar_ecs::world::World::new()));
+    let mut world = tar_ecs::world::World::new();
+
+    let cam = world.entity_create();
+
+    world.entity_set(cam, (Transform::default(), Camera::default()));
+
+    let world = Arc::new(Mutex::new(world));
+    
 
     let r_barrier = pre_render_finished.clone();
     let s_clone = surface.clone();
@@ -170,15 +177,19 @@ pub async fn run() {
     let mut since_start = 0;
     let mut frames = 0;
 
-    let mut file_dialogue = FileDialog::open_file(None);
+    let mut file_dialogue = None;
+    
+    let mut entities = vec![];
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::RedrawRequested(..) => {
                 let mut state = db.lock();
+                let mut world = world.lock();
                 // state.events = vec![];
                 state.mouse_movement.0 = 0.0;
                 state.mouse_movement.1 = 0.0;
+                state.add_object = None;
 
                 let now = instant::Instant::now();
                 state.dt = now - last_render_time;
@@ -260,6 +271,12 @@ pub async fn run() {
 
                 tar_gui::gui(&context, &mut state, &mut file_dialogue);
 
+                if let Some((id, _)) = &state.add_object {
+                    let e = world.entity_create();
+                    world.entity_set(e, (Transform::default(), Rendering {model_id: *id}));
+                    entities.push(e);
+                }
+
                 let output = context.end_frame();
 
                 state.paint_jobs = context.tessellate(output.shapes);
@@ -269,6 +286,7 @@ pub async fn run() {
                     *control_flow = ControlFlow::Exit;
                     return;
                 }
+                MutexGuard::unlock_fair(world);
                 MutexGuard::unlock_fair(state);
 
                 if *(&render_thread.is_finished()) {

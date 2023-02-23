@@ -22,9 +22,7 @@ pub struct EngineState {
     pub mouse_movement: (f64, f64),
     pub mouse_pos: egui::Pos2,
     pub mouse_in_view: bool,
-    pub add_object_string: String,
-    pub add_object: bool,
-    pub adding_object: bool,
+    pub add_object: Option<(uuid::Uuid, String)>,
     pub editing: bool,
 }
 
@@ -43,9 +41,7 @@ impl Default for EngineState {
             mouse_movement: (0.0, 0.0),
             mouse_pos: egui::Pos2::ZERO,
             mouse_in_view: false,
-            add_object: false,
-            add_object_string: String::new(),
-            adding_object: false,
+            add_object: None,
             editing: false,
         }
     }

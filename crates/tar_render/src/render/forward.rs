@@ -70,8 +70,7 @@ impl ForwardRenderer {
     //     self.active_camera = Some(cam);
     // }
 
-    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>) -> uuid::Uuid {
-        let id = uuid::Uuid::new_v4();
+    pub fn add_object<'a>(&'a mut self, obj: GameObject<'a>, id: uuid::Uuid) {
         let (tx, rx) = bounded(1);
         match obj {
             GameObject::ModelPath(p, name) => {
@@ -103,8 +102,6 @@ impl ForwardRenderer {
             }
         }
         self.receivers.insert(id, rx);
-
-        id
     }
 
     pub fn check_done(&mut self, id: uuid::Uuid) -> Result<bool, crossbeam_channel::RecvError> {

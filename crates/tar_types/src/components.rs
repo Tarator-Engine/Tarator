@@ -1,3 +1,4 @@
+use cgmath::Zero;
 use tar_ecs::prelude::Component;
 
 use crate::prims::{Quat, Rad, Vec3};
@@ -8,6 +9,16 @@ pub struct Transform {
     pub pos: Vec3,
     pub rot: Quat,
     pub scale: Vec3,
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            pos: Vec3::zero(),
+            rot: Quat::zero(),
+            scale: Vec3::new(1.0, 1.0, 1.0),
+        }
+    }
 }
 
 /// This Component indicates that an entity is rendered
@@ -29,4 +40,15 @@ pub struct Camera {
     pub znear: f32,
     pub zfar: f32,
     pub active: bool,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            fovy: cgmath::Rad(90.0),
+            znear: 0.001,
+            zfar: 1000.0,
+            active: true,
+        }
+    }
 }

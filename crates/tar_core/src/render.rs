@@ -118,12 +118,9 @@ pub fn render_fn(
             }
         }
 
-        if state.add_object {
-            loaded_objects.push(
-                game_renderer.add_object(tar_render::GameObject::ImportedPath(
-                    &state.add_object_string,
-                )),
-            );
+        if let Some((id, path)) = state.add_object {
+            game_renderer.add_object(tar_render::GameObject::ImportedPath(&path), id);
+            loaded_objects.push(id);
         }
 
         if state.halt {
