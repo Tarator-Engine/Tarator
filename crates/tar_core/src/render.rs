@@ -177,7 +177,10 @@ pub fn render_fn(
 
             // Game rendering
             if let Some(cam) = cameras_state.into_iter().find(|cam| cam.1.active) {
-                game_renderer.render(&mut encoder, &view, objects_state, cam, state.size);
+                match game_renderer.render(&mut encoder, &view, objects_state, cam, state.size) {
+                    Ok(()) => (),
+                    Err(e) => eprintln!("Rendering failed with error: {e:?}"),
+                }
             }
 
             // Egui rendering now

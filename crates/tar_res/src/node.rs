@@ -6,7 +6,7 @@ use tar_types::camera::CameraParams;
 use crate::{
     material::PerFrameData,
     mesh::{MeshId, StaticMesh},
-    Result,
+    Error, Result,
 };
 
 pub struct Node {
@@ -44,7 +44,7 @@ impl Node {
         data: &PerFrameData,
         queue: &wgpu::Queue,
         meshes: &HashMap<MeshId, StaticMesh>,
-    ) {
+    ) -> Result<()> {
         if let Some(mesh) = &mut self.mesh {
             let mut data = (*data).clone();
             let mvp_matrix =
@@ -52,25 +52,29 @@ impl Node {
             data.u_model_matrix = self.final_transform.into();
             data.u_mpv_matrix = mvp_matrix.into();
             data.u_camera = cam_params.position.into();
-            let mesh = meshes.get(mesh).unwrap();
+            let mesh = meshes.get(mesh).ok_or(Error::NonExistentID)?;
             mesh.update_per_frame(&data, queue);
         }
         for child in &mut self.children {
-            child.update_per_frame(cam_params, data, queue, meshes);
+            child.update_per_frame(cam_params, data, queue, meshes)?;
         }
+
+        Ok(())
     }
 
     pub fn draw<'a, 'b>(
         &'a self,
         render_pass: &'b mut wgpu::RenderPass<'a>,
         meshes: &'a HashMap<MeshId, StaticMesh>,
-    ) {
+    ) -> Result<()> {
         if let Some(mesh) = &self.mesh {
-            let mesh = meshes.get(mesh).unwrap();
+            let mesh = meshes.get(mesh).ok_or(Error::NonExistentID)?;
             mesh.draw(render_pass);
         }
         for child in &self.children {
-            child.draw(render_pass, meshes);
+            child.draw(render_pass, meshes)?;
         }
+
+        Ok(())
     }
 }

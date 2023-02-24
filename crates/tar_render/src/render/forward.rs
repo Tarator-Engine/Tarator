@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tar_res::{
-    material::PerFrameData, mesh::StaticMesh, object::Object, texture::Texture, WgpuInfo,
+    material::PerFrameData, mesh::StaticMesh, object::Object, texture::Texture, Result, WgpuInfo,
 };
 
 use crossbeam_channel::{bounded, Receiver};
@@ -107,7 +107,10 @@ impl ForwardRenderer {
         self.receivers.insert(id, rx);
     }
 
-    pub fn check_done(&mut self, id: uuid::Uuid) -> Result<bool, crossbeam_channel::RecvError> {
+    pub fn check_done(
+        &mut self,
+        id: uuid::Uuid,
+    ) -> std::result::Result<bool, crossbeam_channel::RecvError> {
         if let Some(recv) = self.receivers.get(&id) {
             if recv.is_full() {
                 let (object, meshes) = recv.recv()?;
@@ -151,7 +154,7 @@ impl ForwardRenderer {
         objects: Vec<(Transform, Rendering)>,
         camera: (Transform, Camera),
         size: PhysicalSize<u32>,
-    ) {
+    ) -> Result<()> {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -189,9 +192,11 @@ impl ForwardRenderer {
 
         for (id, obj) in &mut self.objects {
             if objects.iter().find(|o| o.1.model_id == *id).is_some() {
-                obj.update_per_frame(&cam_params, &data, &self.queue, &self.meshes);
-                obj.draw(&mut render_pass, &self.meshes);
+                obj.update_per_frame(&cam_params, &data, &self.queue, &self.meshes)?;
+                obj.draw(&mut render_pass, &self.meshes)?;
             }
         }
+
+        Ok(())
     }
 }
