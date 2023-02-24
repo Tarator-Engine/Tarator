@@ -1,12 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
-use tar_res::{material::PerFrameData, texture::Texture, WgpuInfo};
+use tar_res::{
+    material::PerFrameData, mesh::StaticMesh, object::Object, texture::Texture, WgpuInfo,
+};
 
-use crossbeam_channel::bounded;
+use crossbeam_channel::{bounded, Receiver};
 use tar_types::{
     camera::get_cam_params,
     components::{Camera, Rendering, Transform},
 };
+use uuid::Uuid;
 use winit::dpi::PhysicalSize;
 
 use crate::GameObject;
@@ -17,12 +20,13 @@ pub struct ForwardRenderer {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
     // pub cameras: HashMap<uuid::Uuid, crate::camera::RawCamera>,
-    pub objects: HashMap<uuid::Uuid, tar_res::object::Object>,
-    pub active_camera: Option<uuid::Uuid>,
+    pub objects: HashMap<Uuid, Object>,
+    pub active_camera: Option<Uuid>,
     pub depth_texture: tar_res::texture::Texture,
     pub format: wgpu::TextureFormat,
     pub threadpool: threadpool::ThreadPool,
-    pub receivers: HashMap<uuid::Uuid, crossbeam_channel::Receiver<tar_res::object::Object>>,
+    pub receivers: HashMap<Uuid, Receiver<(Object, HashMap<Uuid, StaticMesh>)>>,
+    pub meshes: HashMap<Uuid, StaticMesh>,
 }
 
 impl ForwardRenderer {
@@ -43,6 +47,7 @@ impl ForwardRenderer {
             format,
             threadpool: threadpool::ThreadPool::new(THREAD_NUM),
             receivers: HashMap::new(),
+            meshes: HashMap::new(),
         }
     }
 
@@ -78,9 +83,10 @@ impl ForwardRenderer {
                     surface_format: self.format,
                 });
                 self.threadpool.execute(move || {
+                    let mut meshes = HashMap::new();
                     let path = tar_res::import_gltf(&path, &name).unwrap();
-                    let object = tar_res::load_object(path, w_info).unwrap();
-                    tx.send(object).unwrap();
+                    let object = tar_res::load_object(path, w_info, &mut meshes).unwrap();
+                    tx.send((object, meshes)).unwrap();
                 });
             }
 
@@ -92,8 +98,9 @@ impl ForwardRenderer {
                 });
                 let path = p.into();
                 self.threadpool.execute(move || {
-                    let object = tar_res::load_object(path, w_info).unwrap();
-                    tx.send(object).unwrap();
+                    let mut meshes = HashMap::new();
+                    let object = tar_res::load_object(path, w_info, &mut meshes).unwrap();
+                    tx.send((object, meshes)).unwrap();
                 });
             }
         }
@@ -103,8 +110,11 @@ impl ForwardRenderer {
     pub fn check_done(&mut self, id: uuid::Uuid) -> Result<bool, crossbeam_channel::RecvError> {
         if let Some(recv) = self.receivers.get(&id) {
             if recv.is_full() {
-                let object = recv.recv()?;
+                let (object, meshes) = recv.recv()?;
                 self.objects.insert(id, object);
+                for (id, mesh) in meshes {
+                    self.meshes.insert(id, mesh);
+                }
                 self.receivers.remove(&id);
                 return Ok(true);
             }
@@ -179,8 +189,8 @@ impl ForwardRenderer {
 
         for (id, obj) in &mut self.objects {
             if objects.iter().find(|o| o.1.model_id == *id).is_some() {
-                obj.update_per_frame(&cam_params, &data, &self.queue);
-                obj.draw(&mut render_pass);
+                obj.update_per_frame(&cam_params, &data, &self.queue, &self.meshes);
+                obj.draw(&mut render_pass, &self.meshes);
             }
         }
     }

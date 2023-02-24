@@ -20,6 +20,7 @@ pub mod uniform;
 pub mod vertex;
 
 use cgmath::{Matrix4, Vector3};
+use mesh::StaticMesh;
 use object::Object;
 use store::store_object::StoreObject;
 use uuid::Uuid;
@@ -96,8 +97,12 @@ pub fn import_gltf(path: &str, name: &str) -> Result<String> {
     Ok(path)
 }
 
-pub fn load_object(path: String, w_info: Arc<WgpuInfo>) -> Result<Object> {
-    builder::build(path, w_info)
+pub fn load_object(
+    path: String,
+    w_info: Arc<WgpuInfo>,
+    meshes: &mut HashMap<uuid::Uuid, StaticMesh>,
+) -> Result<Object> {
+    builder::build(path, w_info, meshes)
 }
 
 pub struct WgpuInfo {

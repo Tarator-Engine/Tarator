@@ -23,3 +23,5 @@ impl StaticMesh {
         }
     }
 }
+
+pub type MeshId = uuid::Uuid;
