@@ -4,7 +4,7 @@ use egui_wgpu::renderer::ScreenDescriptor;
 use parking_lot::Mutex;
 use tar_types::{
     components::{Camera, Rendering, Transform},
-    prims::Quat,
+    prims::{Mat4, Quat},
 };
 
 use crate::{DoubleBuffer, EngineState};
@@ -115,15 +115,41 @@ pub fn render_fn(
         for (t, r) in &objects_state {
             if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
                 //TODO!: implementation for multiple nodes
-                obj.nodes[0].translation = t.pos;
-                obj.nodes[0].rotation = Quat::from(t.rot);
-                obj.nodes[0].scale = t.scale;
+                for node in &mut obj.nodes {
+                    node.translation = t.pos;
+                    node.rotation = Quat::from(t.rot);
+                    node.scale = t.scale;
+                    match node.update_transform(&Mat4::from_translation(t.pos)) {
+                        Ok(()) => (),
+                        Err(e) => eprintln!("failed to update model 0 with error {e:?}"),
+                    }
+                }
             }
         }
 
         if let Some((id, path)) = state.add_object {
-            game_renderer.add_object(tar_render::GameObject::ImportedPath(&path), id);
-            loaded_objects.push(id);
+            match path.split(".").last().unwrap() {
+                "rmp" => {
+                    game_renderer.add_object(tar_render::GameObject::ImportedPath(&path), id);
+                    loaded_objects.push(id);
+                }
+                "gltf" | "glb" => {
+                    game_renderer.add_object(
+                        tar_render::GameObject::ModelPath(
+                            &path,
+                            path.split(|x| x == '\\' || x == '/')
+                                .last()
+                                .unwrap()
+                                .split(".")
+                                .nth(0)
+                                .unwrap(),
+                        ),
+                        id,
+                    );
+                    loaded_objects.push(id);
+                }
+                _ => (),
+            }
         }
 
         if state.halt {
