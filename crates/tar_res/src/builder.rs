@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     material::{BindGroup, PbrMaterial, PerFrameData, PerFrameUniforms, PerMaterialUniforms},
-    mesh::Mesh,
+    mesh::StaticMesh,
     node::Node,
     object::Object,
     primitive::{Instance, Primitive},
@@ -76,7 +76,7 @@ fn build_mesh(
     mesh: &Option<usize>,
     object: Arc<StoreObject>,
     w_info: Arc<WgpuInfo>,
-) -> Result<Option<Mesh>> {
+) -> Result<Option<StaticMesh>> {
     if let Some(id) = mesh {
         let timer = tar_utils::start_timer_msg("started building timer");
         let mesh = object
@@ -94,7 +94,7 @@ fn build_mesh(
 
         tar_utils::log_timing("loaded mesh in ", timer);
 
-        Ok(Some(Mesh {
+        Ok(Some(StaticMesh {
             index: mesh.index,
             name: mesh.name.clone(),
             primitives,

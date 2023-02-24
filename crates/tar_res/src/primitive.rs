@@ -31,7 +31,7 @@ pub struct Primitive {
 }
 
 impl Primitive {
-    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
+    pub fn update_per_frame(&self, data: &PerFrameData, queue: &wgpu::Queue) {
         self.material.update_per_frame(data, queue)
     }
 

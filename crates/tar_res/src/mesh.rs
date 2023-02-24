@@ -2,7 +2,7 @@ use wgpu::RenderPass;
 
 use crate::{material::PerFrameData, primitive::Primitive};
 
-pub struct Mesh {
+pub struct StaticMesh {
     pub index: usize,
     pub primitives: Vec<Primitive>,
     // TODO: weights
@@ -10,9 +10,9 @@ pub struct Mesh {
     pub name: String,
 }
 
-impl Mesh {
-    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
-        for prim in &mut self.primitives {
+impl StaticMesh {
+    pub fn update_per_frame(&self, data: &PerFrameData, queue: &wgpu::Queue) {
+        for prim in &self.primitives {
             prim.update_per_frame(data, queue)
         }
     }

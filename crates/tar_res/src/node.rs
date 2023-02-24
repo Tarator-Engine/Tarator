@@ -1,12 +1,12 @@
 use cgmath::{Matrix4, Quaternion, Vector3};
 use tar_types::camera::CameraParams;
 
-use crate::{material::PerFrameData, mesh::Mesh, Result};
+use crate::{material::PerFrameData, mesh::StaticMesh, Result};
 
 pub struct Node {
     pub index: usize,
     pub children: Vec<Node>,
-    pub mesh: Option<Mesh>,
+    pub mesh: Option<StaticMesh>,
     pub rotation: Quaternion<f32>,
     pub scale: Vector3<f32>,
     // TODO: weights
