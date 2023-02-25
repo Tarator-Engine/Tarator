@@ -1,24 +1,35 @@
-use crate::{material::PerFrameData, node::Node, CameraParams};
+use std::collections::HashMap;
+
+use tar_types::camera::CameraParams;
+
+use crate::{material::PerFrameData, mesh::StaticMesh, node::Node, Result};
 
 pub struct Object {
     pub nodes: Vec<Node>,
 }
 
-impl Object {
+impl<'a> Object {
     pub fn update_per_frame(
         &mut self,
         cam_params: &CameraParams,
         data: &PerFrameData,
         queue: &wgpu::Queue,
-    ) {
+        meshes: &HashMap<uuid::Uuid, StaticMesh>,
+    ) -> Result<()> {
         for node in &mut self.nodes {
-            node.update_per_frame(cam_params, data, queue);
+            node.update_per_frame(cam_params, data, queue, meshes)?;
         }
+        Ok(())
     }
 
-    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+    pub fn draw<'b: 'a>(
+        &'b self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+        meshes: &'a HashMap<uuid::Uuid, StaticMesh>,
+    ) -> Result<()> {
         for node in &self.nodes {
-            node.draw(render_pass);
+            node.draw(render_pass, meshes)?;
         }
+        Ok(())
     }
 }

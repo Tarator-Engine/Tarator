@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
@@ -7,7 +7,7 @@ use crate::WgpuInfo;
 
 pub struct Uniform<T: NoUninit> {
     pub buff: wgpu::Buffer,
-    data: T,
+    pub data: PhantomData<T>,
 }
 
 impl<T: NoUninit> Uniform<T> {
@@ -20,18 +20,20 @@ impl<T: NoUninit> Uniform<T> {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
-        let mut uni = Self { buff, data };
+        let uni = Self {
+            buff,
+            data: PhantomData,
+        };
 
-        uni.write_buffer(&w_info.queue);
+        uni.write_buffer(&w_info.queue, data);
         uni
     }
 
-    pub fn update(&mut self, data: T, queue: &wgpu::Queue) {
-        self.data = data;
-        self.write_buffer(queue);
+    pub fn update(&self, data: T, queue: &wgpu::Queue) {
+        self.write_buffer(queue, data);
     }
 
-    fn write_buffer(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(&self.buff, 0, bytemuck::cast_slice(&[self.data]));
+    fn write_buffer(&self, queue: &wgpu::Queue, data: T) {
+        queue.write_buffer(&self.buff, 0, bytemuck::cast_slice(&[data]));
     }
 }

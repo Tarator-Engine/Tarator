@@ -2,8 +2,9 @@ use std::path::Path;
 
 use cgmath::SquareMatrix;
 use serde::{Deserialize, Serialize};
+use tar_types::prims::{Mat4, Quat, Vec3};
 
-use crate::{scene::ImportData, Mat4, Quat, Result, Vec3};
+use crate::{scene::ImportData, Result};
 
 use super::{store_material::StoreMaterial, store_mesh::StoreMesh, store_texture::StoreTexture};
 

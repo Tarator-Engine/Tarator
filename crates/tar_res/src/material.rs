@@ -37,7 +37,7 @@ pub struct PbrMaterial {
 }
 
 impl PbrMaterial {
-    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
+    pub fn update_per_frame(&self, data: &PerFrameData, queue: &wgpu::Queue) {
         self.per_frame_uniforms.update(data, queue);
     }
 
@@ -86,7 +86,7 @@ pub trait BindGroup {
     fn new(data: Self::Data, layout: &wgpu::BindGroupLayout, w_info: Arc<WgpuInfo>) -> Self;
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static>;
     fn names() -> Vec<(String, String)>;
-    fn update(&mut self, dat: &Self::Data, queue: &wgpu::Queue);
+    fn update(&self, dat: &Self::Data, queue: &wgpu::Queue);
 }
 
 pub struct PerMaterialUniforms {
@@ -470,7 +470,7 @@ impl BindGroup for PerFrameUniforms {
         ]
     }
 
-    fn update(&mut self, data: &Self::Data, queue: &wgpu::Queue) {
+    fn update(&self, data: &Self::Data, queue: &wgpu::Queue) {
         self.u_mpv_matrix.update(data.u_mpv_matrix, queue);
         self.u_model_matrix.update(data.u_model_matrix, queue);
         self.u_camera.update(data.u_camera, queue);

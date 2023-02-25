@@ -1,10 +1,10 @@
-use std::{mem::size_of, num::NonZeroU32, sync::Arc};
+use std::{collections::HashMap, mem::size_of, num::NonZeroU32, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
 use crate::{
     material::{BindGroup, PbrMaterial, PerFrameData, PerFrameUniforms, PerMaterialUniforms},
-    mesh::Mesh,
+    mesh::{MeshId, StaticMesh},
     node::Node,
     object::Object,
     primitive::{Instance, Primitive},
@@ -15,14 +15,18 @@ use crate::{
     Error, Result, WgpuInfo,
 };
 
-pub fn build_loaded(obj: StoreObject, w_info: Arc<WgpuInfo>) -> Result<Object> {
+pub fn build_loaded(
+    obj: StoreObject,
+    w_info: Arc<WgpuInfo>,
+    meshes: &mut HashMap<MeshId, StaticMesh>,
+) -> Result<Object> {
     let timer = tar_utils::start_timer_msg("started building loaded object");
     let obj = Arc::new(obj);
 
     let mut nodes = vec![];
     for node in &obj.nodes {
         if node.root_node {
-            nodes.push(build_node(node, obj.clone(), w_info.clone())?)
+            nodes.push(build_node(node, obj.clone(), w_info.clone(), meshes)?)
         }
     }
 
@@ -31,15 +35,24 @@ pub fn build_loaded(obj: StoreObject, w_info: Arc<WgpuInfo>) -> Result<Object> {
     Ok(Object { nodes })
 }
 
-pub fn build(source: String, w_info: Arc<WgpuInfo>) -> Result<Object> {
+pub fn build(
+    source: String,
+    w_info: Arc<WgpuInfo>,
+    meshes: &mut HashMap<MeshId, StaticMesh>,
+) -> Result<Object> {
     let timer = tar_utils::start_timer_msg("started building object");
     let object: StoreObject = rmp_serde::from_slice(&std::fs::read(source)?)?;
     tar_utils::log_timing("loaded from disk in ", timer);
 
-    build_loaded(object, w_info)
+    build_loaded(object, w_info, meshes)
 }
 
-fn build_node(node: &StoreNode, object: Arc<StoreObject>, w_info: Arc<WgpuInfo>) -> Result<Node> {
+fn build_node(
+    node: &StoreNode,
+    object: Arc<StoreObject>,
+    w_info: Arc<WgpuInfo>,
+    meshes: &mut HashMap<MeshId, StaticMesh>,
+) -> Result<Node> {
     let timer = tar_utils::start_timer_msg("started building node");
     let mut children = vec![];
     let child_ids = &node.children;
@@ -53,10 +66,17 @@ fn build_node(node: &StoreNode, object: Arc<StoreObject>, w_info: Arc<WgpuInfo>)
                 .ok_or(Error::NonexistentNode)?,
             object.clone(),
             w_info.clone(),
+            meshes,
         )?);
     }
 
-    let mesh = build_mesh(&node.mesh, object, w_info)?;
+    let initial_mesh = build_mesh(&node.mesh, object, w_info)?;
+    let mut mesh = None;
+    if let Some(m) = initial_mesh {
+        let id = uuid::Uuid::new_v4();
+        mesh = Some(id);
+        meshes.insert(id, m);
+    }
 
     tar_utils::log_timing("loaded node in ", timer);
 
@@ -76,7 +96,7 @@ fn build_mesh(
     mesh: &Option<usize>,
     object: Arc<StoreObject>,
     w_info: Arc<WgpuInfo>,
-) -> Result<Option<Mesh>> {
+) -> Result<Option<StaticMesh>> {
     if let Some(id) = mesh {
         let timer = tar_utils::start_timer_msg("started building timer");
         let mesh = object
@@ -94,7 +114,7 @@ fn build_mesh(
 
         tar_utils::log_timing("loaded mesh in ", timer);
 
-        Ok(Some(Mesh {
+        Ok(Some(StaticMesh {
             index: mesh.index,
             name: mesh.name.clone(),
             primitives,
