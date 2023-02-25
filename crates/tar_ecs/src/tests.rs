@@ -141,7 +141,8 @@ fn component_query() {
         assert!(uuid.id == n, "{} : {}", uuid.id, n);
         n += 1;
     }
-    assert!(n == 10);
+
+    assert!(n == 10, "Expected 10 iterations of UUID, made {}", n);
 
     for position in world.component_query::<Position>() {
         assert!(position.x == 16.0);

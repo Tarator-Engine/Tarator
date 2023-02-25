@@ -1,3 +1,4 @@
+use parking_lot::MutexGuard;
 use crate::{
     bundle::Bundle,
     component::{ ComponentId, Components },
@@ -52,7 +53,7 @@ impl Table {
     #[inline]
     pub fn init<T: Bundle>(
         &mut self,
-        components: &Components, 
+        components: &Vec<ComponentId>, 
         entity: Entity,
         data: T
     ) {
@@ -63,7 +64,7 @@ impl Table {
         // SAFETY:
         // We initialize `component` in our store via [`RawStore::push()`]
         unsafe {
-            data.get_components(components, &mut |component_id, component| {
+            data.get_components::<0>(components, &mut |component_id, component| {
                 let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
 
                 // If the [`Component`] already has been initialized, drop/replace the last index
@@ -80,14 +81,16 @@ impl Table {
     #[inline]
     pub fn set<T: Bundle>(
         &mut self,
-        components: &Components,
+        components: &Vec<ComponentId>,
         index: usize, 
         data: T
     ) {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+
         // SAFETY:
         // We initialize `component` in our store via [`RawStore::push`]
         unsafe {
-            data.get_components(components, &mut |component_id, component| {
+            data.get_components::<0>(components, &mut |component_id, component| {
                 let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
                 store.replace_unchecked(index, component);
             });
@@ -101,7 +104,8 @@ impl Table {
     /// - Unset components in the parent have to be set immediately after this call
     /// - `index` has to be valid
     #[must_use = "The returned variant may contain a relocated Entity!"]
-    pub unsafe fn move_into_parent(&mut self, parent: &mut Self, index: usize) -> Option<Entity> {
+    pub unsafe fn move_into_parent(&mut self, parent: &mut MutexGuard<Self>, index: usize) -> Option<Entity> {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
 
         let is_last = index == self.len() - 1;
 
@@ -133,7 +137,9 @@ impl Table {
     // SAFETY:
     // - Drops the components which are not in the child
     /// - `index` has to be valid
-    pub unsafe fn move_into_child(&mut self, child: &mut Self, index: usize) -> Option<Entity> {
+    pub unsafe fn move_into_child(&mut self, child: &mut MutexGuard<Self>, index: usize) -> Option<Entity> {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+
         let is_last = index == self.len() - 1;
 
         let swapped_entity = if is_last {
@@ -167,6 +173,8 @@ impl Table {
     // - Drops all components at `index`
     // - `index` has to be valid
     pub unsafe fn drop_entity(&mut self, index: usize) -> Option<Entity> {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+
         let is_last = index == self.len() - 1;
 
         let swapped_entity = if is_last {
@@ -195,10 +203,10 @@ impl Table {
     #[inline]
     pub unsafe fn get<'a, T: Bundle>(
         &self,
-        components: &Components,
+        components: &Vec<ComponentId>,
         index: usize
     ) -> T::WrappedRef<'a> {
-        T::from_components(components, &mut |id| {
+        T::from_components::<0>(components, &mut |id| {
             let raw_store = self.components.get(id)?;
             Some(raw_store.get_unchecked(index))
         })
@@ -210,10 +218,10 @@ impl Table {
     #[inline]
     pub unsafe fn get_unchecked<'a, T: Bundle>(
         &self,
-        components: &Components,
+        components: &Vec<ComponentId>,
         index: usize
     ) -> T::Ref<'a> {
-        T::from_components_unchecked(components, &mut |id| {
+        T::from_components_unchecked::<0>(components, &mut |id| {
             let raw_store = self.components.get(id).unwrap();
             raw_store.get_unchecked(index)
         })
@@ -224,10 +232,10 @@ impl Table {
     #[inline]
     pub unsafe fn get_mut<'a, T: Bundle>(
         &mut self,
-        components: &Components,
+        components: &Vec<ComponentId>,
         index: usize
     ) -> T::WrappedMutRef<'a> {
-        T::from_components_mut(components, &mut |id| {
+        T::from_components_mut::<0>(components, &mut |id| {
             let raw_store = self.components.get_mut(id)?;
             Some(raw_store.get_unchecked_mut(index))
         })
@@ -237,8 +245,12 @@ impl Table {
     /// - `index` has to be valid and in bounds
     /// - Returned mutable references may be invalid
     #[inline]
-    pub unsafe fn get_unchecked_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::MutRef<'a> {
-        T::from_components_unchecked_mut(components, &mut |id| {
+    pub unsafe fn get_unchecked_mut<'a, T: Bundle>(
+        &mut self,
+        components: &Vec<ComponentId>,
+        index: usize
+    ) -> T::MutRef<'a> {
+        T::from_components_unchecked_mut::<0>(components, &mut |id| {
             let raw_store = self.components.get_mut(id).unwrap();
             raw_store.get_unchecked_mut(index)
         })
@@ -252,8 +264,8 @@ impl Table {
     }
 
     #[inline]
-    pub fn entities(&self) -> impl Iterator<Item = &Entity> {
-        self.entities.iter()
+    pub fn entities(&self) -> Vec<Entity> {
+        self.entities.clone()
     }
 
     #[inline]
@@ -267,7 +279,7 @@ impl Table {
     }
 
     #[inline]
-    pub fn no_components(&self) -> bool {
+    pub fn is_empty_table(&self) -> bool {
         self.components.len() == 0
     }
 

@@ -1,13 +1,15 @@
 use std::{
     alloc::Layout,
     any::{ Any, TypeId, type_name },
+    sync::Arc,
     mem::needs_drop,
     collections::HashMap, 
     marker::PhantomData
 };
+use parking_lot::{Mutex, MutexGuard};
 
 use crate::{
-    store::sparse::SparseSetIndex,
+    store::{sparse::SparseSetIndex, table::Table},
     bundle::Bundle,
     archetype::{ Archetypes, ArchetypeId }
 };
@@ -226,27 +228,36 @@ impl Components {
 /// An [`Iterator`] for a given [`Bundle`], which iterates over all
 /// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
 /// [`Bundle`].
+#[derive(Debug)]
 pub struct ComponentQuery<'a, T: Bundle> {
-    archetypes: &'a Archetypes,
-    archetype_ids: Vec<ArchetypeId>,
-    components: &'a Components,
-    current: usize,
+    ids: Vec<ComponentId>,
+    tables: Vec<Arc<Mutex<Table>>>,
     index: usize,
+    table: usize,
     marker: PhantomData<&'a T>
 }
 
 impl<'a, T: Bundle> ComponentQuery<'a, T> {
     pub fn new(
         archetype_ids: Vec<ArchetypeId>,
-        archetypes: &'a Archetypes,
-        components: &'a Components
+        archetypes: &'a mut Archetypes,
+        components: &'a Components,
     ) -> Self {
+        let mut tables = Vec::with_capacity(archetype_ids.len());
+
+        for id in archetype_ids {
+            if let Some(archetype) = archetypes.get(id) {
+                tables.push(archetype.table())
+            } else {
+                debug_assert!(false, "Invalid Id was passed!");
+            }
+        }
+
         Self {
-            archetypes,
-            archetype_ids,
-            components,
-            current: 0,
+            ids: T::get_component_ids(components),
+            tables,
             index: 0,
+            table: 0,
             marker: PhantomData
         }
     }
@@ -256,23 +267,20 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
     type Item = T::Ref<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(archetype_ids) = self.archetype_ids.get(self.current) {
-            let archetype = self.archetypes.get(*archetype_ids)?;
-            
-            // TODO Make [`Store`] automatically bound check or something
-            if self.index == archetype.len() {
-                self.current += 1; 
-                self.index = 0;
+        if let Some(table) = self.tables.get(self.table) {
+            {
+                let index = self.index;
+                let table = table.lock();
 
-                return self.next();
+                if table.len() > index {
+                    self.index += 1;
+                    return unsafe { Some(table.get_unchecked::<T>(&self.ids, index)) };
+                }
             }
 
-            let index = self.index;
-            self.index += 1;
-            
-            // SAFETY:
-            // Archetype is parent of `T: Bundle` archetype, value is safe to use
-            return Some(unsafe { archetype.get_unchecked::<T>(self.components, index) });
+            self.table += 1;
+            self.index = 0;
+            return self.next();
         }
         
         None
@@ -282,12 +290,12 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
 /// An [`Iterator`] for a given [`Bundle`], which iterates mutably over all
 /// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
 /// [`Bundle`].
+#[derive(Debug)]
 pub struct ComponentQueryMut<'a, T: Bundle> {
-    archetypes: &'a mut Archetypes,
-    archetype_ids: Vec<ArchetypeId>,
-    components: &'a Components,
-    current: usize,
+    ids: Vec<ComponentId>,
+    tables: Vec<Arc<Mutex<Table>>>,
     index: usize,
+    table: usize,
     marker: PhantomData<&'a mut T>
 }
 
@@ -295,14 +303,23 @@ impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
     pub fn new(
         archetype_ids: Vec<ArchetypeId>,
         archetypes: &'a mut Archetypes,
-        components: &'a Components
+        components: &'a Components,
     ) -> Self {
+        let mut tables = Vec::with_capacity(archetype_ids.len());
+
+        for id in archetype_ids {
+            if let Some(archetype) = archetypes.get(id) {
+                tables.push(archetype.table())
+            } else {
+                debug_assert!(false, "Invalid Id was passed!");
+            }
+        }
+
         Self {
-            archetypes,
-            archetype_ids,
-            components,
-            current: 0,
+            ids: T::get_component_ids(components),
+            tables,
             index: 0,
+            table: 0,
             marker: PhantomData
         }
     }
@@ -312,26 +329,23 @@ impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
     type Item = T::MutRef<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(archetype_ids) = self.archetype_ids.get(self.current) {
-            let archetype = self.archetypes.get_mut(*archetype_ids)?;
-            
-            // TODO Make [`Store`] automatically bound check or something
-            if self.index == archetype.len() {
-                self.current += 1; 
-                self.index = 0;
+        if let Some(table) = self.tables.get_mut(self.table) {
+            {
+                let index = self.index;
+                let mut table = table.lock();
 
-                return self.next();
+                if table.len() > index {
+                    self.index += 1;
+                    return unsafe { Some(table.get_unchecked_mut::<T>(&self.ids, index)) };
+                }
             }
 
-            let index = self.index;
-            self.index += 1;
-            
-            // SAFETY:
-            // Archetype is parent of `T: Bundle` archetype, value is safe to use
-            return Some(unsafe { archetype.get_unchecked_mut::<T>(self.components, index) });
+            self.table += 1;
+            self.index = 0;
+            self.next()
+        } else {
+            None
         }
-        
-        None
     } 
 }
 

@@ -1,7 +1,3 @@
-//! Big portions of this code have been looked from
-//! <https://github.com/bevyengine/bevy/blob/main/crates/bevy_ecs/macros/src/lib.rs>
-
-
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
@@ -56,11 +52,11 @@ pub fn foreach_tuple(input: TokenStream) -> TokenStream {
             .map(|ident| format_ident!("{}{}", ident, i));
         if input.idents.len() < 2 {
             ident_tuples.push(quote! {
-                #(#idents)*
+                #((#idents, #i))*
             });
         } else {
             ident_tuples.push(quote! {
-                (#(#idents),*)
+                (#((#idents, #i)),*)
             });
         }
     }

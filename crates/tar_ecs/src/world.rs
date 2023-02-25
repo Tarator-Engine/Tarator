@@ -266,9 +266,10 @@ impl World {
         // - We know that we carry the empty archetype with us
         unsafe {
             let archetype = archetypes.get_unchecked_mut(ArchetypeId::EMPTY.index());
-            entity_meta.index = archetype.len();
+            let mut table = archetype.table_lock();
+            entity_meta.index = table.len();
             entity_meta.archetype_id = archetype.id();
-            archetype.set_empty(entity);
+            table.set_empty(entity);
         }
 
         entity
@@ -292,7 +293,7 @@ impl World {
             .get_mut(entity_meta.archetype_id)
             .expect(format!("{:#?} is invalid!", entity_meta.archetype_id).as_str());
 
-        let replaced_entity = unsafe { archetype.drop_entity(entity_meta.index) };
+        let replaced_entity = unsafe { archetype.table_lock().drop_entity(entity_meta.index) };
 
         if let Some(replaced_entity) = replaced_entity {
             // Set the index of the moved entity
@@ -345,7 +346,10 @@ impl World {
                 // SAFETY:
                 // `self.entities` guarantees that the archetype does exist
                 let archetype = unsafe { archetypes.get_unchecked_mut(archetype_id.index()) };
-                archetype.set(components, entity_meta.index, data);
+
+                let ids = T::get_component_ids(components);
+                archetype.table_lock().set(&ids, entity_meta.index, data);
+
                 return;
             }
 
@@ -353,17 +357,18 @@ impl World {
         };
 
         // If [`Archetype`] of `entity` does change
-        let (old_archetype, new_archetype) =
-            archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
-        let (old_index, new_index) = (entity_meta.index, new_archetype.len());
+        let (old_archetype, new_archetype) = archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
+        let (mut old_table, mut new_table) = (old_archetype.table_lock(), new_archetype.table_lock());
+        let (old_index, new_index) = (entity_meta.index, new_table.len());
 
         entity_meta.index = new_index;
         entity_meta.archetype_id = new_archetype.id();
 
         // SAFETY:
         // We initialize the remaining components right after
-        let replaced_entity = unsafe { old_archetype.move_into_parent(new_archetype, old_index) };
-        new_archetype.init(components, entity, data);
+        let replaced_entity = unsafe { old_table.move_into_parent(&mut new_table, old_index) };
+        let ids = T::get_component_ids(components);
+        new_table.init(&ids, entity, data);
 
         if let Some(replaced_entity) = replaced_entity {
             // Set the index of the moved entity
@@ -408,14 +413,14 @@ impl World {
         }
 
         // If [`Archetype`] of `entity` does change
-        let (old_archetype, new_archetype) =
-            archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
-        let (old_index, new_index) = (entity_meta.index, new_archetype.len());
+        let (old_archetype, new_archetype) = archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
+        let (mut old_table, mut new_table) = (old_archetype.table_lock(), new_archetype.table_lock());
+        let (old_index, new_index) = (entity_meta.index, new_table.len());
 
         entity_meta.index = new_index;
         entity_meta.archetype_id = new_archetype.id();
 
-        let replaced_entity = unsafe { old_archetype.move_into_child(new_archetype, old_index) };
+        let replaced_entity = unsafe { old_table.move_into_child(&mut new_table, old_index) };
 
         if let Some(replaced_entity) = replaced_entity {
             // Set the index of the moved entity
@@ -441,7 +446,14 @@ impl World {
             return T::empty_ref();
         };
 
-        archetype.get::<T>(components, meta.index)
+        let ids = T::get_component_ids(components);
+
+        let table = archetype.table_lock();
+        if table.len() < meta.index {
+            return T::empty_ref();
+        }
+
+        unsafe { table.get::<T>(&ids, meta.index) }
     }
 
     #[inline]
@@ -458,7 +470,14 @@ impl World {
             return T::empty_mut_ref();
         };
 
-        archetype.get_mut::<T>(components, meta.index)
+        let ids = T::get_component_ids(components);
+        
+        let mut table = archetype.table_lock();
+        if table.len() < meta.index {
+            return T::empty_mut_ref();
+        }
+
+        unsafe { table.get_mut::<T>(&ids, meta.index) }
     }
 
     #[inline]
@@ -477,13 +496,13 @@ impl World {
         // SAFETY:
         // [`Archetype`] was just created
         let archetype = unsafe { archetypes.get_unchecked(archetype_id.index()) };
-        let mut entities: Vec<_> = archetype.entities().map(|entity| *entity).collect();
+        let mut entities = archetype.table_lock().entities();
 
         for parent_id in archetype.parents() {
             // SAFETY:
             // Parent definitely exists
             let parent = unsafe { archetypes.get_unchecked(parent_id.index()) };
-            entities.append(&mut parent.entities().map(|entity| *entity).collect());
+            entities.append(&mut parent.table_lock().entities());
         }
 
         entities
@@ -572,7 +591,7 @@ impl World {
         let archetype = archetypes.get_unchecked(archetype_id.index());
 
         let mut bundle_components = bundle_info.components().clone();
-        bundle_components.insert(archetype.component_ids().collect());
+        bundle_components.insert(archetype.table_lock().component_ids().collect());
 
         archetypes.get_id_from_components_or_create_with_capacity(
             components,
@@ -599,7 +618,7 @@ impl World {
         let archetype = archetypes.get_unchecked(archetype_id.index());
 
         let mut bundle_components = bundle_info.components().clone();
-        bundle_components.remove(archetype.component_ids().collect());
+        bundle_components.remove(archetype.table_lock().component_ids().collect());
 
         archetypes.get_id_from_components_or_create_with_capacity(
             components,

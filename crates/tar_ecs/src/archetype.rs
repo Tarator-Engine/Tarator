@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::{
+    sync::Arc,
+    collections::HashMap
+};
+use parking_lot::{ Mutex, MutexGuard };
 
 use crate::{
     component::{ ComponentId, Components },
-    store::{
-        sparse::{ SparseSetIndex, SparseSet, MutSparseSet },
-        raw_store::RawStore, table::Table
-    },
-    entity::Entity,
-    bundle::{ BundleInfo, Bundle, BundleComponents }
+    store::{ sparse::SparseSetIndex, table::Table },
+    bundle::{ BundleInfo, BundleComponents }
 };
 
 
@@ -54,7 +54,7 @@ impl SparseSetIndex for ArchetypeId {
 pub struct Archetype {
     id: ArchetypeId,
     parents: Vec<ArchetypeId>,
-    table: Table
+    table: Arc<Mutex<Table>>
 }
 
 impl Archetype {
@@ -66,7 +66,7 @@ impl Archetype {
         Self {
             id,
             parents: Vec::new(),
-            table: Table::empty()
+            table: Arc::new(Mutex::new(Table::empty()))
         }
     }
 
@@ -83,103 +83,18 @@ impl Archetype {
         Self {
             id,
             parents: Vec::new(),
-            table: Table::with_capacity(component_ids, components, capacity)
+            table: Arc::new(Mutex::new(Table::with_capacity(component_ids, components, capacity)))
         }
     }
 
-    /// Pushes given `data` for `entity` into its [`RawStore`]. This means the related
-    /// [`EntityMeta`](crate::entity::EntityMeta) index can just be set using [`Archetype::len()`].
-    ///
-    /// SAFETY:
-    /// - `data` must contain all components of this [`Archetype`]
     #[inline]
-    pub fn init<T: Bundle>(
-        &mut self,
-        components: &Components,
-        entity: Entity,
-        data: T
-    ) {
-        self.table.init(components, entity, data)
-    }
-
-    /// Initializes  given `data` for `entity` in its [`RawStore`].
-    ///
-    /// SAFETY:
-    /// - `data` must contain all components of this [`Archetype`]
-    #[inline]
-    pub fn set<T: Bundle>(
-        &mut self,
-        components: &Components,
-        index: usize, 
-        data: T
-    ) {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-        self.table.set(components, index, data)
-    }
-
-    /// SAFETY:
-    /// - Function should only be used for the empty ArchetypeId
-    /// - Will mess with [`World`] if above is not regarded
-    #[inline]
-    pub unsafe fn set_empty(&mut self, entity: Entity) {
-        self.table.set_empty(entity)
+    pub fn table(&self) -> Arc<Mutex<Table>> {
+        self.table.clone()
     }
 
     #[inline]
-    pub fn get<'a, T: Bundle>(
-        &self,
-        components: &Components,
-        index: usize
-    ) -> T::WrappedRef<'a> {
-        if index >= self.len() {
-            debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
-            return T::empty_ref();
-        }
-
-        // SAFETY:
-        // Already bounds checked
-        unsafe { self.table.get::<T>(components, index) }
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    /// - Returned references may be invalid
-    #[inline]
-    pub unsafe fn get_unchecked<'a, T: Bundle>(
-        &self,
-        components: &Components,
-        index: usize
-    ) -> T::Ref<'a> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        self.table.get_unchecked::<T>(components, index)
-    }
-
-    #[inline]
-    pub fn get_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::WrappedMutRef<'a> {
-        if index >= self.len() {
-            debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
-            return T::empty_mut_ref();
-        }
-
-        // SAFETY:
-        // Already bounds checked
-        unsafe { self.table.get_mut::<T>(components, index) }
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    /// - Returned mutable references may be invalid
-    #[inline]
-    pub unsafe fn get_unchecked_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::MutRef<'a> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        self.table.get_unchecked_mut::<T>(components, index)
-    }
-
-    #[inline]
-    pub fn get_entity(&self, index: usize) -> Option<Entity> {
-        self.table.get_entity(index)
+    pub fn table_lock(&self) -> MutexGuard<Table> {
+        self.table.lock()
     }
 
     #[inline]
@@ -187,45 +102,28 @@ impl Archetype {
         self.id
     }
 
-    #[inline]
-    pub fn entities(&self) -> impl Iterator<Item = &Entity> {
-        self.table.entities()
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.table.len()
-    }
-
-    #[inline]
-    pub fn contains(&self, component_id: ComponentId) -> bool {
-        self.table.contains(component_id)
-    }
-
-    #[inline]
-    pub fn component_ids(&self) -> impl Iterator<Item = ComponentId> + '_ {
-        self.table.component_ids()
-    }
-
     /// Checks if `archetype` is contains at least all [`Component`](crate::component::Component)s,
     /// and if so, add them to the list of parents.
     #[inline]
-    pub fn init_parent(&mut self, archetype: &Archetype) {
+    pub fn init_parent(&mut self, parent: &Archetype) {
 
         // If `archetype` is already a set parent, ignore
-        if self.parents.contains(&archetype.id()) {
+        if self.parents.contains(&parent.id()) {
             return;
         }
 
-        for component_id in self.component_ids() {
+        let self_table = self.table.lock();
+        let parent_table = parent.table.lock();
+
+        for component_id in self_table.component_ids() {
             // If the `archetype` does not contain every component_id of `self`, `archetype` is not
             // a parent. We only care about parents for now.
-            if !archetype.contains(component_id) {
+            if !parent_table.contains(component_id) {
                 return;
             }
         }
 
-        self.parents.push(archetype.id());
+        self.parents.push(parent.id());
     }
 
     #[inline]
@@ -241,49 +139,6 @@ impl Archetype {
     #[inline]
     pub fn parents(&self) -> impl Iterator<Item = &ArchetypeId> {
         self.parents.iter() 
-    }
-
-    #[inline]
-    pub fn is_empty_archetype(&self) -> bool {
-        self.table.no_components()
-    }
-
-    /// Performs a swap_remove and moves the removed into the parent. The returned [`Entity`] is
-    /// the [`Entity`] that may have been relocated by the process.
-    ///
-    /// SAFETY:
-    /// - Unset components in the parent have to be set immediately after this call
-    /// - `index` has to be valid
-    #[inline]
-    #[must_use = "The returned variant may contain a relocated Entity!"]
-    pub unsafe fn move_into_parent(&mut self, parent: &mut Self, index: usize) -> Option<Entity> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        self.table.move_into_parent(&mut parent.table, index)
-    }
-
-    /// Performs a swap_remove and moves the removed into the child. The returned [`Entity`] is
-    /// the [`Entity`] that may have been relocated by the process.
-    ///
-    // SAFETY:
-    // - Drops the components which are not in the child
-    /// - `index` has to be valid
-    pub unsafe fn move_into_child(&mut self, child: &mut Self, index: usize) -> Option<Entity> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        self.table.move_into_child(&mut child.table, index)
-    }
-
-    /// Performs a swap_remove. The returned [`Entity`] is the [`Entity`] that may have been
-    /// relocated by the process.
-    ///
-    // SAFETY:
-    // - Drops all components at `index`
-    // - `index` has to be valid
-    pub unsafe fn drop_entity(&mut self, index: usize) -> Option<Entity> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        self.table.drop_entity(index)
     }
 }
 
