@@ -533,7 +533,7 @@ impl World {
         let mut archetype_ids: Vec<_> = archetype.parents().map(|id| *id).collect();
         archetype_ids.push(archetype_id);
 
-        ComponentQuery::new(archetype_ids, archetypes, components)
+        ComponentQuery::new(&archetype_ids, archetypes, components)
     }
     
     #[inline]
@@ -556,7 +556,7 @@ impl World {
         let mut archetype_ids: Vec<_> = archetype.parents().map(|id| *id).collect();
         archetype_ids.push(archetype_id);
 
-        ComponentQueryMut::new(archetype_ids, archetypes, components)
+        ComponentQueryMut::new(&archetype_ids, archetypes, components)
     }
 
     #[inline]

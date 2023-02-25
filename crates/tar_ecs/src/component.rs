@@ -2,9 +2,9 @@ use std::{
     alloc::Layout,
     any::{ Any, TypeId, type_name },
     sync::Arc,
-    mem::needs_drop,
+    mem::{needs_drop, size_of, self},
     collections::HashMap, 
-    marker::PhantomData
+    marker::PhantomData, ptr::{drop_in_place, copy, addr_of_mut}
 };
 use parking_lot::{Mutex, MutexGuard};
 
@@ -232,6 +232,7 @@ impl Components {
 pub struct ComponentQuery<'a, T: Bundle> {
     ids: Vec<ComponentId>,
     tables: Vec<Arc<Mutex<Table>>>,
+    current: MutexGuard<'a, Table>,
     index: usize,
     table: usize,
     marker: PhantomData<&'a T>
@@ -239,14 +240,14 @@ pub struct ComponentQuery<'a, T: Bundle> {
 
 impl<'a, T: Bundle> ComponentQuery<'a, T> {
     pub fn new(
-        archetype_ids: Vec<ArchetypeId>,
+        archetype_ids: &Vec<ArchetypeId>,
         archetypes: &'a mut Archetypes,
         components: &'a Components,
     ) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
         for id in archetype_ids {
-            if let Some(archetype) = archetypes.get(id) {
+            if let Some(archetype) = archetypes.get(*id) {
                 tables.push(archetype.table())
             } else {
                 debug_assert!(false, "Invalid Id was passed!");
@@ -255,6 +256,7 @@ impl<'a, T: Bundle> ComponentQuery<'a, T> {
 
         Self {
             ids: T::get_component_ids(components),
+            current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
             tables,
             index: 0,
             table: 0,
@@ -267,24 +269,35 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
     type Item = T::Ref<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(table) = self.tables.get(self.table) {
-            {
-                let index = self.index;
-                let table = table.lock();
-
-                if table.len() > index {
-                    self.index += 1;
-                    return unsafe { Some(table.get_unchecked::<T>(&self.ids, index)) };
-                }
-            }
-
-            self.table += 1;
-            self.index = 0;
-            return self.next();
+        let index = self.index;
+        if self.current.len() > index {
+            self.index += 1;
+            // SAFETY:
+            // Just boundchecked
+            return unsafe { Some(self.current.get_unchecked::<T>(&self.ids, index)) };
         }
-        
-        None
-    } 
+
+        self.index = 0;
+        self.table += 1;
+
+        // This here is some magic to keep the Mutex locked for it's entire iteration
+        unsafe {
+            let mut table = self.tables.get(self.table)?.lock();
+            let table = addr_of_mut!(table);
+            let current = addr_of_mut!(self.current).clone();
+
+            // Drop the current Guard, unlocking the mutex
+            drop_in_place(current);
+
+            // Copy in the new guard
+            copy(table.cast::<u8>(), current.cast::<u8>(), size_of::<MutexGuard<'a, Table>>());
+            
+            // Forget the local variable of the lock, so that our mutex doesn't get replaced
+            mem::forget(table);
+        }
+
+        return self.next();
+    }
 }
 
 /// An [`Iterator`] for a given [`Bundle`], which iterates mutably over all
@@ -294,6 +307,7 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
 pub struct ComponentQueryMut<'a, T: Bundle> {
     ids: Vec<ComponentId>,
     tables: Vec<Arc<Mutex<Table>>>,
+    current: MutexGuard<'a, Table>,
     index: usize,
     table: usize,
     marker: PhantomData<&'a mut T>
@@ -301,14 +315,14 @@ pub struct ComponentQueryMut<'a, T: Bundle> {
 
 impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
     pub fn new(
-        archetype_ids: Vec<ArchetypeId>,
+        archetype_ids: &Vec<ArchetypeId>,
         archetypes: &'a mut Archetypes,
         components: &'a Components,
     ) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
         for id in archetype_ids {
-            if let Some(archetype) = archetypes.get(id) {
+            if let Some(archetype) = archetypes.get(*id) {
                 tables.push(archetype.table())
             } else {
                 debug_assert!(false, "Invalid Id was passed!");
@@ -318,6 +332,7 @@ impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
         Self {
             ids: T::get_component_ids(components),
             tables,
+            current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
             index: 0,
             table: 0,
             marker: PhantomData
@@ -329,23 +344,32 @@ impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
     type Item = T::MutRef<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(table) = self.tables.get_mut(self.table) {
-            {
-                let index = self.index;
-                let mut table = table.lock();
-
-                if table.len() > index {
-                    self.index += 1;
-                    return unsafe { Some(table.get_unchecked_mut::<T>(&self.ids, index)) };
-                }
-            }
-
-            self.table += 1;
-            self.index = 0;
-            self.next()
-        } else {
-            None
+        let index = self.index;
+        if self.current.len() > index {
+            self.index += 1;
+            return unsafe { Some(self.current.get_unchecked_mut::<T>(&self.ids, index)) };
         }
-    } 
+
+        self.index = 0;
+        self.table += 1;
+
+        // This here is some magic to keep the Mutex locked for it's entire iteration
+        unsafe {
+            let mut table = self.tables.get(self.table)?.lock();
+            let table = addr_of_mut!(table);
+            let current = addr_of_mut!(self.current).clone();
+
+            // Drop the current Guard, unlocking the mutex
+            drop_in_place(current);
+
+            // Copy in the new guard
+            copy(table.cast::<u8>(), current.cast::<u8>(), size_of::<MutexGuard<'a, Table>>());
+            
+            // Forget the local variable of the lock, so that our mutex doesn't get replaced
+            mem::forget(table);
+        }
+
+        return self.next();
+    }
 }
 
