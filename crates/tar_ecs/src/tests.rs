@@ -116,7 +116,7 @@ fn entity_query() {
         world.entity_set(entity, UUID::new(19700101000000));
     }
 
-    for entity in world.entity_query::<UUID>() {
+    for entity in world.entity_collect::<UUID>() {
         let uuid = world.entity_get::<UUID>(entity).unwrap();
         assert!(uuid.id == 19700101000000);
     }
@@ -144,9 +144,9 @@ fn component_query() {
     assert!(n == 10);
 
     for position in world.component_query::<Position>() {
-        assert!(position.x == 16.0);   
-        assert!(position.y == 16.0);   
-        assert!(position.z == 42.0);   
+        assert!(position.x == 16.0);
+        assert!(position.y == 16.0);
+        assert!(position.z == 42.0);
     }
 }
 
@@ -157,7 +157,7 @@ fn zst() {
     let entity = world.entity_create();
     world.entity_set(entity, Zst);
 
-    for query_entity in world.entity_query::<Zst>() {
+    for query_entity in world.entity_collect::<Zst>() {
         assert!(entity == query_entity);
     }
 
@@ -183,5 +183,24 @@ fn component_clone() {
     for uuid in world.component_query::<UUID>() {
         assert!(uuid.id == 16);
     }
+}
+
+#[test]
+fn collect_entity_by_empty_unit() {
+    let mut world = World::new();
+    let entity = world.entity_create();
+    world.entity_set(entity, (Zst, UUID::new(42), Position::new(16., 16., 42.)));
+
+    for _ in world.entity_collect::<()>() {
+        let position = world.entity_get::<Position>(entity).unwrap();
+        let uuid = world.entity_get::<UUID>(entity).unwrap();
+        assert!(uuid.id == 42);
+        assert!(position.x == 16.);
+        assert!(position.y == 16.);
+        assert!(position.z == 42.);
+        return;
+    }
+
+    panic!("Should've already returned!");
 }
 

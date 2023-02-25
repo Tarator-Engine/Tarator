@@ -28,12 +28,12 @@ pub struct ComponentId(u32);
 
 impl ComponentId {
     #[inline]
-    pub fn new(index: usize) -> Self {
+    pub const fn new(index: usize) -> Self {
         Self(index as u32)
     }
 
     #[inline]
-    pub fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self.0 as usize
     }
 }

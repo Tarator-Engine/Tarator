@@ -272,12 +272,12 @@ pub struct BundleId(usize);
 
 impl BundleId {
     #[inline]
-    pub fn new(index: usize) -> Self {
+    pub const fn new(index: usize) -> Self {
         Self(index)
     }
 
     #[inline]
-    pub fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self.0
     }
 }

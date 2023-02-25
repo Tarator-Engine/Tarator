@@ -22,12 +22,12 @@ impl ArchetypeId {
     pub const INVALID: Self = Self(u32::MAX);
 
     #[inline]
-    pub fn new(index: usize) -> Self {
+    pub const fn new(index: usize) -> Self {
         Self(index as u32)
     }
 
     #[inline]
-    pub fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self.0 as usize
     }
 }
