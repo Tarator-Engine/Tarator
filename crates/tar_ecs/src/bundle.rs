@@ -129,6 +129,14 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     unsafe fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8));
 }
 
+
+/// Helper-trait to clone [`Bundle`]s with ease, where every [`Component`] has [`Clone`]
+/// implemented
+pub trait CloneBundle: Bundle + Clone {
+    fn clone<'a>(data: Self::Ref<'a>) -> Self;
+}
+
+
 unsafe impl<C: Component> Bundle for C {
     type Ref<'a> = &'a Self;
     type MutRef<'a> = &'a mut Self;
@@ -174,6 +182,12 @@ unsafe impl<C: Component> Bundle for C {
     #[inline]
     unsafe fn get_components(self, components: &Components, func: &mut impl FnMut(ComponentId, *mut u8)) {
         func(*components.get_id_from::<C>().unwrap(), &mut ManuallyDrop::new(self) as *mut ManuallyDrop<Self> as *mut u8)
+    }
+}
+
+impl<C: Component + Clone> CloneBundle for C {
+    fn clone<'a>(data: Self::Ref<'a>) -> Self {
+        data.clone() 
     }
 }
 
@@ -234,6 +248,14 @@ macro_rules! component_tuple_impl {
                 $(
                     $c.get_components(components, func);
                 )*
+            }
+        }
+
+        impl<$($c: Component + Clone),*> CloneBundle for ($($c,)*) {
+            fn clone<'a>(data: Self::Ref<'a>) -> Self {
+                #[allow(non_snake_case)]
+                let ($($c,)*) = data;
+                ($($c.clone(),)*)
             }
         }
     };
