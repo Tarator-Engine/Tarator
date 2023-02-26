@@ -5,7 +5,6 @@ mod render;
 
 use std::sync::{Arc, Barrier};
 
-use egui::ClippedPrimitive;
 use instant::Duration;
 
 use parking_lot::MutexGuard;
@@ -94,6 +93,7 @@ pub async fn run() {
         egui_textures_delta: egui::epaint::textures::TexturesDelta::default(),
         events: vec![],
         mouse_movement: (0.0, 0.0),
+        resized: false,
     });
     let db = Arc::new(db);
 
@@ -111,7 +111,7 @@ pub async fn run() {
     let title = env!("CARGO_PKG_NAME");
     let window = winit::window::WindowBuilder::new()
         .with_title(title)
-        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
+        // .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
         .build(&event_loop)
         .unwrap();
 
@@ -182,6 +182,7 @@ pub async fn run() {
         match event {
             Event::RedrawRequested(..) => {
                 let mut state = db.lock();
+                state.resized = false;
                 state.events = vec![];
                 state.mouse_movement.0 = 0.0;
                 state.mouse_movement.1 = 0.0;
@@ -207,8 +208,13 @@ pub async fn run() {
                                 // TODO! use for seeing if egui wanted this event or not
                                 let res = egui_state.on_event(&context, &event);
                                 if !res.consumed {
-                                    state.events.push(event.clone().to_static().unwrap());
+                                    match &event {
+                                        WindowEvent::KeyboardInput{..} | WindowEvent::MouseInput{..} | WindowEvent::MouseWheel{..} => state.events.push(event.clone().to_static().unwrap()),                              
+                                        _=> ()
+                                    }
+                                    
                                 }
+                                // state.events.push(event.clone().to_static().unwrap());
                                 match event {
                                     #[cfg(not(target_arch = "wasm32"))]
                                     WindowEvent::CloseRequested
@@ -227,6 +233,8 @@ pub async fn run() {
                                         // This solves an issue where the app would panic when minimizing on Windows.
                                         if size.width > 0 && size.height > 0 {
                                             state.size = *size;
+
+                                            state.resized = true;
                                         }
                                     }
 

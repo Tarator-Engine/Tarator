@@ -15,4 +15,5 @@ pub struct EngineState {
     pub egui_textures_delta: egui::epaint::textures::TexturesDelta,
     pub events: Vec<winit::event::WindowEvent<'static>>,
     pub mouse_movement: (f64, f64),
+    pub resized: bool,
 }

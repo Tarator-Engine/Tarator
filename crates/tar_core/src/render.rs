@@ -93,6 +93,18 @@ pub fn render_fn(
         }
 
         for event in state.events {
+            match &event {
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            virtual_keycode: Some(key),
+                            state,
+                            ..
+                        },
+                    ..
+                } => println!("l1: {key:?}, {state:?}"),
+                _ => (),
+            }
             input(&mut game_renderer, &event);
         }
 
@@ -106,6 +118,12 @@ pub fn render_fn(
             .sensitivity = state.cam_sensitivity;
 
         update(&mut game_renderer, state.dt);
+
+        if state.resized {
+            game_renderer.resize(state.size, &mut config);
+            surface.configure(&device, &config);
+            println!("resized");
+        }
 
         let output_frame = match surface.get_current_texture() {
             Ok(frame) => Some(frame),
