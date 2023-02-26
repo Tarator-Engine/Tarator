@@ -349,8 +349,6 @@ pub async fn run() {
                                         // This solves an issue where the app would panic when minimizing on Windows.
                                         if size.width > 0 && size.height > 0 {
                                             state.size = *size;
-
-                                            state.resized = true;
                                         }
                                     }
 
