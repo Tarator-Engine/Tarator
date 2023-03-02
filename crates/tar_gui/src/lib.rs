@@ -1,10 +1,14 @@
+mod entity_viewer;
+
 use egui::Color32;
 use egui_file::FileDialog;
+use tar_ecs::world::World;
 
 pub fn gui(
     context: &egui::Context,
     state: &mut tar_types::EngineState,
     file_dialogue: &mut Option<FileDialog>,
+    world: &mut World,
 ) {
     egui::Window::new("Timings")
         .resizable(false)
@@ -17,7 +21,8 @@ pub fn gui(
         .resizable(true)
         .default_width(300.0)
         .show(&context, |ui| {
-            ui.vertical_centered(|ui| ui.heading("right panel"))
+            ui.vertical_centered(|ui| ui.heading("right panel"));
+            entity_viewer::complete(ui, world, state);
         });
     egui::SidePanel::left("left panel")
         .resizable(true)
@@ -26,7 +31,6 @@ pub fn gui(
             ui.vertical_centered(|ui| ui.heading("left panel"));
             ui.label("sensitvity");
             ui.add(egui::Slider::new(&mut state.cam_sensitivity, 0.0..=5.0));
-            // ui.text_edit_singleline(&mut state.add_object_string);
             if ui.button("Add Object").clicked() {
                 let mut d = FileDialog::open_file(None);
                 d.open();
