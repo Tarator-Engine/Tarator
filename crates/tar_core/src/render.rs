@@ -104,6 +104,9 @@ pub fn render_fn(
     loop {
         r_barrier.wait();
         let state = engine_state.lock().update_read();
+        if state.halt {
+            return;
+        }
         let objects_state = world.lock().component_collect::<(Transform, Rendering)>();
         let cameras_state = world.lock().component_collect::<(Transform, Camera)>();
 
@@ -150,10 +153,6 @@ pub fn render_fn(
                 }
                 _ => (),
             }
-        }
-
-        if state.halt {
-            return;
         }
 
         // for event in state.events {
