@@ -5,9 +5,9 @@ use std::{
 use parking_lot::{ Mutex, MutexGuard };
 
 use crate::{
-    component::{ ComponentId, Components },
+    component::ComponentId,
     store::{ sparse::SparseSetIndex, table::Table },
-    bundle::{ BundleInfo, BundleComponents }
+    bundle::BundleComponents
 };
 
 
@@ -76,14 +76,13 @@ impl Archetype {
     pub fn with_capacity<'a>(
         id: ArchetypeId,
         component_ids: impl Iterator<Item = &'a ComponentId>,
-        components: &Components,
         capacity: usize
     ) -> Self {
 
         Self {
             id,
             parents: Vec::new(),
-            table: Arc::new(Mutex::new(Table::with_capacity(component_ids, components, capacity)))
+            table: Arc::new(Mutex::new(Table::with_capacity(component_ids, capacity)))
         }
     }
 
@@ -167,11 +166,10 @@ impl Archetypes {
     pub fn create_with_capacity(
         &mut self,
         bundle_components: &BundleComponents,
-        components: &Components,
         capacity: usize
     ) -> ArchetypeId {
         let id = ArchetypeId::new(self.len());
-        let mut archetype = Archetype::with_capacity(id, bundle_components.iter(), components, capacity);
+        let mut archetype = Archetype::with_capacity(id, bundle_components.iter(), capacity);
 
         // Check every current archetype and our newly created archetype if they are parents.
         for other_archetype in &mut self.archetypes {
@@ -192,24 +190,23 @@ impl Archetypes {
 
     pub fn get_id_from_components_or_create_with_capacity(
         &mut self,
-        components: &Components,
         bundle_components: &BundleComponents,
         capacity: usize
     ) -> ArchetypeId {
         self.get_id_from_components(bundle_components).unwrap_or_else(|| {
-            self.create_with_capacity(bundle_components, components, capacity)
+            self.create_with_capacity(bundle_components, capacity)
         })
     }
 
     #[inline]
-    pub fn get_from_bundle(&self, info: &BundleInfo) -> Option<&Archetype> {
-        let id = self.get_id_from_components(info.components())?;
+    pub fn get_from_bundle(&self, info: &BundleComponents) -> Option<&Archetype> {
+        let id = self.get_id_from_components(info)?;
         self.archetypes.get(id.index())
     }
 
     #[inline]
-    pub fn get_from_bundle_mut(&mut self,info: &BundleInfo) -> Option<&mut Archetype> {
-        let id = self.get_id_from_components(info.components())?;
+    pub fn get_from_bundle_mut(&mut self,info: &BundleComponents) -> Option<&mut Archetype> {
+        let id = self.get_id_from_components(info)?;
         self.archetypes.get_mut(id.index())
     }
 

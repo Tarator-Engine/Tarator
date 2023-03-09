@@ -1,15 +1,22 @@
 use std::{
+    mem::{ needs_drop, size_of, self },
     alloc::Layout,
-    any::{ Any, TypeId, type_name },
-    sync::Arc,
-    mem::{needs_drop, size_of, self},
-    collections::HashMap, 
-    marker::PhantomData, ptr::{drop_in_place, copy, addr_of_mut}
+    any::TypeId, collections::HashMap, sync::Arc, marker::PhantomData,
+    ptr::{ addr_of_mut, drop_in_place, copy }
 };
-use parking_lot::{Mutex, MutexGuard};
+
+use fxhash::{ FxBuildHasher };
+use parking_lot::{ RwLock, Mutex, MutexGuard };
+use tar_ecs_macros::Component;
 
 use crate::{
-    store::{sparse::SparseSetIndex, table::Table},
+    store::{ sparse::SparseSetIndex, table::Table },
+    callback::{
+        Callback,
+        ComponentCallbacks,
+        CallbackId,
+        CallbackFunc
+    },
     bundle::Bundle,
     archetype::{ Archetypes, ArchetypeId }
 };
@@ -19,7 +26,15 @@ use crate::{
 /// manually be implemented on a type, or via `#[derive(Component)]`.
 ///
 /// Read further: [`Bundle`]
-pub trait Component: Send + Sync + 'static {}
+pub trait Component: Sized + Send + Sync + 'static {
+    #[inline]
+    fn add_callback<T: Callback<Self>>() {
+        Components::add_callback::<T, Self>()
+    }
+}
+
+#[derive(Component)]
+pub struct Fake;
 
 
 /// Every [`Component`] gets its own [`ComponentId`] per [`World`](crate::world::World). This
@@ -53,93 +68,24 @@ impl SparseSetIndex for ComponentId {
 }
 
 
-/// Contains information about a [`Component`], most important its [`Layout`] and its [`Drop`]
-/// function, if any, which is crutial for [`RawStore`](crate::store::raw_store::RawStore)to drop a
-/// stored [`Component`] correctly, and not create any memory leaks because of some allocations
-/// from a [`Component`].
-pub struct ComponentDescription {
-    name: &'static str,
-    send_sync: bool,
-    type_id: Option<TypeId>,
+pub struct ComponentInfo {
+    drop: Option<unsafe fn(*mut u8)>,
     layout: Layout,
-    drop: Option<unsafe fn(*mut u8)>
+    callbacks: ComponentCallbacks
 }
 
-impl std::fmt::Debug for ComponentDescription {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ComponentDescriptor")
-            .field("name", &self.name)
-            .field("send_sync", &self.send_sync)
-            .field("type_id", &self.type_id)
-            .field("layout", &self.layout)
-            .field("drop", &match self.drop {
-                Some(_) => "Some(_)",
-                None => "None"
-            })
-            .finish()
+impl ComponentInfo {
+    unsafe fn inner_drop<T>(to_drop: *mut u8) {
+        to_drop.cast::<T>().drop_in_place()
     }
-}
-
-impl ComponentDescription {
-    /// SAFETY:
-    /// - `ptr` must be owned
-    /// - `ptr` must point to valid data of type `T`
+    
     #[inline]
-    unsafe fn drop_ptr<T>(ptr: *mut u8) {
-        ptr.cast::<T>().drop_in_place()
-    }
-
-    /// New [`ComponentDescription`] from given [`Component`]
-    pub fn new<T: Component>() -> Self {
+    pub fn new_from<T: Component>() -> Self {
         Self {
-            name: type_name::<T>(),
-            send_sync: true,
-            type_id: Some(TypeId::of::<T>()),
+            drop: needs_drop::<T>().then_some(Self::inner_drop::<T>),
             layout: Layout::new::<T>(),
-            drop: needs_drop::<T>().then_some(Self::drop_ptr::<T>)
+            callbacks: ComponentCallbacks::new()
         }
-    }
-
-    /// SAFETY:
-    /// - `layout` and `drop` must correspond to the same type
-    /// - type must be `Send + Sync`
-    pub unsafe fn new_raw(
-        name: impl Into<&'static str>,
-        layout: Layout,
-        drop: Option<unsafe fn(*mut u8)>
-    ) -> Self {
-        Self {
-            name: name.into(),
-            send_sync: true,
-            type_id: None,
-            layout,
-            drop
-        }
-    }
-
-    pub fn new_non_send_sync<T: Any>() -> Self {
-        Self {
-            name: type_name::<T>(),
-            send_sync: false,
-            type_id: Some(TypeId::of::<T>()),
-            layout: Layout::new::<T>(),
-            drop: needs_drop::<T>().then_some(Self::drop_ptr::<T>)
-        }
-    }
-
-    #[inline]
-    pub fn name(&self) -> &str {
-        self.name
-    }
-
-    #[inline]
-    pub fn send_sync(&self) -> bool {
-        self.send_sync
-    }
-
-    #[inline]
-    pub fn type_id(&self) -> Option<TypeId> {
-        self.type_id
     }
 
     #[inline]
@@ -147,80 +93,98 @@ impl ComponentDescription {
         self.layout
     }
 
-    /// Returns the drop function of this [`ComponentDescription`]'s [`Component`]
     #[inline]
     pub fn drop(&self) -> Option<unsafe fn(*mut u8)> {
         self.drop
     }
+
+    #[inline]
+    pub fn callback(&self, id: CallbackId) -> Option<CallbackFunc> {
+        self.callbacks.get(id)
+    }
 }
 
 
-#[derive(Debug)]
+static mut COMPONENTS: Option<RwLock<Components>> = None;
+
 pub struct Components {
-    components: Vec<ComponentDescription>,
-    indices: HashMap<TypeId, ComponentId>
+    infos: Vec<ComponentInfo>,
+    ids: HashMap<TypeId, ComponentId, FxBuildHasher>,
+    callback_ids: HashMap<TypeId, CallbackId, FxBuildHasher>
 }
 
 impl Components {
-    #[inline]
-    pub fn new() -> Self {
-        Self {
-            components: Vec::new(),
-            indices: HashMap::new()
-        }
+    pub unsafe fn new() {
+        COMPONENTS = Some(RwLock::new(Self {
+            infos: Default::default(),
+            ids: Default::default(),
+            callback_ids: Default::default()
+        }))
     }
 
-    #[inline]
-    pub fn init<T: Component>(&mut self) -> ComponentId {
-        let Self { components, indices } = self;
-        *indices.entry(TypeId::of::<T>()).or_insert_with(|| Self::_init(components, ComponentDescription::new::<T>()))
+    pub fn init<T: Component>() -> ComponentId {
+        let mut this = unsafe { COMPONENTS.as_mut().unwrap().write() };
+
+        this.ids.get(&TypeId::of::<T>()).map(|id| *id).unwrap_or_else(|| {
+            let index = this.infos.len();
+            let id = ComponentId::new(index);
+            this.ids.insert(TypeId::of::<T>(), id);
+            this.infos.push(ComponentInfo::new_from::<T>());
+
+            id
+        })
     }
 
-    #[inline]
-    pub fn init_from_description(&mut self, description: ComponentDescription) -> ComponentId {
-        Self::_init(&mut self.components, description)
+    pub fn add_callback<T: Callback<U>, U: Component>() {
+        let mut this = unsafe { COMPONENTS.as_mut().unwrap().write() };
+
+        let callback_type_id = TypeId::of::<T>();
+        let callback_id = this.callback_ids.get(&callback_type_id).map(|id| *id).unwrap_or_else(|| {
+            let index = this.callback_ids.len();
+            let callback_id = CallbackId::new(index);
+            this.callback_ids.insert(callback_type_id, callback_id);
+
+            callback_id
+        });
+
+        let id = this.ids.get(&TypeId::of::<U>()).map(|id| *id).unwrap_or_else(|| {
+            let index = this.infos.len();
+            let id = ComponentId::new(index);
+            this.ids.insert(TypeId::of::<U>(), id);
+            this.infos.push(ComponentInfo::new_from::<U>());
+
+            id
+        });
+        // SAFETY:
+        // We just checked or pushed
+        let info = unsafe { this.infos.get_unchecked_mut(id.index()) };
+
+        info.callbacks.add::<T, U>(callback_id);
     }
 
-    #[inline]
-    fn _init(components: &mut Vec<ComponentDescription>, description: ComponentDescription) -> ComponentId {
-        let id = ComponentId::new(components.len());
-        components.push(description);
-        id
+    pub fn get_info<T>(id: ComponentId, func: impl FnOnce(&ComponentInfo) -> T) -> T {
+        let this = unsafe { COMPONENTS.as_ref().unwrap().read() };
+        let info = this.infos.get(id.index()).unwrap();
+        
+        func(info)
     }
 
-    #[inline]
-    pub fn get_description(&self, id: ComponentId) -> Option<&ComponentDescription> {
-        self.components.get(id.index())
+    pub fn get_id_from<T: Component>() -> Option<ComponentId> {
+        Self::get_id(TypeId::of::<T>())
     }
 
-    #[inline]
-    pub unsafe fn get_description_unchecked(&self, id: ComponentId) -> &ComponentDescription {
-        self.components.get_unchecked(id.index())
+    pub fn get_id(id: TypeId) -> Option<ComponentId> {
+        let this = unsafe { COMPONENTS.as_ref().unwrap().read() };
+        this.ids.get(&id).map(|id| *id)
     }
 
-    #[inline]
-    pub fn get_id(&self, id: TypeId) -> Option<&ComponentId> {
-        self.indices.get(&id)
+    pub fn get_callback_id_from<T: Callback<Fake>>() -> Option<CallbackId> {
+        Self::get_callback_id(TypeId::of::<T>())
     }
 
-    #[inline]
-    pub fn get_id_from<T: Any>(&self) -> Option<&ComponentId> {
-        self.get_id(TypeId::of::<T>())
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.components.len()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &ComponentDescription> {
-        self.components.iter()
+    pub fn get_callback_id(id: TypeId) -> Option<CallbackId> {
+        let this = unsafe { COMPONENTS.as_ref().unwrap().read() };
+        this.callback_ids.get(&id).map(|id| *id)
     }
 }
 
@@ -230,7 +194,6 @@ impl Components {
 /// [`Bundle`].
 #[derive(Debug)]
 pub struct ComponentQuery<'a, T: Bundle> {
-    ids: Vec<ComponentId>,
     tables: Vec<Arc<Mutex<Table>>>,
     current: MutexGuard<'a, Table>,
     index: usize,
@@ -241,8 +204,7 @@ pub struct ComponentQuery<'a, T: Bundle> {
 impl<'a, T: Bundle> ComponentQuery<'a, T> {
     pub fn new(
         archetype_ids: &Vec<ArchetypeId>,
-        archetypes: &'a mut Archetypes,
-        components: &'a Components,
+        archetypes: &'a mut Archetypes
     ) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
@@ -255,7 +217,6 @@ impl<'a, T: Bundle> ComponentQuery<'a, T> {
         }
 
         Self {
-            ids: T::get_component_ids(components),
             current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
             tables,
             index: 0,
@@ -274,7 +235,7 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
             self.index += 1;
             // SAFETY:
             // Just boundchecked
-            return unsafe { Some(self.current.get_unchecked::<T>(&self.ids, index)) };
+            return unsafe { Some(self.current.get_unchecked::<T>(index)) };
         }
 
         self.index = 0;
@@ -305,7 +266,6 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
 /// [`Bundle`].
 #[derive(Debug)]
 pub struct ComponentQueryMut<'a, T: Bundle> {
-    ids: Vec<ComponentId>,
     tables: Vec<Arc<Mutex<Table>>>,
     current: MutexGuard<'a, Table>,
     index: usize,
@@ -316,8 +276,7 @@ pub struct ComponentQueryMut<'a, T: Bundle> {
 impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
     pub fn new(
         archetype_ids: &Vec<ArchetypeId>,
-        archetypes: &'a mut Archetypes,
-        components: &'a Components,
+        archetypes: &'a mut Archetypes
     ) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
@@ -330,7 +289,6 @@ impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
         }
 
         Self {
-            ids: T::get_component_ids(components),
             tables,
             current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
             index: 0,
@@ -347,7 +305,7 @@ impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
         let index = self.index;
         if self.current.len() > index {
             self.index += 1;
-            return unsafe { Some(self.current.get_unchecked_mut::<T>(&self.ids, index)) };
+            return unsafe { Some(self.current.get_unchecked_mut::<T>(index)) };
         }
 
         self.index = 0;
@@ -372,4 +330,3 @@ impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
         return self.next();
     }
 }
-

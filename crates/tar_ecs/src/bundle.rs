@@ -1,13 +1,11 @@
-//! Some portions of this code where looked up from
-//! <https://docs.rs/bevy_ecs/latest/src/bevy_ecs/bundle.rs.html>
-
-
 use std::{
-    collections::HashMap,
-    any::{ TypeId, type_name },
+    collections::{ HashMap },
+    any::TypeId,
     mem::ManuallyDrop
 };
 
+use fxhash::FxBuildHasher;
+use parking_lot::RwLock;
 use tar_ecs_macros::foreach_tuple;
 use crate::{
     component::{ Component, Components, ComponentId },
@@ -86,9 +84,9 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     fn empty_mut_ref<'a>() -> Self::WrappedMutRef<'a>;
 
     /// Initializes and gets the [`ComponentId`]s via `func`.
-    fn init_component_ids(components: &mut Components, func: &mut impl FnMut(ComponentId));
+    fn init_component_ids(func: &mut impl FnMut(ComponentId));
 
-    fn get_component_ids(components: &Components) -> Vec<ComponentId>;
+    fn get_component_ids(func: &mut impl FnMut(ComponentId));
 
     /// Returns a tuple of references to the components in the order of `Self`. The references are
     /// set using the return value of `func`.
@@ -97,14 +95,14 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// - Returning [`None`] from `func` is always safe
     /// - If the return value of `func` is [`Some`], the pointer has to point to valid data of
     /// [`ComponentId`] type
-    unsafe fn from_components<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::WrappedRef<'a>;
+    unsafe fn from_components<'a>(func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::WrappedRef<'a>;
 
     /// Returns a tuple of references to the components in the order of `Self`. The references are
     /// set using the return value of `func`.
     ///
     /// SAFETY:
     /// - If the return value of `func` has to point to valid data of[`ComponentId`] type
-    unsafe fn from_components_unchecked<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> *const u8) -> Self::Ref<'a>;
+    unsafe fn from_components_unchecked<'a>(func: &mut impl FnMut(ComponentId) -> *const u8) -> Self::Ref<'a>;
 
     /// Returns a tuple of mutable references to the components in the order of `Self`. The mutable
     /// references are set using the return value of `func`.
@@ -113,14 +111,14 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// - Returning [`None`] from `func` is always safe
     /// - If the return value of `func` is [`Some`], the pointer has to point to valid data of
     /// [`ComponentId`] type
-    unsafe fn from_components_mut<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a>;
+    unsafe fn from_components_mut<'a>(func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a>;
 
     /// Returns a tuple of mutable references to the components in the order of `Self`. The mutable
     /// references are set using the return value of `func`.
     ///
     /// SAFETY:
     /// - If the return value of `func` is has to point to valid data of[`ComponentId`] type
-    unsafe fn from_components_unchecked_mut<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a>;
+    unsafe fn from_components_unchecked_mut<'a>(func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a>;
 
     /// Get the components of this [`Bundle`] with a corresponding [`ComponentId`]. This passes
     /// ownership to `func`.
@@ -128,7 +126,7 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// SAFETY:
     /// - pointer in `func` must be used, else will create memory leak if data has to be dropped
     /// - data in `func` must be manually dropped
-    unsafe fn get_components<const I: usize>(self, components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId, *mut u8));
+    unsafe fn get_components(self, func: &mut impl FnMut(ComponentId, *mut u8));
 }
 
 
@@ -157,38 +155,38 @@ unsafe impl<C: Component> Bundle for C {
     }
 
     #[inline]
-    fn init_component_ids(components: &mut Components, func: &mut impl FnMut(ComponentId)) {
-        func(components.init::<C>())
+    fn init_component_ids(func: &mut impl FnMut(ComponentId)) {
+        func(Components::init::<C>())
     }
 
     #[inline]
-    fn get_component_ids(components: &Components) -> Vec<ComponentId> {
-        vec![*components.get_id_from::<C>().unwrap()]
+    fn get_component_ids(func: &mut impl FnMut(ComponentId)) {
+        func(Components::get_id_from::<C>().unwrap())
     }
 
     #[inline]
-    unsafe fn from_components<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::WrappedRef<'a> {
-        Some(&*func(*components.get_unchecked(I))?.cast::<Self>())
+    unsafe fn from_components<'a>(func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::WrappedRef<'a> {
+        Some(&*func(Components::get_id_from::<C>().unwrap())?.cast::<Self>())
     }
 
     #[inline]
-    unsafe fn from_components_unchecked<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> *const u8) -> Self::Ref<'a> {
-        &*func(*components.get_unchecked(I)).cast::<Self>()
+    unsafe fn from_components_unchecked<'a>(func: &mut impl FnMut(ComponentId) -> *const u8) -> Self::Ref<'a> {
+        &*func(Components::get_id_from::<C>().unwrap()).cast::<Self>()
     }
 
     #[inline]
-    unsafe fn from_components_mut<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a> {
-        Some(&mut *func(*components.get_unchecked(I))?.cast::<Self>())
+    unsafe fn from_components_mut<'a>(func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a> {
+        Some(&mut *func(Components::get_id_from::<C>().unwrap())?.cast::<Self>())
     }
 
     #[inline]
-    unsafe fn from_components_unchecked_mut<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a> {
-        &mut *func(*components.get_unchecked(I)).cast::<Self>()
+    unsafe fn from_components_unchecked_mut<'a>(func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a> {
+        &mut *func(Components::get_id_from::<C>().unwrap()).cast::<Self>()
     }
 
     #[inline]
-    unsafe fn get_components<const I: usize>(self, components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId, *mut u8)) {
-        func(*components.get_unchecked(I), &mut ManuallyDrop::new(self) as *mut ManuallyDrop<Self> as *mut u8)
+    unsafe fn get_components(self, func: &mut impl FnMut(ComponentId, *mut u8)) {
+        func(Components::get_id_from::<C>().unwrap(), &mut ManuallyDrop::new(self) as *mut ManuallyDrop<Self> as *mut u8)
     }
 }
 
@@ -200,7 +198,7 @@ impl<C: Component + Clone> CloneBundle for C {
 
 macro_rules! component_tuple_impl {
     ($(($c:ident, $n:expr)),*) => {
-        unsafe impl<$($c: Bundle),*> Bundle for ($($c,)*) {
+        unsafe impl<$($c: Component + Bundle),*> Bundle for ($($c,)*) {
             type Ref<'a> = ($($c::Ref<'a>,)*);
             type MutRef<'a> = ($($c::MutRef<'a>,)*);
 
@@ -219,47 +217,47 @@ macro_rules! component_tuple_impl {
 
             #[inline]
             #[allow(unused_variables)]
-            fn init_component_ids(components: &mut Components, func: &mut impl FnMut(ComponentId)) {
-                $(<$c as Bundle>::init_component_ids(components, func);)*
+            fn init_component_ids(func: &mut impl FnMut(ComponentId)) {
+                $(<$c as Bundle>::init_component_ids(func);)*
             }
 
             #[inline]
             #[allow(unused_variables)]
-            fn get_component_ids(components: &Components) -> Vec<ComponentId> {
-                vec![$(*components.get_id_from::<$c>().unwrap(),)*]
+            fn get_component_ids(func: &mut impl FnMut(ComponentId)) {
+                $(func(Components::get_id_from::<$c>().unwrap());)*
             }
 
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::WrappedRef<'a> {
-                ($($c::from_components::<$n>(components, func),)*)
+            unsafe fn from_components<'a>(func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Self::WrappedRef<'a> {
+                ($($c::from_components(func),)*)
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_unchecked<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> *const u8) -> Self::Ref<'a> {
-                ($($c::from_components_unchecked::<$n>(components, func),)*)
+            unsafe fn from_components_unchecked<'a>(func: &mut impl FnMut(ComponentId) -> *const u8) -> Self::Ref<'a> {
+                ($($c::from_components_unchecked(func),)*)
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_mut<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a> {
-                ($($c::from_components_mut::<$n>(components, func),)*)
+            unsafe fn from_components_mut<'a>(func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a> {
+                ($($c::from_components_mut(func),)*)
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_unchecked_mut<'a, const I: usize>(components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a> {
-                ($($c::from_components_unchecked_mut::<$n>(components, func),)*)
+            unsafe fn from_components_unchecked_mut<'a>(func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a> {
+                ($($c::from_components_unchecked_mut(func),)*)
             }
 
             #[inline]
             #[allow(unused_variables, unused_mut)]
-            unsafe fn get_components<const I: usize>(self, components: &Vec<ComponentId>, func: &mut impl FnMut(ComponentId, *mut u8)) {
+            unsafe fn get_components(self, func: &mut impl FnMut(ComponentId, *mut u8)) {
                 #[allow(non_snake_case)]
                 let ($(mut $c,)*) = self;
-                $($c.get_components::<$n>(components, func);)*
+                $($c.get_components(func);)*
             }
         }
 
@@ -352,109 +350,53 @@ impl From<Vec<ComponentId>> for BundleComponents {
 }
 
 
-/// Contains both the [`BundleId`] and [`ComponentId`]s of a [`Bundle`]. [`Bundle`]s with same sets
-/// of [`Component`]s will still have the same [`BundleInfo`] as well as [`BundleId`].
-#[derive(Debug)]
-pub struct BundleInfo {
-    id: BundleId,
-    components: BundleComponents
-}
+static mut BUNDLES: Option<RwLock<Bundles>> = None;
 
-impl BundleInfo {
-    #[inline]
-    pub fn id(&self) -> BundleId {
-        self.id
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &ComponentId> {
-        self.components.iter()
-    }
-
-    #[inline]
-    pub fn components(&self) -> &BundleComponents {
-        &self.components
-    }
-}
-
-
-/// Manages every [`Bundle`] that gets used on a [`World`](crate::world::World).
-#[derive(Debug)]
 pub struct Bundles {
-    bundles: Vec<BundleInfo>,
-    indices: HashMap<TypeId, BundleId>
+    bundles: Vec<BundleComponents>,
+    ids: HashMap<TypeId, BundleId, FxBuildHasher>
 }
 
 impl Bundles {
-    #[inline]
-    pub fn new() -> Self {
-        Self {
+    pub unsafe fn new() {
+        BUNDLES = Some(RwLock::new(Self {
             bundles: Vec::new(),
-            indices: HashMap::new()
-        }
+            ids: Default::default()
+        }))
     }
 
-    /// Initializes given [`Bundle`], as well as all of its [`Component`]s.
-    #[inline]
-    pub fn init<'a, T: Bundle>(&'a mut self, components: &mut Components) -> &'a BundleInfo {
-        let id = self.indices.entry(TypeId::of::<T>()).or_insert_with(|| {
-            let mut component_ids = Vec::new();
-            T::init_component_ids(components, &mut |id| component_ids.push(id));
-            let id = BundleId::new(self.bundles.len());
-            let info = Self::_init(type_name::<T>(), component_ids, id);
-            self.bundles.push(info);
-            id
-        });
-        // SAFETY:
-        // Already initialized or inserted
-        unsafe { self.bundles.get_unchecked(id.index()) }
-    }
-    
-    #[inline]
-    fn _init(name: &'static str, mut components: Vec<ComponentId>, id: BundleId) -> BundleInfo {
-        let old_len = components.len();
+    pub fn init<T: Bundle>() -> BundleId {
+        let mut components = Vec::new();
+        T::init_component_ids(&mut |id| components.push(id));
+        let len = components.len();
         components.sort();
         components.dedup();
-        assert!(
-            components.len() == old_len,
-            "Bundle {} has duplicate components",
-            name
-        );
+        assert!(len == components.len(), "Bundle with duplicate components detected!");
+        let components = components.into();
 
-        BundleInfo {
-            id,
-            components: BundleComponents::new(components)
-        } 
+        let mut this = unsafe { BUNDLES.as_mut().unwrap().write() };
+        
+        let mut index = 0;
+        for bundle in &this.bundles {
+            if bundle == &components {
+                return BundleId::new(index);
+            }
+
+            index += 1;
+        }
+
+        
+        let id = BundleId::new(index);
+
+        this.bundles.push(components);
+        this.ids.insert(TypeId::of::<T>(), id);
+
+        id
     }
 
-    #[inline]
-    pub fn get_info(&self, id: BundleId) -> Option<&BundleInfo> {
-        self.bundles.get(id.index())
-    }
-
-    #[inline]
-    pub unsafe fn get_info_unchecked(&self, id: BundleId) -> &BundleInfo {
-        self.bundles.get_unchecked(id.index())
-    }
-
-    #[inline]
-    pub fn get_id(&self, id: TypeId) -> Option<BundleId> {
-        self.indices.get(&id).cloned()
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.bundles.len()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &BundleInfo> {
-        self.bundles.iter()
+    pub fn get_bundle<T>(id: BundleId, func: impl FnOnce(&BundleComponents) -> T) -> T {
+        let this = unsafe { BUNDLES.as_ref().unwrap().read() };
+        let bundle = this.bundles.get(id.index()).unwrap();
+        func(bundle)
     }
 }
-

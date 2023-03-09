@@ -46,6 +46,8 @@ struct Zst;
 
 #[test]
 fn single_entity_single_component() {
+    init_ecs();
+
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -57,6 +59,8 @@ fn single_entity_single_component() {
 
 #[test]
 fn single_entity_multiple_components_single() {
+    init_ecs();
+
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -81,6 +85,8 @@ fn single_entity_multiple_components_single() {
 
 #[test]
 fn single_entity_multiple_components_multi() {
+    init_ecs();
+    
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -109,6 +115,8 @@ fn single_entity_multiple_components_multi() {
 
 #[test]
 fn entity_query() {
+    init_ecs();
+    
     let mut world = World::new();
 
     for _ in 0..5 {
@@ -124,6 +132,8 @@ fn entity_query() {
 
 #[test]
 fn component_query() {
+    init_ecs();
+    
     let mut world = World::new();
     
     for n in 5..10 {
@@ -153,6 +163,8 @@ fn component_query() {
 
 #[test]
 fn zst() {
+    init_ecs();
+    
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -169,6 +181,8 @@ fn zst() {
 
 #[test]
 fn component_clone() {
+    init_ecs();
+    
     let mut world = World::new();
 
     for _ in 0..10 {
@@ -188,6 +202,8 @@ fn component_clone() {
 
 #[test]
 fn collect_entity_by_empty_unit() {
+    init_ecs();
+    
     let mut world = World::new();
     let entity = world.entity_create();
     world.entity_set(entity, (Zst, UUID::new(42), Position::new(16., 16., 42.)));
@@ -205,3 +221,11 @@ fn collect_entity_by_empty_unit() {
     panic!("Should've already returned!");
 }
 
+/*fn test() {
+
+    world.init_component::<Position>(|component: *mut u8, user: &[*mut u8]| {
+         
+    });
+
+    world.entity_component_run_callbacks(&[&mut egui_state.cast::<u8>()]);
+}*/

@@ -33,15 +33,15 @@ impl Table {
 impl Table {
     pub fn with_capacity<'a>(
         component_ids: impl Iterator<Item = &'a ComponentId>,
-        components: &Components,
         capacity: usize
     ) -> Self {
         let mut component_set = MutSparseSet::new();
 
         for component_id in component_ids {
-            let description = components.get_description(*component_id).unwrap();
-            let store = unsafe { RawStore::with_capacity(description.layout(), description.drop(), capacity) };
-            component_set.insert(*component_id, store);
+            Components::get_info(*component_id, |info| {
+                let store = unsafe { RawStore::with_capacity(info.layout(), info.drop(), capacity) };
+                component_set.insert(*component_id, store);
+            });
         }
 
         Self {
@@ -53,7 +53,6 @@ impl Table {
     #[inline]
     pub fn init<T: Bundle>(
         &mut self,
-        components: &Vec<ComponentId>, 
         entity: Entity,
         data: T
     ) {
@@ -64,7 +63,7 @@ impl Table {
         // SAFETY:
         // We initialize `component` in our store via [`RawStore::push()`]
         unsafe {
-            data.get_components::<0>(components, &mut |component_id, component| {
+            data.get_components(&mut |component_id, component| {
                 let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
 
                 // If the [`Component`] already has been initialized, drop/replace the last index
@@ -81,7 +80,6 @@ impl Table {
     #[inline]
     pub fn set<T: Bundle>(
         &mut self,
-        components: &Vec<ComponentId>,
         index: usize, 
         data: T
     ) {
@@ -90,10 +88,19 @@ impl Table {
         // SAFETY:
         // We initialize `component` in our store via [`RawStore::push`]
         unsafe {
-            data.get_components::<0>(components, &mut |component_id, component| {
+            data.get_components(&mut |component_id, component| {
                 let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
                 store.replace_unchecked(index, component);
             });
+        }
+    }
+
+    pub unsafe fn foreach_at(&mut self, index: usize, func: impl Fn(ComponentId, *mut u8)) {
+        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
+
+        for (id, store) in self.components.iter_mut() {
+            let data = store.get_unchecked_mut(index);
+            func(*id, data);
         }
     }
 
@@ -203,10 +210,9 @@ impl Table {
     #[inline]
     pub unsafe fn get<'a, T: Bundle>(
         &self,
-        components: &Vec<ComponentId>,
         index: usize
     ) -> T::WrappedRef<'a> {
-        T::from_components::<0>(components, &mut |id| {
+        T::from_components(&mut |id| {
             let raw_store = self.components.get(id)?;
             Some(raw_store.get_unchecked(index))
         })
@@ -218,10 +224,9 @@ impl Table {
     #[inline]
     pub unsafe fn get_unchecked<'a, T: Bundle>(
         &self,
-        components: &Vec<ComponentId>,
         index: usize
     ) -> T::Ref<'a> {
-        T::from_components_unchecked::<0>(components, &mut |id| {
+        T::from_components_unchecked(&mut |id| {
             let raw_store = self.components.get(id).unwrap();
             raw_store.get_unchecked(index)
         })
@@ -232,10 +237,9 @@ impl Table {
     #[inline]
     pub unsafe fn get_mut<'a, T: Bundle>(
         &mut self,
-        components: &Vec<ComponentId>,
         index: usize
     ) -> T::WrappedMutRef<'a> {
-        T::from_components_mut::<0>(components, &mut |id| {
+        T::from_components_mut(&mut |id| {
             let raw_store = self.components.get_mut(id)?;
             Some(raw_store.get_unchecked_mut(index))
         })
@@ -247,10 +251,9 @@ impl Table {
     #[inline]
     pub unsafe fn get_unchecked_mut<'a, T: Bundle>(
         &mut self,
-        components: &Vec<ComponentId>,
         index: usize
     ) -> T::MutRef<'a> {
-        T::from_components_unchecked_mut::<0>(components, &mut |id| {
+        T::from_components_unchecked_mut(&mut |id| {
             let raw_store = self.components.get_mut(id).unwrap();
             raw_store.get_unchecked_mut(index)
         })

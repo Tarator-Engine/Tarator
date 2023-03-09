@@ -1,14 +1,13 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{ format_ident, quote };
+use quote::{format_ident, quote};
 use syn::{
-    parse::{ Parse, ParseStream },
+    parse::{Parse, ParseStream},
     parse_macro_input, parse_quote,
     token::Comma,
-    DeriveInput, Ident, LitInt, Result
+    DeriveInput, Ident, LitInt, Result,
 };
-
 
 struct ForeachTuple {
     macro_ident: Ident,
@@ -75,7 +74,6 @@ pub fn foreach_tuple(input: TokenStream) -> TokenStream {
     })
 }
 
-
 #[proc_macro_derive(Component, attributes(component))]
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
@@ -93,3 +91,16 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     })
 }
 
+#[proc_macro_derive(Callback, attributes(callback))]
+pub fn derive_callback(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    let struct_name = &ast.ident;
+    let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
+
+    TokenStream::from(quote! {
+        impl #impl_generics Callback<tar_ecs::component::Fake> for #struct_name #type_generics #where_clause {
+            fn callback(&mut self, component: &mut tar_ecs::component::Fake) {}
+        }
+    })
+}
