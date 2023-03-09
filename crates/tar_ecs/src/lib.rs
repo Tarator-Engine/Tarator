@@ -11,13 +11,12 @@ mod tests;
 
 pub mod prelude {
     pub use super::callback::Callback;
-    pub use super::component::Component;
+    pub use super::component::{Component, Fake};
     pub use super::entity::Entity;
-    pub use super::world::World;
-    pub use tar_ecs_macros::{ Callback, Component };
     pub use super::init_ecs;
+    pub use super::world::World;
+    pub use tar_ecs_macros::{Callback, Component};
 }
-
 
 pub fn init_ecs() {
     unsafe {

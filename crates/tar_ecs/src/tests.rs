@@ -1,10 +1,16 @@
 use crate::prelude::*;
 
-#[derive(Component)]
+static INIT: std::sync::Once = std::sync::Once::new();
+
+fn init() {
+    INIT.call_once(|| init_ecs())
+}
+
+#[derive(Component, Default)]
 struct Position {
     x: f32,
     y: f32,
-    z: f32
+    z: f32,
 }
 
 impl Position {
@@ -13,10 +19,9 @@ impl Position {
     }
 }
 
-
-#[derive(Clone, Component)]
+#[derive(Clone, Component, Default)]
 struct UUID {
-    id: u128 
+    id: u128,
 }
 
 impl UUID {
@@ -25,13 +30,12 @@ impl UUID {
     }
 }
 
-
-#[derive(Component)]
+#[derive(Component, Default)]
 struct Color {
     r: f32,
     g: f32,
     b: f32,
-    a: f32
+    a: f32,
 }
 
 impl Color {
@@ -43,10 +47,9 @@ impl Color {
 #[derive(Component, Eq, PartialEq)]
 struct Zst;
 
-
 #[test]
 fn single_entity_single_component() {
-    init_ecs();
+    init();
 
     let mut world = World::new();
 
@@ -56,10 +59,9 @@ fn single_entity_single_component() {
     assert!(world.entity_get::<UUID>(entity).unwrap().id == 19700101000000);
 }
 
-
 #[test]
 fn single_entity_multiple_components_single() {
-    init_ecs();
+    init();
 
     let mut world = World::new();
 
@@ -71,52 +73,52 @@ fn single_entity_multiple_components_single() {
     let (uuid, position, color) = (
         world.entity_get::<UUID>(entity).unwrap(),
         world.entity_get::<Position>(entity).unwrap(),
-        world.entity_get::<Color>(entity).unwrap()
+        world.entity_get::<Color>(entity).unwrap(),
     );
-    assert!(uuid.id == 19700101000000);   
-    assert!(position.x == 16.0);   
-    assert!(position.y == 16.0);   
-    assert!(position.z == 42.0);   
-    assert!(color.r == 1.0);   
-    assert!(color.g == 0.0);   
-    assert!(color.b == 1.0);   
-    assert!(color.a == 1.0);   
+    assert!(uuid.id == 19700101000000);
+    assert!(position.x == 16.0);
+    assert!(position.y == 16.0);
+    assert!(position.z == 42.0);
+    assert!(color.r == 1.0);
+    assert!(color.g == 0.0);
+    assert!(color.b == 1.0);
+    assert!(color.a == 1.0);
 }
 
 #[test]
 fn single_entity_multiple_components_multi() {
-    init_ecs();
-    
+    init();
+
     let mut world = World::new();
 
     let entity = world.entity_create();
     world.entity_set(
-        entity, 
+        entity,
         (
             UUID::new(19700101000000),
             Position::new(16.0, 16.0, 42.0),
-            Color::new(1.0, 0.0, 1.0, 1.0)
-        )
+            Color::new(1.0, 0.0, 1.0, 1.0),
+        ),
     );
 
     let (uuid, position, color) = {
         let (uuid, position, color) = world.entity_get::<(UUID, Position, Color)>(entity);
         (uuid.unwrap(), position.unwrap(), color.unwrap())
     };
-    assert!(uuid.id == 19700101000000);   
-    assert!(position.x == 16.0);   
-    assert!(position.y == 16.0);   
-    assert!(position.z == 42.0);   
-    assert!(color.r == 1.0);   
-    assert!(color.g == 0.0);   
-    assert!(color.b == 1.0);   
-    assert!(color.a == 1.0);   
+    assert!(uuid.id == 19700101000000);
+    assert!(position.x == 16.0);
+    assert!(position.y == 16.0);
+    assert!(position.z == 42.0);
+    assert!(color.r == 1.0);
+    assert!(color.g == 0.0);
+    assert!(color.b == 1.0);
+    assert!(color.a == 1.0);
 }
 
 #[test]
 fn entity_query() {
-    init_ecs();
-    
+    init();
+
     let mut world = World::new();
 
     for _ in 0..5 {
@@ -132,10 +134,10 @@ fn entity_query() {
 
 #[test]
 fn component_query() {
-    init_ecs();
-    
+    init();
+
     let mut world = World::new();
-    
+
     for n in 5..10 {
         let entity = world.entity_create();
         world.entity_set(entity, UUID::new(n));
@@ -163,8 +165,8 @@ fn component_query() {
 
 #[test]
 fn zst() {
-    init_ecs();
-    
+    init();
+
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -181,8 +183,8 @@ fn zst() {
 
 #[test]
 fn component_clone() {
-    init_ecs();
-    
+    init();
+
     let mut world = World::new();
 
     for _ in 0..10 {
@@ -202,8 +204,8 @@ fn component_clone() {
 
 #[test]
 fn collect_entity_by_empty_unit() {
-    init_ecs();
-    
+    init();
+
     let mut world = World::new();
     let entity = world.entity_create();
     world.entity_set(entity, (Zst, UUID::new(42), Position::new(16., 16., 42.)));
@@ -221,11 +223,54 @@ fn collect_entity_by_empty_unit() {
     panic!("Should've already returned!");
 }
 
-/*fn test() {
+#[test]
+fn callback() {
+    #[derive(Callback)]
+    struct MyCallback(u32);
 
-    world.init_component::<Position>(|component: *mut u8, user: &[*mut u8]| {
-         
-    });
+    impl Callback<Position> for MyCallback {
+        fn callback(&mut self, _: &mut Position) {
+            self.0 += 1;
+        }
+    }
 
-    world.entity_component_run_callbacks(&[&mut egui_state.cast::<u8>()]);
-}*/
+    impl Callback<UUID> for MyCallback {
+        fn callback(&mut self, _: &mut UUID) {
+            self.0 += 1;
+        }
+    }
+
+    impl Callback<Color> for MyCallback {
+        fn callback(&mut self, _: &mut Color) {
+            self.0 += 1;
+        }
+    }
+
+    impl Callback<Zst> for MyCallback {
+        fn callback(&mut self, _: &mut Zst) {
+            self.0 += 1;
+        }
+    }
+
+    init();
+
+    Position::add_callback::<MyCallback>();
+    UUID::add_callback::<MyCallback>();
+    Color::add_callback::<MyCallback>();
+    Zst::add_callback::<MyCallback>();
+
+    let mut world = World::new();
+
+    for _ in 0..4 {
+        let entity = world.entity_create();
+        let data = (Position::default(), UUID::default(), Color::default(), Zst);
+        world.entity_set(entity, data);
+    }
+
+    let mut cb = MyCallback(0);
+    for entity in world.entity_collect::<()>() {
+        world.entity_callback(entity, &mut cb);
+    }
+
+    assert!(cb.0 == 16, "{} != 16", cb.0);
+}

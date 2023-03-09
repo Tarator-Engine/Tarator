@@ -1,24 +1,22 @@
 use std::{
-    mem::{ needs_drop, size_of, self },
     alloc::Layout,
-    any::TypeId, collections::HashMap, sync::Arc, marker::PhantomData,
-    ptr::{ addr_of_mut, drop_in_place, copy }
+    any::TypeId,
+    collections::HashMap,
+    marker::PhantomData,
+    mem::{self, needs_drop, size_of},
+    ptr::{addr_of_mut, copy, drop_in_place},
+    sync::Arc,
 };
 
-use fxhash::{ FxBuildHasher };
-use parking_lot::{ RwLock, Mutex, MutexGuard };
+use fxhash::FxBuildHasher;
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use tar_ecs_macros::Component;
 
 use crate::{
-    store::{ sparse::SparseSetIndex, table::Table },
-    callback::{
-        Callback,
-        ComponentCallbacks,
-        CallbackId,
-        CallbackFunc
-    },
+    archetype::{ArchetypeId, Archetypes},
     bundle::Bundle,
-    archetype::{ Archetypes, ArchetypeId }
+    callback::{Callback, CallbackFunc, CallbackId, ComponentCallbacks},
+    store::{sparse::SparseSetIndex, table::Table},
 };
 
 /// A [`Component`] is nothing more but data, which can be stored in a given
@@ -35,7 +33,6 @@ pub trait Component: Sized + Send + Sync + 'static {
 
 #[derive(Component)]
 pub struct Fake;
-
 
 /// Every [`Component`] gets its own [`ComponentId`] per [`World`](crate::world::World). This
 /// [`ComponentId`] directly links to a [`ComponentDescription`], which contains some crutial
@@ -67,24 +64,23 @@ impl SparseSetIndex for ComponentId {
     }
 }
 
-
 pub struct ComponentInfo {
     drop: Option<unsafe fn(*mut u8)>,
     layout: Layout,
-    callbacks: ComponentCallbacks
+    callbacks: ComponentCallbacks,
 }
 
 impl ComponentInfo {
     unsafe fn inner_drop<T>(to_drop: *mut u8) {
         to_drop.cast::<T>().drop_in_place()
     }
-    
+
     #[inline]
     pub fn new_from<T: Component>() -> Self {
         Self {
             drop: needs_drop::<T>().then_some(Self::inner_drop::<T>),
             layout: Layout::new::<T>(),
-            callbacks: ComponentCallbacks::new()
+            callbacks: ComponentCallbacks::new(),
         }
     }
 
@@ -104,57 +100,69 @@ impl ComponentInfo {
     }
 }
 
-
-static mut COMPONENTS: Option<RwLock<Components>> = None;
+static mut COMPONENTS: RwLock<Option<Components>> = RwLock::new(None);
 
 pub struct Components {
     infos: Vec<ComponentInfo>,
     ids: HashMap<TypeId, ComponentId, FxBuildHasher>,
-    callback_ids: HashMap<TypeId, CallbackId, FxBuildHasher>
+    callback_ids: HashMap<TypeId, CallbackId, FxBuildHasher>,
 }
 
 impl Components {
     pub unsafe fn new() {
-        COMPONENTS = Some(RwLock::new(Self {
+        COMPONENTS = RwLock::new(Some(Self {
             infos: Default::default(),
             ids: Default::default(),
-            callback_ids: Default::default()
+            callback_ids: Default::default(),
         }))
     }
 
     pub fn init<T: Component>() -> ComponentId {
-        let mut this = unsafe { COMPONENTS.as_mut().unwrap().write() };
+        let mut this = unsafe { COMPONENTS.write() };
+        let this = this.as_mut().unwrap();
 
-        this.ids.get(&TypeId::of::<T>()).map(|id| *id).unwrap_or_else(|| {
-            let index = this.infos.len();
-            let id = ComponentId::new(index);
-            this.ids.insert(TypeId::of::<T>(), id);
-            this.infos.push(ComponentInfo::new_from::<T>());
+        this.ids
+            .get(&TypeId::of::<T>())
+            .map(|id| *id)
+            .unwrap_or_else(|| {
+                let index = this.infos.len();
+                let id = ComponentId::new(index);
+                this.ids.insert(TypeId::of::<T>(), id);
+                this.infos.push(ComponentInfo::new_from::<T>());
 
-            id
-        })
+                id
+            })
     }
 
     pub fn add_callback<T: Callback<U>, U: Component>() {
-        let mut this = unsafe { COMPONENTS.as_mut().unwrap().write() };
+        let mut this = unsafe { COMPONENTS.write() };
+        let this = this.as_mut().unwrap();
 
         let callback_type_id = TypeId::of::<T>();
-        let callback_id = this.callback_ids.get(&callback_type_id).map(|id| *id).unwrap_or_else(|| {
-            let index = this.callback_ids.len();
-            let callback_id = CallbackId::new(index);
-            this.callback_ids.insert(callback_type_id, callback_id);
+        let callback_id = this
+            .callback_ids
+            .get(&callback_type_id)
+            .map(|id| *id)
+            .unwrap_or_else(|| {
+                let index = this.callback_ids.len();
+                let callback_id = CallbackId::new(index);
+                this.callback_ids.insert(callback_type_id, callback_id);
 
-            callback_id
-        });
+                callback_id
+            });
 
-        let id = this.ids.get(&TypeId::of::<U>()).map(|id| *id).unwrap_or_else(|| {
-            let index = this.infos.len();
-            let id = ComponentId::new(index);
-            this.ids.insert(TypeId::of::<U>(), id);
-            this.infos.push(ComponentInfo::new_from::<U>());
+        let id = this
+            .ids
+            .get(&TypeId::of::<U>())
+            .map(|id| *id)
+            .unwrap_or_else(|| {
+                let index = this.infos.len();
+                let id = ComponentId::new(index);
+                this.ids.insert(TypeId::of::<U>(), id);
+                this.infos.push(ComponentInfo::new_from::<U>());
 
-            id
-        });
+                id
+            });
         // SAFETY:
         // We just checked or pushed
         let info = unsafe { this.infos.get_unchecked_mut(id.index()) };
@@ -163,9 +171,10 @@ impl Components {
     }
 
     pub fn get_info<T>(id: ComponentId, func: impl FnOnce(&ComponentInfo) -> T) -> T {
-        let this = unsafe { COMPONENTS.as_ref().unwrap().read() };
+        let this = unsafe { COMPONENTS.read() };
+        let this = this.as_ref().unwrap();
         let info = this.infos.get(id.index()).unwrap();
-        
+
         func(info)
     }
 
@@ -174,7 +183,8 @@ impl Components {
     }
 
     pub fn get_id(id: TypeId) -> Option<ComponentId> {
-        let this = unsafe { COMPONENTS.as_ref().unwrap().read() };
+        let this = unsafe { COMPONENTS.read() };
+        let this = this.as_ref().unwrap();
         this.ids.get(&id).map(|id| *id)
     }
 
@@ -183,11 +193,11 @@ impl Components {
     }
 
     pub fn get_callback_id(id: TypeId) -> Option<CallbackId> {
-        let this = unsafe { COMPONENTS.as_ref().unwrap().read() };
+        let this = unsafe { COMPONENTS.read() };
+        let this = this.as_ref().unwrap();
         this.callback_ids.get(&id).map(|id| *id)
     }
 }
-
 
 /// An [`Iterator`] for a given [`Bundle`], which iterates over all
 /// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
@@ -198,14 +208,11 @@ pub struct ComponentQuery<'a, T: Bundle> {
     current: MutexGuard<'a, Table>,
     index: usize,
     table: usize,
-    marker: PhantomData<&'a T>
+    marker: PhantomData<&'a T>,
 }
 
 impl<'a, T: Bundle> ComponentQuery<'a, T> {
-    pub fn new(
-        archetype_ids: &Vec<ArchetypeId>,
-        archetypes: &'a mut Archetypes
-    ) -> Self {
+    pub fn new(archetype_ids: &Vec<ArchetypeId>, archetypes: &'a mut Archetypes) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
         for id in archetype_ids {
@@ -221,7 +228,7 @@ impl<'a, T: Bundle> ComponentQuery<'a, T> {
             tables,
             index: 0,
             table: 0,
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 }
@@ -251,8 +258,12 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
             drop_in_place(current);
 
             // Copy in the new guard
-            copy(table.cast::<u8>(), current.cast::<u8>(), size_of::<MutexGuard<'a, Table>>());
-            
+            copy(
+                table.cast::<u8>(),
+                current.cast::<u8>(),
+                size_of::<MutexGuard<'a, Table>>(),
+            );
+
             // Forget the local variable of the lock, so that our mutex doesn't get replaced
             mem::forget(table);
         }
@@ -270,14 +281,11 @@ pub struct ComponentQueryMut<'a, T: Bundle> {
     current: MutexGuard<'a, Table>,
     index: usize,
     table: usize,
-    marker: PhantomData<&'a mut T>
+    marker: PhantomData<&'a mut T>,
 }
 
 impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
-    pub fn new(
-        archetype_ids: &Vec<ArchetypeId>,
-        archetypes: &'a mut Archetypes
-    ) -> Self {
+    pub fn new(archetype_ids: &Vec<ArchetypeId>, archetypes: &'a mut Archetypes) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
         for id in archetype_ids {
@@ -293,7 +301,7 @@ impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
             current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
             index: 0,
             table: 0,
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 }
@@ -321,8 +329,12 @@ impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
             drop_in_place(current);
 
             // Copy in the new guard
-            copy(table.cast::<u8>(), current.cast::<u8>(), size_of::<MutexGuard<'a, Table>>());
-            
+            copy(
+                table.cast::<u8>(),
+                current.cast::<u8>(),
+                size_of::<MutexGuard<'a, Table>>(),
+            );
+
             // Forget the local variable of the lock, so that our mutex doesn't get replaced
             mem::forget(table);
         }

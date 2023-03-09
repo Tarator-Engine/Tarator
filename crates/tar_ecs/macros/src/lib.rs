@@ -99,8 +99,8 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     TokenStream::from(quote! {
-        impl #impl_generics Callback<tar_ecs::component::Fake> for #struct_name #type_generics #where_clause {
-            fn callback(&mut self, component: &mut tar_ecs::component::Fake) {}
+        impl #impl_generics Callback<Fake> for #struct_name #type_generics #where_clause {
+            fn callback(&mut self, component: &mut Fake) {}
         }
     })
 }
