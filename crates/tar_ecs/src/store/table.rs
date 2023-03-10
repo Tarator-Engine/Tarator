@@ -2,14 +2,14 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     bundle::Bundle,
-    component::{ComponentId, Components},
+    component::{ComponentHashId, ComponentId, Components},
     entity::Entity,
     store::{
         raw_store::RawStore,
         sparse::{MutSparseSet, SparseSet},
     },
 };
-use parking_lot::MutexGuard;
+use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
 
 #[derive(Debug)]
 pub struct Table {
@@ -123,7 +123,7 @@ impl Table {
     #[must_use = "The returned variant may contain a relocated Entity!"]
     pub unsafe fn move_into_parent(
         &mut self,
-        parent: &mut MutexGuard<Self>,
+        parent: &mut RwLockWriteGuard<Self>,
         index: usize,
     ) -> Option<Entity> {
         debug_assert!(
@@ -165,7 +165,7 @@ impl Table {
     /// - `index` has to be valid
     pub unsafe fn move_into_child(
         &mut self,
-        child: &mut MutexGuard<Self>,
+        child: &mut RwLockWriteGuard<Self>,
         index: usize,
     ) -> Option<Entity> {
         debug_assert!(
@@ -279,6 +279,28 @@ impl Table {
             raw_store.get_unchecked_mut(index)
         })
     }
+
+    pub unsafe fn get_unchecked_raw(
+        &self,
+        component: ComponentHashId,
+        index: usize,
+    ) -> Option<*const u8> {
+        let id = Components::get_id(component)?;
+        let raw_store = self.components.get(id)?;
+
+        Some(raw_store.get_unchecked(index))
+    }
+
+    pub unsafe fn get_unchecked_mut_raw(
+        &mut self,
+        component: ComponentHashId,
+        index: usize,
+    ) -> Option<*mut u8> {
+        let id = Components::get_id(component)?;
+        let raw_store = self.components.get_mut(id)?;
+
+        Some(raw_store.get_unchecked_mut(index))
+    }
 }
 
 impl Table {
@@ -316,11 +338,11 @@ impl Table {
 pub struct TRef<'a, T: Bundle> {
     data: T::Ref<'a>,
     #[allow(unused)]
-    table: MutexGuard<'a, Table>,
+    table: RwLockReadGuard<'a, Table>,
 }
 
 impl<'a, T: Bundle> TRef<'a, T> {
-    pub fn new(data: T::Ref<'a>, table: MutexGuard<'a, Table>) -> Self {
+    pub fn new(data: T::Ref<'a>, table: RwLockReadGuard<'a, Table>) -> Self {
         Self { data, table }
     }
 }
@@ -336,11 +358,11 @@ impl<'a, T: Bundle> Deref for TRef<'a, T> {
 pub struct TMut<'a, T: Bundle> {
     data: T::Mut<'a>,
     #[allow(unused)]
-    table: MutexGuard<'a, Table>,
+    table: RwLockWriteGuard<'a, Table>,
 }
 
 impl<'a, T: Bundle> TMut<'a, T> {
-    pub fn new(data: T::Mut<'a>, table: MutexGuard<'a, Table>) -> Self {
+    pub fn new(data: T::Mut<'a>, table: RwLockWriteGuard<'a, Table>) -> Self {
         Self { data, table }
     }
 }

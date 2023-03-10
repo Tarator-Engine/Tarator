@@ -1,15 +1,15 @@
 use std::{
     alloc::Layout,
-    any::TypeId,
+    any::{type_name, TypeId},
     collections::HashMap,
     marker::PhantomData,
     mem::{self, needs_drop, size_of},
-    ptr::{addr_of_mut, copy, drop_in_place},
+    ptr::{addr_of_mut, copy},
     sync::Arc,
 };
 
-use fxhash::FxBuildHasher;
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use fxhash::{hash, FxBuildHasher};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tar_ecs_macros::Component;
 
 use crate::{
@@ -70,6 +70,29 @@ impl SparseSetIndex for ComponentId {
     }
 }
 
+/// Every [`Component`] gets its own [`ComponentId`] per [`World`](crate::world::World). This
+/// [`ComponentId`] directly links to a [`ComponentDescription`], which contains some crutial
+/// information about a [`Component`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct ComponentHashId(usize);
+
+impl ComponentHashId {
+    #[inline]
+    pub fn new<T: Component>() -> Self {
+        Self::new_from_str(type_name::<T>())
+    }
+
+    #[inline]
+    pub fn new_from_str(name: &'static str) -> Self {
+        Self(hash(name))
+    }
+
+    #[inline]
+    pub const fn id(self) -> usize {
+        self.0 as usize
+    }
+}
+
 pub struct ComponentInfo {
     drop: Option<unsafe fn(*mut u8)>,
     layout: Layout,
@@ -110,7 +133,7 @@ static mut COMPONENTS: RwLock<Option<Components>> = RwLock::new(None);
 
 pub struct Components {
     infos: Vec<ComponentInfo>,
-    ids: HashMap<TypeId, ComponentId, FxBuildHasher>,
+    ids: HashMap<ComponentHashId, ComponentId, FxBuildHasher>,
     callback_ids: HashMap<TypeId, CallbackId, FxBuildHasher>,
 }
 
@@ -134,12 +157,12 @@ impl Components {
         let this = this.as_mut().unwrap();
 
         this.ids
-            .get(&TypeId::of::<T>())
+            .get(&ComponentHashId::new::<T>())
             .map(|id| *id)
             .unwrap_or_else(|| {
                 let index = this.infos.len();
                 let id = ComponentId::new(index);
-                this.ids.insert(TypeId::of::<T>(), id);
+                this.ids.insert(ComponentHashId::new::<T>(), id);
                 this.infos.push(ComponentInfo::new_from::<T>());
 
                 id
@@ -165,12 +188,12 @@ impl Components {
 
         let id = this
             .ids
-            .get(&TypeId::of::<U>())
+            .get(&ComponentHashId::new::<U>())
             .map(|id| *id)
             .unwrap_or_else(|| {
                 let index = this.infos.len();
                 let id = ComponentId::new(index);
-                this.ids.insert(TypeId::of::<U>(), id);
+                this.ids.insert(ComponentHashId::new::<U>(), id);
                 this.infos.push(ComponentInfo::new_from::<U>());
 
                 id
@@ -191,10 +214,10 @@ impl Components {
     }
 
     pub fn get_id_from<T: Component>() -> Option<ComponentId> {
-        Self::get_id(TypeId::of::<T>())
+        Self::get_id(ComponentHashId::new::<T>())
     }
 
-    pub fn get_id(id: TypeId) -> Option<ComponentId> {
+    pub fn get_id(id: ComponentHashId) -> Option<ComponentId> {
         let this = unsafe { COMPONENTS.read() };
         let this = this.as_ref().unwrap();
         this.ids.get(&id).map(|id| *id)
@@ -211,13 +234,17 @@ impl Components {
     }
 }
 
+/// ///////////////////////////////////////////////////////////////////////////////////////////////
+/// QUERIES ///////////////////////////////////////////////////////////////////////////////////////
+/// ///////////////////////////////////////////////////////////////////////////////////////////////
+
 /// An [`Iterator`] for a given [`Bundle`], which iterates over all
 /// [`Archetype`](crate::archetype::Archetype)s of a [`World`](crate::world::World) who contain the
 /// [`Bundle`].
 #[derive(Debug)]
 pub struct ComponentQuery<'a, T: Bundle> {
-    tables: Vec<Arc<Mutex<Table>>>,
-    current: MutexGuard<'a, Table>,
+    tables: Vec<Arc<RwLock<Table>>>,
+    current: RwLockReadGuard<'a, Table>,
     index: usize,
     table: usize,
     marker: PhantomData<&'a T>,
@@ -236,7 +263,7 @@ impl<'a, T: Bundle> ComponentQuery<'a, T> {
         }
 
         Self {
-            current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
+            current: archetypes.get(archetype_ids[0]).unwrap().table_read(),
             tables,
             index: 0,
             table: 0,
@@ -262,18 +289,16 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
 
         // This here is some magic to keep the Mutex locked for it's entire iteration
         unsafe {
-            let mut table = self.tables.get(self.table)?.lock();
-            let table = addr_of_mut!(table);
-            let current = addr_of_mut!(self.current).clone();
+            let mut table = self.tables.get(self.table)?.read();
 
             // Drop the current Guard, unlocking the mutex
-            drop_in_place(current);
+            addr_of_mut!(self.current).drop_in_place();
 
             // Copy in the new guard
             copy(
-                table.cast::<u8>(),
-                current.cast::<u8>(),
-                size_of::<MutexGuard<'a, Table>>(),
+                addr_of_mut!(table).cast::<u8>(),
+                addr_of_mut!(self.current).cast::<u8>(),
+                size_of::<RwLockReadGuard<'a, Table>>(),
             );
 
             // Forget the local variable of the lock, so that our mutex doesn't get replaced
@@ -289,8 +314,8 @@ impl<'a, T: Bundle> Iterator for ComponentQuery<'a, T> {
 /// [`Bundle`].
 #[derive(Debug)]
 pub struct ComponentQueryMut<'a, T: Bundle> {
-    tables: Vec<Arc<Mutex<Table>>>,
-    current: MutexGuard<'a, Table>,
+    tables: Vec<Arc<RwLock<Table>>>,
+    current: RwLockWriteGuard<'a, Table>,
     index: usize,
     table: usize,
     marker: PhantomData<&'a mut T>,
@@ -310,7 +335,7 @@ impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
 
         Self {
             tables,
-            current: archetypes.get(archetype_ids[0]).unwrap().table_lock(),
+            current: archetypes.get(archetype_ids[0]).unwrap().table_write(),
             index: 0,
             table: 0,
             marker: PhantomData,
@@ -333,18 +358,16 @@ impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
 
         // This here is some magic to keep the Mutex locked for it's entire iteration
         unsafe {
-            let mut table = self.tables.get(self.table)?.lock();
-            let table = addr_of_mut!(table);
-            let current = addr_of_mut!(self.current).clone();
+            let mut table = self.tables.get(self.table)?.write();
 
             // Drop the current Guard, unlocking the mutex
-            drop_in_place(current);
+            addr_of_mut!(self.current).drop_in_place();
 
             // Copy in the new guard
             copy(
-                table.cast::<u8>(),
-                current.cast::<u8>(),
-                size_of::<MutexGuard<'a, Table>>(),
+                addr_of_mut!(table).cast::<u8>(),
+                addr_of_mut!(self.current).cast::<u8>(),
+                size_of::<RwLockWriteGuard<'a, Table>>(),
             );
 
             // Forget the local variable of the lock, so that our mutex doesn't get replaced

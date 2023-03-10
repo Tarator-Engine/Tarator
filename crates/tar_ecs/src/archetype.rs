@@ -1,4 +1,4 @@
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
@@ -49,7 +49,7 @@ impl SparseSetIndex for ArchetypeId {
 pub struct Archetype {
     id: ArchetypeId,
     parents: Vec<ArchetypeId>,
-    table: Arc<Mutex<Table>>,
+    table: Arc<RwLock<Table>>,
 }
 
 impl Archetype {
@@ -61,7 +61,7 @@ impl Archetype {
         Self {
             id,
             parents: Vec::new(),
-            table: Arc::new(Mutex::new(Table::empty())),
+            table: Arc::new(RwLock::new(Table::empty())),
         }
     }
 
@@ -76,18 +76,23 @@ impl Archetype {
         Self {
             id,
             parents: Vec::new(),
-            table: Arc::new(Mutex::new(Table::with_capacity(component_ids, capacity))),
+            table: Arc::new(RwLock::new(Table::with_capacity(component_ids, capacity))),
         }
     }
 
     #[inline]
-    pub fn table(&self) -> Arc<Mutex<Table>> {
+    pub fn table(&self) -> Arc<RwLock<Table>> {
         self.table.clone()
     }
 
     #[inline]
-    pub fn table_lock(&self) -> MutexGuard<Table> {
-        self.table.lock()
+    pub fn table_read(&self) -> RwLockReadGuard<Table> {
+        self.table.read()
+    }
+
+    #[inline]
+    pub fn table_write(&self) -> RwLockWriteGuard<Table> {
+        self.table.write()
     }
 
     #[inline]
@@ -104,8 +109,8 @@ impl Archetype {
             return;
         }
 
-        let self_table = self.table.lock();
-        let parent_table = parent.table.lock();
+        let self_table = self.table.write();
+        let parent_table = parent.table.read();
 
         for component_id in self_table.component_ids() {
             // If the `archetype` does not contain every component_id of `self`, `archetype` is not

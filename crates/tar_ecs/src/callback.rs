@@ -1,9 +1,6 @@
 use crate::{
     component::Component,
-    store::sparse::{
-        SparseSetIndex,
-        MutSparseSet
-    }
+    store::sparse::{MutSparseSet, SparseSetIndex},
 };
 
 pub trait Callback<T: Component>: Sized + 'static {
@@ -37,18 +34,17 @@ impl SparseSetIndex for CallbackId {
     }
 }
 
-
 pub type CallbackFunc = unsafe fn(*mut u8, *mut u8);
 
 pub struct ComponentCallbacks {
-    callbacks: MutSparseSet<CallbackId, CallbackFunc>
+    callbacks: MutSparseSet<CallbackId, CallbackFunc>,
 }
 
 impl ComponentCallbacks {
     #[inline]
     pub fn new() -> Self {
         Self {
-            callbacks: MutSparseSet::new()
+            callbacks: MutSparseSet::new(),
         }
     }
 

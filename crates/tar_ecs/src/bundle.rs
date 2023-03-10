@@ -1,10 +1,10 @@
-use std::{any::TypeId, collections::HashMap, mem::ManuallyDrop};
+use std::{any::type_name, collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
     component::{Component, ComponentId, Components},
     store::sparse::SparseSetIndex,
 };
-use fxhash::FxBuildHasher;
+use fxhash::{hash, FxBuildHasher};
 use parking_lot::RwLock;
 use tar_ecs_macros::foreach_tuple;
 
@@ -344,6 +344,21 @@ impl SparseSetIndex for BundleId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct BundleHashId(usize);
+
+impl BundleHashId {
+    #[inline]
+    pub fn new<T: Bundle>() -> Self {
+        Self(hash(type_name::<T>()))
+    }
+
+    #[inline]
+    pub const fn id(self) -> usize {
+        self.0
+    }
+}
+
 /// Stores a sorted [`Vec`] of [`ComponentId`]s, used in [`Archetypes`](crate::archetype::Archetypes)
 /// to to easily identify an [`Archetype`](crate::archetype::Archetype).
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -397,7 +412,7 @@ static mut BUNDLES: RwLock<Option<Bundles>> = RwLock::new(None);
 
 pub struct Bundles {
     bundles: Vec<BundleComponents>,
-    ids: HashMap<TypeId, BundleId, FxBuildHasher>,
+    ids: HashMap<BundleHashId, BundleId, FxBuildHasher>,
 }
 
 impl Bundles {
@@ -441,7 +456,7 @@ impl Bundles {
         let id = BundleId::new(index);
 
         this.bundles.push(components);
-        this.ids.insert(TypeId::of::<T>(), id);
+        this.ids.insert(BundleHashId::new::<T>(), id);
 
         id
     }

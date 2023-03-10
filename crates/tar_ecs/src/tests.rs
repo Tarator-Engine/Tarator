@@ -247,3 +247,68 @@ fn callback() {
 
     assert!(cb.0 == 16, "{} != 16", cb.0);
 }
+
+#[test]
+fn single_entity_single_component_raw() {
+    use crate::component::ComponentHashId;
+
+    let mut world = World::new();
+
+    let entity = world.entity_create();
+    world.entity_set(entity, UUID::new(19700101000000));
+
+    let (table, index) = world.entity_get_table_and_index(entity).unwrap();
+    let hash_id = ComponentHashId::new::<UUID>();
+
+    unsafe {
+        assert!(
+            (*table
+                .write()
+                .get_unchecked_raw(hash_id, index)
+                .unwrap()
+                .cast::<UUID>())
+            .id == 19700101000000
+        );
+    }
+}
+
+#[test]
+fn single_entity_multiple_components_raw() {
+    use crate::component::ComponentHashId;
+
+    let mut world = World::new();
+
+    let entity = world.entity_create();
+    world.entity_set(entity, UUID::new(19700101000000));
+    world.entity_set(entity, Position::new(16.0, 16.0, 42.0));
+    world.entity_set(entity, Color::new(1.0, 0.0, 1.0, 1.0));
+
+    let (table, index) = world.entity_get_table_and_index(entity).unwrap();
+    let table = table.read();
+
+    let (uuid, position, color) = unsafe {
+        (
+            &*table
+                .get_unchecked_raw(ComponentHashId::new::<UUID>(), index)
+                .unwrap()
+                .cast::<UUID>(),
+            &*table
+                .get_unchecked_raw(ComponentHashId::new::<Position>(), index)
+                .unwrap()
+                .cast::<Position>(),
+            &*table
+                .get_unchecked_raw(ComponentHashId::new::<Color>(), index)
+                .unwrap()
+                .cast::<Color>(),
+        )
+    };
+
+    assert!(uuid.id == 19700101000000);
+    assert!(position.x == 16.0);
+    assert!(position.y == 16.0);
+    assert!(position.z == 42.0);
+    assert!(color.r == 1.0);
+    assert!(color.g == 0.0);
+    assert!(color.b == 1.0);
+    assert!(color.a == 1.0);
+}
