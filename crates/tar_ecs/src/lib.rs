@@ -13,14 +13,6 @@ pub mod prelude {
     pub use super::callback::Callback;
     pub use super::component::{Component, Fake};
     pub use super::entity::Entity;
-    pub use super::init_ecs;
     pub use super::world::World;
     pub use tar_ecs_macros::{Callback, Component};
-}
-
-pub fn init_ecs() {
-    unsafe {
-        component::Components::new();
-        bundle::Bundles::new();
-    }
 }

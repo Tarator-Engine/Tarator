@@ -87,7 +87,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     TokenStream::from(quote! {
-        impl #impl_generics Component for #struct_name #type_generics #where_clause {}
+        unsafe impl #impl_generics Component for #struct_name #type_generics #where_clause {}
     })
 }
 
@@ -100,7 +100,7 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         impl #impl_generics Callback<Fake> for #struct_name #type_generics #where_clause {
-            fn callback(&mut self, component: &mut Fake) {}
+            fn callback(&mut self, _: &mut Fake) {}
         }
     })
 }

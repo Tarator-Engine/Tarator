@@ -374,10 +374,16 @@ pub struct Bundles {
 
 impl Bundles {
     pub unsafe fn new() {
-        BUNDLES = RwLock::new(Some(Self {
+        let mut this = BUNDLES.write();
+
+        if this.is_some() {
+            return;
+        }
+
+        *this = Some(Self {
             bundles: Vec::new(),
             ids: Default::default(),
-        }))
+        })
     }
 
     pub fn init<T: Bundle>() -> BundleId {

@@ -21,10 +21,13 @@ use crate::{
 
 /// A [`Component`] is nothing more but data, which can be stored in a given
 /// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can
-/// manually be implemented on a type, or via `#[derive(Component)]`.
+/// be derived via `#[derive(Component)]`.
 ///
 /// Read further: [`Bundle`]
-pub trait Component: Sized + Send + Sync + 'static {
+///
+/// SAFETY:
+/// - Manual implementation is discouraged
+pub unsafe trait Component: Sized + Send + Sync + 'static {
     #[inline]
     fn add_callback<T: Callback<Self>>() {
         Components::add_callback::<T, Self>()
@@ -110,11 +113,17 @@ pub struct Components {
 
 impl Components {
     pub unsafe fn new() {
-        COMPONENTS = RwLock::new(Some(Self {
+        let mut this = COMPONENTS.write();
+
+        if this.is_some() {
+            return;
+        }
+
+        *this = Some(Self {
             infos: Default::default(),
             ids: Default::default(),
             callback_ids: Default::default(),
-        }))
+        })
     }
 
     pub fn init<T: Component>() -> ComponentId {

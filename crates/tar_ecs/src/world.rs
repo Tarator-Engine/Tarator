@@ -1,12 +1,12 @@
 use crate::{
-    archetype::{ ArchetypeId, Archetypes },
-    bundle::{ Bundle, Bundles, CloneBundle },
-    component::{ ComponentQuery, ComponentQueryMut, Components, Fake },
+    archetype::{ArchetypeId, Archetypes},
+    bundle::{Bundle, Bundles, CloneBundle},
     callback::Callback,
-    entity::{ Entities, Entity },
+    component::{ComponentQuery, ComponentQueryMut, Components, Fake},
+    entity::{Entities, Entity},
     store::sparse::SparseSetIndex,
 };
-use std::sync::atomic::{ AtomicUsize, Ordering };
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Uniquely identifies a [`World`]. Multiple [`World`]s can also be created from different
 /// threads, and they'll still have an unique [`WorldId`].
@@ -57,8 +57,6 @@ impl SparseSetIndex for WorldId {
 ///
 /// ```
 /// fn main() {
-///     init_ecs();
-///  
 ///     use tar_ecs::prelude::*;
 ///
 ///     let mut world = World::new();
@@ -69,9 +67,9 @@ impl SparseSetIndex for WorldId {
 ///     #[derive(Component)]
 ///     struct Name(String);
 ///
-///     // Or we can implement [`Component`] manually
+///     // Or we can implement [`Component`] manually (discouraged)
 ///     struct Age(u8);
-///     impl Component for Age {}
+///     unsafe impl Component for Age {}
 ///
 ///     {
 ///         let name = Name(String::from("Max Mustermann"));
@@ -104,8 +102,6 @@ impl SparseSetIndex for WorldId {
 /// struct Odd(u32);
 ///
 /// fn main() {
-///     init_ecs();
-///  
 ///     let mut world = World::new();
 ///
 ///     for n in 0..42 {
@@ -143,6 +139,10 @@ impl World {
     /// Will panic if it gets called more than [`usize::MAX`] times
     #[inline]
     pub fn new() -> Self {
+        unsafe {
+            Components::new();
+            Bundles::new();
+        }
         Self {
             id: WorldId::new(),
             archetypes: Archetypes::new(),
@@ -187,12 +187,7 @@ impl World {
     /// Reconsider if this function should panic or not
     #[inline]
     pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
-        Self::inner_entity_set(
-            entity,
-            data, 
-            &mut self.archetypes,
-            &mut self.entities
-        )
+        Self::inner_entity_set(entity, data, &mut self.archetypes, &mut self.entities)
     }
 
     /// Unsets a given [`Bundle`] on `entity`.
@@ -201,11 +196,7 @@ impl World {
     /// in fairly poor performance.
     #[inline]
     pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
-        Self::inner_entity_unset::<T>(
-            entity,
-            &mut self.archetypes,
-            &mut self.entities
-        )
+        Self::inner_entity_unset::<T>(entity, &mut self.archetypes, &mut self.entities)
     }
 
     /// Returns a reference to the [`Component`] data of given [`Entity`]. If the [`Entity`]
@@ -258,10 +249,7 @@ impl World {
 /// INNER ENTITY FUNCTIONS ////////////////////////////////////////////////////////////////////////
 /// ///////////////////////////////////////////////////////////////////////////////////////////////
 impl World {
-    fn inner_entity_create(
-        archetypes: &mut Archetypes,
-        entities: &mut Entities
-    ) -> Entity {
+    fn inner_entity_create(archetypes: &mut Archetypes, entities: &mut Entities) -> Entity {
         let (entity, entity_meta) = entities.create();
         // SAFETY:
         // - Getting the empty archetype is safe, as it should already exist
@@ -277,11 +265,7 @@ impl World {
         entity
     }
 
-    fn inner_entity_destroy(
-        entity: Entity,
-        archetypes: &mut Archetypes,
-        entities: &mut Entities
-    ) {
+    fn inner_entity_destroy(entity: Entity, archetypes: &mut Archetypes, entities: &mut Entities) {
         let Some(entity_meta) = entities.destroy(entity) else {
             return;
         };
@@ -302,7 +286,8 @@ impl World {
             //
             // SAFETY:
             // Entity definitely exists
-            let replaced_entity_meta = unsafe { entities.get_unchecked_mut(replaced_entity.id() as usize) };
+            let replaced_entity_meta =
+                unsafe { entities.get_unchecked_mut(replaced_entity.id() as usize) };
             replaced_entity_meta.index = entity_meta.index;
         }
     }
@@ -311,7 +296,7 @@ impl World {
         entity: Entity,
         data: T,
         archetypes: &mut Archetypes,
-        entities: &mut Entities
+        entities: &mut Entities,
     ) {
         let entity_meta = entities
             .get_mut(entity)
@@ -319,7 +304,7 @@ impl World {
 
         let archetype_id = 'relocate: {
             if entity_meta.is_empty() {
-                let bundle_id= Bundles::init::<T>();
+                let bundle_id = Bundles::init::<T>();
 
                 break 'relocate Bundles::get_bundle(bundle_id, |bundle| {
                     let archetype = archetypes.get_from_bundle(bundle);
@@ -333,13 +318,8 @@ impl World {
 
             // SAFETY:
             // `entity_meta.archetype_id` is definitely valid
-            let archetype_id = unsafe {
-                Self::get_add_archetype_id::<T>(
-                    archetypes,
-                    entity_meta.archetype_id,
-                    1,
-                )
-            };
+            let archetype_id =
+                unsafe { Self::get_add_archetype_id::<T>(archetypes, entity_meta.archetype_id, 1) };
 
             // If [`Archetype`] of `entity` does not need to change
             if archetype_id == entity_meta.archetype_id {
@@ -355,8 +335,10 @@ impl World {
         };
 
         // If [`Archetype`] of `entity` does change
-        let (old_archetype, new_archetype) = archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
-        let (mut old_table, mut new_table) = (old_archetype.table_lock(), new_archetype.table_lock());
+        let (old_archetype, new_archetype) =
+            archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
+        let (mut old_table, mut new_table) =
+            (old_archetype.table_lock(), new_archetype.table_lock());
         let (old_index, new_index) = (entity_meta.index, new_table.len());
 
         entity_meta.index = new_index;
@@ -381,7 +363,7 @@ impl World {
     pub fn inner_entity_unset<T: Bundle>(
         entity: Entity,
         archetypes: &mut Archetypes,
-        entities: &mut Entities
+        entities: &mut Entities,
     ) {
         let Some(entity_meta) = entities.get_mut(entity) else {
             return;
@@ -393,21 +375,18 @@ impl World {
 
         // SAFETY:
         // `entity_meta.archetype_id` is definitely valid
-        let archetype_id = unsafe {
-            Self::get_sub_archetype_id::<T>(
-                archetypes,
-                entity_meta.archetype_id,
-                1,
-            )
-        };
+        let archetype_id =
+            unsafe { Self::get_sub_archetype_id::<T>(archetypes, entity_meta.archetype_id, 1) };
 
         if archetype_id == entity_meta.archetype_id {
             return;
         }
 
         // If [`Archetype`] of `entity` does change
-        let (old_archetype, new_archetype) = archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
-        let (mut old_table, mut new_table) = (old_archetype.table_lock(), new_archetype.table_lock());
+        let (old_archetype, new_archetype) =
+            archetypes.get_2_mut(entity_meta.archetype_id, archetype_id);
+        let (mut old_table, mut new_table) =
+            (old_archetype.table_lock(), new_archetype.table_lock());
         let (old_index, new_index) = (entity_meta.index, new_table.len());
 
         entity_meta.index = new_index;
@@ -429,7 +408,7 @@ impl World {
     fn inner_entity_get<'a, T: Bundle>(
         entity: Entity,
         archetypes: &Archetypes,
-        entities: &Entities
+        entities: &Entities,
     ) -> T::WrappedRef<'a> {
         let Some(meta) = entities.get(entity) else {
             return T::empty_ref();
@@ -449,7 +428,7 @@ impl World {
     fn inner_entity_get_mut<'a, T: Bundle>(
         entity: Entity,
         archetypes: &mut Archetypes,
-        entities: &Entities
+        entities: &Entities,
     ) -> T::WrappedMutRef<'a> {
         let Some(meta) = entities.get(entity) else {
             return T::empty_mut_ref();
@@ -457,7 +436,7 @@ impl World {
         let Some(archetype) = archetypes.get_mut(meta.archetype_id) else {
             return T::empty_mut_ref();
         };
-        
+
         let mut table = archetype.table_lock();
         if table.len() < meta.index {
             return T::empty_mut_ref();
@@ -469,11 +448,7 @@ impl World {
     fn inner_entity_collect<T: Bundle>(archetypes: &mut Archetypes) -> Vec<Entity> {
         let id = Bundles::init::<T>();
         let archetype_id = Bundles::get_bundle(id, |bundle| {
-            archetypes
-                .get_id_from_components_or_create_with_capacity(
-                    bundle,
-                1,
-            )
+            archetypes.get_id_from_components_or_create_with_capacity(bundle, 1)
         });
 
         // SAFETY:
@@ -495,7 +470,7 @@ impl World {
         entity: Entity,
         callback: &mut T,
         archetypes: &Archetypes,
-        entities: &Entities
+        entities: &Entities,
     ) {
         let Some(meta) = entities.get(entity) else {
             return;
@@ -506,7 +481,7 @@ impl World {
         };
 
         let mut table = archetype.table_lock();
-        
+
         let Some(callback_id) = Components::get_callback_id_from::<T>() else {
             return;
         };
@@ -532,14 +507,12 @@ impl World {
 /// INNER COMPONENT FUNCTIONS /////////////////////////////////////////////////////////////////////
 /// ///////////////////////////////////////////////////////////////////////////////////////////////
 impl World {
-    fn inner_component_query<'a, T: Bundle>(archetypes: &'a mut Archetypes) -> ComponentQuery<'a, T> {
+    fn inner_component_query<'a, T: Bundle>(
+        archetypes: &'a mut Archetypes,
+    ) -> ComponentQuery<'a, T> {
         let id = Bundles::init::<T>();
         let archetype_id = Bundles::get_bundle(id, |bundle| {
-            archetypes
-                .get_id_from_components_or_create_with_capacity(
-                    bundle,
-                1,
-            )
+            archetypes.get_id_from_components_or_create_with_capacity(bundle, 1)
         });
 
         // SAFETY:
@@ -550,15 +523,13 @@ impl World {
 
         ComponentQuery::new(&archetype_ids, archetypes)
     }
-    
-    fn inner_component_query_mut<'a, T: Bundle>(archetypes: &'a mut Archetypes) -> ComponentQueryMut<'a, T> {
+
+    fn inner_component_query_mut<'a, T: Bundle>(
+        archetypes: &'a mut Archetypes,
+    ) -> ComponentQueryMut<'a, T> {
         let id = Bundles::init::<T>();
         let archetype_id = Bundles::get_bundle(id, |bundle| {
-            archetypes
-                .get_id_from_components_or_create_with_capacity(
-                    bundle,
-                1,
-            )
+            archetypes.get_id_from_components_or_create_with_capacity(bundle, 1)
         });
 
         // SAFETY:
@@ -588,18 +559,16 @@ impl World {
     unsafe fn get_add_archetype_id<T: Bundle>(
         archetypes: &mut Archetypes,
         archetype_id: ArchetypeId,
-        on_create_capacity: usize
+        on_create_capacity: usize,
     ) -> ArchetypeId {
-        let bundle_id= Bundles::init::<T>();
+        let bundle_id = Bundles::init::<T>();
         let archetype = archetypes.get_unchecked(archetype_id.index());
 
-        let mut bundle_components = Bundles::get_bundle(bundle_id, |bundle| bundle.clone() );
+        let mut bundle_components = Bundles::get_bundle(bundle_id, |bundle| bundle.clone());
         bundle_components.insert(archetype.table_lock().component_ids().collect());
 
-        archetypes.get_id_from_components_or_create_with_capacity(
-            &bundle_components,
-            on_create_capacity,
-        )
+        archetypes
+            .get_id_from_components_or_create_with_capacity(&bundle_components, on_create_capacity)
     }
 
     /// Returns the [`ArchetypeId`] from given [`ArchetypeId`], which calculates in subtraction what
@@ -613,16 +582,13 @@ impl World {
         archetype_id: ArchetypeId,
         on_create_capacity: usize,
     ) -> ArchetypeId {
-        let bundle_id= Bundles::init::<T>();
+        let bundle_id = Bundles::init::<T>();
         let archetype = archetypes.get_unchecked(archetype_id.index());
 
         let mut bundle_components = Bundles::get_bundle(bundle_id, |bundle| bundle.clone());
         bundle_components.insert(archetype.table_lock().component_ids().collect());
 
-        archetypes.get_id_from_components_or_create_with_capacity(
-            &bundle_components,
-            on_create_capacity,
-        )
+        archetypes
+            .get_id_from_components_or_create_with_capacity(&bundle_components, on_create_capacity)
     }
 }
-

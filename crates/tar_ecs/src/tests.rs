@@ -1,11 +1,5 @@
 use crate::prelude::*;
 
-static INIT: std::sync::Once = std::sync::Once::new();
-
-fn init() {
-    INIT.call_once(|| init_ecs())
-}
-
 #[derive(Component, Default)]
 struct Position {
     x: f32,
@@ -49,8 +43,6 @@ struct Zst;
 
 #[test]
 fn single_entity_single_component() {
-    init();
-
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -61,8 +53,6 @@ fn single_entity_single_component() {
 
 #[test]
 fn single_entity_multiple_components_single() {
-    init();
-
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -87,8 +77,6 @@ fn single_entity_multiple_components_single() {
 
 #[test]
 fn single_entity_multiple_components_multi() {
-    init();
-
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -117,8 +105,6 @@ fn single_entity_multiple_components_multi() {
 
 #[test]
 fn entity_query() {
-    init();
-
     let mut world = World::new();
 
     for _ in 0..5 {
@@ -134,8 +120,6 @@ fn entity_query() {
 
 #[test]
 fn component_query() {
-    init();
-
     let mut world = World::new();
 
     for n in 5..10 {
@@ -165,8 +149,6 @@ fn component_query() {
 
 #[test]
 fn zst() {
-    init();
-
     let mut world = World::new();
 
     let entity = world.entity_create();
@@ -183,8 +165,6 @@ fn zst() {
 
 #[test]
 fn component_clone() {
-    init();
-
     let mut world = World::new();
 
     for _ in 0..10 {
@@ -204,8 +184,6 @@ fn component_clone() {
 
 #[test]
 fn collect_entity_by_empty_unit() {
-    init();
-
     let mut world = World::new();
     let entity = world.entity_create();
     world.entity_set(entity, (Zst, UUID::new(42), Position::new(16., 16., 42.)));
@@ -252,14 +230,12 @@ fn callback() {
         }
     }
 
-    init();
+    let mut world = World::new();
 
     Position::add_callback::<MyCallback>();
     UUID::add_callback::<MyCallback>();
     Color::add_callback::<MyCallback>();
     Zst::add_callback::<MyCallback>();
-
-    let mut world = World::new();
 
     for _ in 0..4 {
         let entity = world.entity_create();
