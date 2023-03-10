@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use crate::{
     bundle::Bundle,
     component::{ComponentHashId, ComponentId, Components},
@@ -269,6 +267,14 @@ impl Table {
         }))
     }
 
+    #[inline]
+    pub unsafe fn get_raw_mut<'a, T: Bundle>(&mut self, index: usize) -> Option<T::RawMut> {
+        T::some_raw_mut_or_none(T::from_components_mut(&mut |id| {
+            let raw_store = self.components.get_mut(id)?;
+            Some(raw_store.get_unchecked_mut(index))
+        }))
+    }
+
     /// SAFETY:
     /// - `index` has to be valid and in bounds
     /// - Returned mutable references may be invalid
@@ -342,41 +348,36 @@ pub struct TRef<'a, T: Bundle> {
 }
 
 impl<'a, T: Bundle> TRef<'a, T> {
+    #[inline]
     pub fn new(data: T::Ref<'a>, table: RwLockReadGuard<'a, Table>) -> Self {
         Self { data, table }
     }
-}
-
-impl<'a, T: Bundle> Deref for TRef<'a, T> {
-    type Target = T::Ref<'a>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
+    
+    #[inline]
+    pub fn get(&self) -> T::Ref<'a> {
+        self.data
     }
 }
 
 pub struct TMut<'a, T: Bundle> {
-    data: T::Mut<'a>,
+    data: T::RawMut,
     #[allow(unused)]
     table: RwLockWriteGuard<'a, Table>,
 }
 
 impl<'a, T: Bundle> TMut<'a, T> {
-    pub fn new(data: T::Mut<'a>, table: RwLockWriteGuard<'a, Table>) -> Self {
+    #[inline]
+    pub fn new(data: T::RawMut, table: RwLockWriteGuard<'a, Table>) -> Self {
         Self { data, table }
     }
-}
 
-impl<'a, T: Bundle> Deref for TMut<'a, T> {
-    type Target = T::Mut<'a>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
+    #[inline]
+    pub fn get(&self) -> T::Ref<'a> {
+        unsafe { T::into_ref(self.data) }
     }
-}
 
-impl<'a, T: Bundle> DerefMut for TMut<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
+    #[inline]
+    pub fn get_mut(&mut self) -> T::Mut<'a> {
+        unsafe { T::into_mut(self.data) }
     }
 }

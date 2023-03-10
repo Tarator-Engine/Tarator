@@ -88,7 +88,7 @@ impl SparseSetIndex for WorldId {
 ///     }
 ///
 ///     // Getting our [`Component`]s like this returns us `(Option<&Name>, Option<&Age>)`
-///     let (name, age) = *world.entity_get::<(Name, Age)>(human).unwrap();
+///     let (name, age) = *world.entity_get::<(Name, Age)>(human).unwrap().get();
 ///     assert!(name.0 == String::from("Max Mustermann"));
 ///     assert!(age.0 == 42);
 ///
@@ -126,7 +126,7 @@ impl SparseSetIndex for WorldId {
 ///
 ///     // This iterates only over [`Entity`]s with a `Whole` [`Component`] set
 ///     for entity in world.entity_collect::<Whole>() {
-///         let whole = world.entity_get::<Whole>(entity).unwrap();
+///         let whole = world.entity_get::<Whole>(entity).unwrap().get();
 ///         assert!(whole.0 == 2);
 ///     }
 ///
@@ -456,7 +456,7 @@ impl World {
             return None;
         }
 
-        unsafe { Some(TMut::new(table.get_mut::<T>(meta.index)?, table)) }
+        unsafe { Some(TMut::new(table.get_raw_mut::<T>(meta.index)?, table)) }
     }
 
     fn inner_entity_get_table_and_index(

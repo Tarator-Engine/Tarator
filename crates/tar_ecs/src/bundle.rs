@@ -60,10 +60,12 @@ use tar_ecs_macros::foreach_tuple;
 /// - [`Bundle::WrappedRef`] and [`Bundle::WrappedMutRef`] are supposed to be wrapped in[`Option`]
 pub unsafe trait Bundle: Send + Sync + 'static {
     /// Implemented as a tuple of [`Component`] references
-    type Ref<'a>;
+    type Ref<'a>: Copy;
 
     /// Implemented as a tuple of mutable [`Component`] references
     type Mut<'a>;
+
+    type RawMut: Copy;
 
     /// Implemented as a tuple of [`Component`] references wrapped in [`Option`]
     type WrappedRef<'a>;
@@ -79,9 +81,15 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// [`Entity`] doesn't exist.
     fn empty_mut<'a>() -> Self::WrappedMut<'a>;
 
+    unsafe fn into_ref<'a>(data: Self::RawMut) -> Self::Ref<'a>;
+
+    unsafe fn into_mut<'a>(data: Self::RawMut) -> Self::Mut<'a>;
+
     fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>>;
 
     fn some_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::Mut<'a>>;
+
+    fn some_raw_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::RawMut>;
 
     /// Initializes and gets the [`ComponentId`]s via `func`.
     fn init_component_ids(func: &mut impl FnMut(ComponentId));
@@ -146,6 +154,7 @@ pub trait CloneBundle: Bundle + Clone {
 unsafe impl<T: Component> Bundle for T {
     type Ref<'a> = &'a Self;
     type Mut<'a> = &'a mut Self;
+    type RawMut = *mut Self;
 
     type WrappedRef<'a> = Option<Self::Ref<'a>>;
     type WrappedMut<'a> = Option<Self::Mut<'a>>;
@@ -161,6 +170,16 @@ unsafe impl<T: Component> Bundle for T {
     }
 
     #[inline]
+    unsafe fn into_ref<'a>(data: Self::RawMut) -> Self::Ref<'a> {
+        &*data
+    }
+
+    #[inline]
+    unsafe fn into_mut<'a>(data: Self::RawMut) -> Self::Mut<'a> {
+        &mut *data
+    }
+
+    #[inline]
     fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>> {
         data
     }
@@ -168,6 +187,11 @@ unsafe impl<T: Component> Bundle for T {
     #[inline]
     fn some_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::Mut<'a>> {
         data
+    }
+
+    #[inline]
+    fn some_raw_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::RawMut> {
+        Some(data? as *mut _)
     }
 
     #[inline]
@@ -228,6 +252,7 @@ macro_rules! component_tuple_impl {
         unsafe impl<$($c: Component + Bundle),*> Bundle for ($($c,)*) {
             type Ref<'a> = ($($c::Ref<'a>,)*);
             type Mut<'a> = ($($c::Mut<'a>,)*);
+            type RawMut = ($($c::RawMut,)*);
 
             type WrappedRef<'a> = ($($c::WrappedRef<'a>,)*);
             type WrappedMut<'a> = ($($c::WrappedMut<'a>,)*);
@@ -243,6 +268,20 @@ macro_rules! component_tuple_impl {
             }
 
             #[inline]
+            unsafe fn into_ref<'a>(data: Self::RawMut) -> Self::Ref<'a> {
+                #[allow(non_snake_case)]
+                let ($($c,)*) = data;
+                ($($c::into_ref($c),)*)
+            }
+
+            #[inline]
+            unsafe fn into_mut<'a>(data: Self::RawMut) -> Self::Mut<'a> {
+                #[allow(non_snake_case)]
+                let ($($c,)*) = data;
+                ($($c::into_mut($c),)*)
+            }
+
+            #[inline]
             fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>> {
                 #[allow(non_snake_case)]
                 let ($($c,)*) = data;
@@ -254,6 +293,13 @@ macro_rules! component_tuple_impl {
                 #[allow(non_snake_case)]
                 let ($($c,)*) = data;
                 Some(($( $c::some_mut_or_none($c)?, )*))
+            }
+
+            #[inline]
+            fn some_raw_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::RawMut> {
+                #[allow(non_snake_case)]
+                let ($($c,)*) = data;
+                Some(($( $c::some_raw_mut_or_none($c)?, )*))
             }
 
             #[inline]

@@ -27,8 +27,7 @@ fn input(
     cam: &Entity,
     world: &mut World
 ) {
-    let mut getter = world.entity_get_mut::<(Transform, Camera)>(*cam).unwrap();
-    let cam = &mut getter.1;
+    let (_, mut cam) = world.entity_get_mut::<(Transform, Camera)>(*cam).unwrap().get_mut();
     match event {
         WindowEvent::KeyboardInput {
             input:
@@ -89,8 +88,7 @@ fn update(
     world: &mut World,
     dt: std::time::Duration,
 ) {
-    let mut getter = world.entity_get_mut::<(Transform, Camera)>(*cam);
-    let (t, cam) = getter.as_deref_mut().unwrap();
+    let (mut t, mut cam) = world.entity_get_mut::<(Transform, Camera)>(*cam).unwrap().get_mut();
     // UPDATE CAMERA
     let dt = dt.as_secs_f32();
 
@@ -372,8 +370,7 @@ pub async fn run() {
                 winit_events = vec![];
 
                 {
-                    let mut getter = world.entity_get_mut::<(Transform, Camera)>(cam).unwrap();
-                    let cam = &mut getter.1;
+                    let (_, mut cam) = world.entity_get_mut::<(Transform, Camera)>(cam).unwrap().get_mut();
                     if cam.mouse_pressed {
                         cam.rotate_horizontal = state.mouse_movement.0 as f32;
                         cam.rotate_vertical = state.mouse_movement.1 as f32;
@@ -382,8 +379,7 @@ pub async fn run() {
 
                 {
                     if entities.len() > 0{
-                        let mut getter = world.entity_get_mut::<(Transform, Rendering)>(entities[0]).unwrap();
-                        let t = &mut getter.0;
+                        let (mut t, _) = world.entity_get_mut::<(Transform, Rendering)>(entities[0]).unwrap().get_mut();
                         t.pos.x = f32::sin(start_time.elapsed().as_secs_f32());
                     }
                 }

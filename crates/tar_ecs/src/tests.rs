@@ -61,7 +61,8 @@ fn single_entity_single_component() {
     let entity = world.entity_create();
     world.entity_set(entity, UUID::new(19700101000000));
 
-    assert!(world.entity_get::<UUID>(entity).unwrap().id == 19700101000000);
+    let getter = world.entity_get::<UUID>(entity).unwrap();
+    assert!(getter.get().id == 19700101000000);
 }
 
 #[test]
@@ -74,9 +75,9 @@ fn single_entity_multiple_components_single() {
     world.entity_set(entity, Color::new(1.0, 0.0, 1.0, 1.0));
 
     let (uuid, position, color) = (
-        world.entity_get::<UUID>(entity).unwrap(),
-        world.entity_get::<Position>(entity).unwrap(),
-        world.entity_get::<Color>(entity).unwrap(),
+        world.entity_get::<UUID>(entity).unwrap().get(),
+        world.entity_get::<Position>(entity).unwrap().get(),
+        world.entity_get::<Color>(entity).unwrap().get(),
     );
     assert!(uuid.id == 19700101000000);
     assert!(position.x == 16.0);
@@ -102,7 +103,7 @@ fn single_entity_multiple_components_multi() {
         ),
     );
 
-    let (uuid, position, color) = *world.entity_get::<(UUID, Position, Color)>(entity).unwrap();
+    let (uuid, position, color) = world.entity_get::<(UUID, Position, Color)>(entity).unwrap().get();
     assert!(uuid.id == 19700101000000);
     assert!(position.x == 16.0);
     assert!(position.y == 16.0);
@@ -123,7 +124,7 @@ fn entity_query() {
     }
 
     for entity in world.entity_collect::<UUID>() {
-        let uuid = world.entity_get::<UUID>(entity).unwrap();
+        let uuid = world.entity_get::<UUID>(entity).unwrap().get();
         assert!(uuid.id == 19700101000000);
     }
 }
@@ -199,8 +200,8 @@ fn collect_entity_by_empty_unit() {
     world.entity_set(entity, (Zst, UUID::new(42), Position::new(16., 16., 42.)));
 
     for _ in world.entity_collect::<()>() {
-        let position = world.entity_get::<Position>(entity).unwrap();
-        let uuid = world.entity_get::<UUID>(entity).unwrap();
+        let position = world.entity_get::<Position>(entity).unwrap().get();
+        let uuid = world.entity_get::<UUID>(entity).unwrap().get();
         assert!(uuid.id == 42);
         assert!(position.x == 16.);
         assert!(position.y == 16.);
