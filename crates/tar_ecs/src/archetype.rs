@@ -1,15 +1,11 @@
-use std::{
-    sync::Arc,
-    collections::HashMap
-};
-use parking_lot::{ Mutex, MutexGuard };
+use parking_lot::{Mutex, MutexGuard};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
+    bundle::BundleComponents,
     component::ComponentId,
-    store::{ sparse::SparseSetIndex, table::Table },
-    bundle::BundleComponents
+    store::{sparse::SparseSetIndex, table::Table},
 };
-
 
 /// Each [`Archetype`] gets its own unique [`ArchetypeId`]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -44,7 +40,6 @@ impl SparseSetIndex for ArchetypeId {
     }
 }
 
-
 /// Stores an unique set of [`Component`](crate::component::Component)s ([`Bundle`]) and keeps all
 /// stored [`Component`](crate::componen::Component) packed, with no empty indices between them.
 ///
@@ -54,7 +49,7 @@ impl SparseSetIndex for ArchetypeId {
 pub struct Archetype {
     id: ArchetypeId,
     parents: Vec<ArchetypeId>,
-    table: Arc<Mutex<Table>>
+    table: Arc<Mutex<Table>>,
 }
 
 impl Archetype {
@@ -66,7 +61,7 @@ impl Archetype {
         Self {
             id,
             parents: Vec::new(),
-            table: Arc::new(Mutex::new(Table::empty()))
+            table: Arc::new(Mutex::new(Table::empty())),
         }
     }
 
@@ -76,13 +71,12 @@ impl Archetype {
     pub fn with_capacity<'a>(
         id: ArchetypeId,
         component_ids: impl Iterator<Item = &'a ComponentId>,
-        capacity: usize
+        capacity: usize,
     ) -> Self {
-
         Self {
             id,
             parents: Vec::new(),
-            table: Arc::new(Mutex::new(Table::with_capacity(component_ids, capacity)))
+            table: Arc::new(Mutex::new(Table::with_capacity(component_ids, capacity))),
         }
     }
 
@@ -105,7 +99,6 @@ impl Archetype {
     /// and if so, add them to the list of parents.
     #[inline]
     pub fn init_parent(&mut self, parent: &Archetype) {
-
         // If `archetype` is already a set parent, ignore
         if self.parents.contains(&parent.id()) {
             return;
@@ -137,17 +130,16 @@ impl Archetype {
 
     #[inline]
     pub fn parents(&self) -> impl Iterator<Item = &ArchetypeId> {
-        self.parents.iter() 
+        self.parents.iter()
     }
 }
-
 
 /// Manages all [`Archetype`]s of a [`World`](crate::world::World), as well as each one's parent
 /// [`Archetype`]s.
 #[derive(Debug)]
 pub struct Archetypes {
     archetypes: Vec<Archetype>,
-    archetype_ids: HashMap<BundleComponents, ArchetypeId>
+    archetype_ids: HashMap<BundleComponents, ArchetypeId>,
 }
 
 impl Archetypes {
@@ -157,7 +149,7 @@ impl Archetypes {
         let empty = unsafe { Archetype::empty(ArchetypeId::new(0)) };
         Self {
             archetypes: vec![empty],
-            archetype_ids: HashMap::new()
+            archetype_ids: HashMap::new(),
         }
     }
 
@@ -166,7 +158,7 @@ impl Archetypes {
     pub fn create_with_capacity(
         &mut self,
         bundle_components: &BundleComponents,
-        capacity: usize
+        capacity: usize,
     ) -> ArchetypeId {
         let id = ArchetypeId::new(self.len());
         let mut archetype = Archetype::with_capacity(id, bundle_components.iter(), capacity);
@@ -191,11 +183,10 @@ impl Archetypes {
     pub fn get_id_from_components_or_create_with_capacity(
         &mut self,
         bundle_components: &BundleComponents,
-        capacity: usize
+        capacity: usize,
     ) -> ArchetypeId {
-        self.get_id_from_components(bundle_components).unwrap_or_else(|| {
-            self.create_with_capacity(bundle_components, capacity)
-        })
+        self.get_id_from_components(bundle_components)
+            .unwrap_or_else(|| self.create_with_capacity(bundle_components, capacity))
     }
 
     #[inline]
@@ -205,7 +196,7 @@ impl Archetypes {
     }
 
     #[inline]
-    pub fn get_from_bundle_mut(&mut self,info: &BundleComponents) -> Option<&mut Archetype> {
+    pub fn get_from_bundle_mut(&mut self, info: &BundleComponents) -> Option<&mut Archetype> {
         let id = self.get_id_from_components(info)?;
         self.archetypes.get_mut(id.index())
     }
@@ -221,7 +212,11 @@ impl Archetypes {
     }
 
     #[inline]
-    pub fn get_2_mut(&mut self, a: ArchetypeId, b: ArchetypeId) -> (&mut Archetype, &mut Archetype) {
+    pub fn get_2_mut(
+        &mut self,
+        a: ArchetypeId,
+        b: ArchetypeId,
+    ) -> (&mut Archetype, &mut Archetype) {
         if a.index() > b.index() {
             let (b_slice, a_slice) = self.archetypes.split_at_mut(a.index());
             (&mut a_slice[0], &mut b_slice[b.index()])
@@ -233,12 +228,12 @@ impl Archetypes {
 
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> &Archetype {
-        self.archetypes.get_unchecked(index)  
+        self.archetypes.get_unchecked(index)
     }
 
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Archetype {
-        self.archetypes.get_unchecked_mut(index)  
+        self.archetypes.get_unchecked_mut(index)
     }
 
     #[inline]
@@ -251,4 +246,3 @@ impl Archetypes {
         self.archetypes.len()
     }
 }
-

@@ -4,7 +4,10 @@ use crate::{
     callback::Callback,
     component::{ComponentQuery, ComponentQueryMut, Components, Fake},
     entity::{Entities, Entity},
-    store::sparse::SparseSetIndex,
+    store::{
+        sparse::SparseSetIndex,
+        table::{TMut, TRef},
+    },
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -203,7 +206,7 @@ impl World {
     /// doesn't have [`Component`] from the given [`Bundle`], the returned tuple field will be
     /// [`None`].
     #[inline]
-    pub fn entity_get<'a, T: Bundle>(&'a self, entity: Entity) -> T::WrappedRef<'a> {
+    pub fn entity_get<'a, T: Bundle>(&'a self, entity: Entity) -> Option<TRef<'a, T>> {
         Self::inner_entity_get::<T>(entity, &self.archetypes, &self.entities)
     }
 
@@ -211,7 +214,7 @@ impl World {
     /// doesn't have [`Component`] from the given [`Bundle`], the returned tuple field will be
     /// [`None`].
     #[inline]
-    pub fn entity_get_mut<'a, T: Bundle>(&'a mut self, entity: Entity) -> T::WrappedMutRef<'a> {
+    pub fn entity_get_mut<'a, T: Bundle>(&'a mut self, entity: Entity) -> Option<TMut<'a, T>> {
         Self::inner_entity_get_mut::<T>(entity, &mut self.archetypes, &self.entities)
     }
 
@@ -407,42 +410,34 @@ impl World {
 
     fn inner_entity_get<'a, T: Bundle>(
         entity: Entity,
-        archetypes: &Archetypes,
+        archetypes: &'a Archetypes,
         entities: &Entities,
-    ) -> T::WrappedRef<'a> {
-        let Some(meta) = entities.get(entity) else {
-            return T::empty_ref();
-        };
-        let Some(archetype) = archetypes.get(meta.archetype_id) else {
-            return T::empty_ref();
-        };
+    ) -> Option<TRef<'a, T>> {
+        let meta = entities.get(entity)?;
+        let archetype = archetypes.get(meta.archetype_id)?;
 
         let table = archetype.table_lock();
         if table.len() < meta.index {
-            return T::empty_ref();
+            return None;
         }
 
-        unsafe { table.get::<T>(meta.index) }
+        unsafe { Some(TRef::new(table.get::<T>(meta.index)?, table)) }
     }
 
     fn inner_entity_get_mut<'a, T: Bundle>(
         entity: Entity,
-        archetypes: &mut Archetypes,
+        archetypes: &'a Archetypes,
         entities: &Entities,
-    ) -> T::WrappedMutRef<'a> {
-        let Some(meta) = entities.get(entity) else {
-            return T::empty_mut_ref();
-        };
-        let Some(archetype) = archetypes.get_mut(meta.archetype_id) else {
-            return T::empty_mut_ref();
-        };
+    ) -> Option<TMut<'a, T>> {
+        let meta = entities.get(entity)?;
+        let archetype = archetypes.get(meta.archetype_id)?;
 
         let mut table = archetype.table_lock();
         if table.len() < meta.index {
-            return T::empty_mut_ref();
+            return None;
         }
 
-        unsafe { table.get_mut::<T>(meta.index) }
+        unsafe { Some(TMut::new(table.get_mut::<T>(meta.index)?, table)) }
     }
 
     fn inner_entity_collect<T: Bundle>(archetypes: &mut Archetypes) -> Vec<Entity> {

@@ -89,10 +89,7 @@ fn single_entity_multiple_components_multi() {
         ),
     );
 
-    let (uuid, position, color) = {
-        let (uuid, position, color) = world.entity_get::<(UUID, Position, Color)>(entity);
-        (uuid.unwrap(), position.unwrap(), color.unwrap())
-    };
+    let (uuid, position, color) = *world.entity_get::<(UUID, Position, Color)>(entity).unwrap();
     assert!(uuid.id == 19700101000000);
     assert!(position.x == 16.0);
     assert!(position.y == 16.0);

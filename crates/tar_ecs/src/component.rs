@@ -319,7 +319,7 @@ impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
 }
 
 impl<'a, T: Bundle> Iterator for ComponentQueryMut<'a, T> {
-    type Item = T::MutRef<'a>;
+    type Item = T::Mut<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;

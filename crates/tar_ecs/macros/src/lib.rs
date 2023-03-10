@@ -51,11 +51,11 @@ pub fn foreach_tuple(input: TokenStream) -> TokenStream {
             .map(|ident| format_ident!("{}{}", ident, i));
         if input.idents.len() < 2 {
             ident_tuples.push(quote! {
-                #((#idents, #i))*
+                #(#idents)*
             });
         } else {
             ident_tuples.push(quote! {
-                (#((#idents, #i)),*)
+                (#(#idents),*)
             });
         }
     }

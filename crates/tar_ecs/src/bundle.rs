@@ -63,13 +63,13 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     type Ref<'a>;
 
     /// Implemented as a tuple of mutable [`Component`] references
-    type MutRef<'a>;
+    type Mut<'a>;
 
     /// Implemented as a tuple of [`Component`] references wrapped in [`Option`]
     type WrappedRef<'a>;
 
     /// Implemented as a tuple of mutable [`Component`] references wrapped in [`Option`]
-    type WrappedMutRef<'a>;
+    type WrappedMut<'a>;
 
     /// Returns a tuple of [`None`] values, used to return from a function, if for example an
     /// [`Entity`] doesn't exist.
@@ -77,7 +77,11 @@ pub unsafe trait Bundle: Send + Sync + 'static {
 
     /// Returns a tuple of [`None`] values, used to return from a function, if for example an
     /// [`Entity`] doesn't exist.
-    fn empty_mut_ref<'a>() -> Self::WrappedMutRef<'a>;
+    fn empty_mut<'a>() -> Self::WrappedMut<'a>;
+
+    fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>>;
+
+    fn some_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::Mut<'a>>;
 
     /// Initializes and gets the [`ComponentId`]s via `func`.
     fn init_component_ids(func: &mut impl FnMut(ComponentId));
@@ -113,7 +117,7 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// [`ComponentId`] type
     unsafe fn from_components_mut<'a>(
         func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
-    ) -> Self::WrappedMutRef<'a>;
+    ) -> Self::WrappedMut<'a>;
 
     /// Returns a tuple of mutable references to the components in the order of `Self`. The mutable
     /// references are set using the return value of `func`.
@@ -122,7 +126,7 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// - If the return value of `func` is has to point to valid data of[`ComponentId`] type
     unsafe fn from_components_unchecked_mut<'a>(
         func: &mut impl FnMut(ComponentId) -> *mut u8,
-    ) -> Self::MutRef<'a>;
+    ) -> Self::Mut<'a>;
 
     /// Get the components of this [`Bundle`] with a corresponding [`ComponentId`]. This passes
     /// ownership to `func`.
@@ -139,12 +143,12 @@ pub trait CloneBundle: Bundle + Clone {
     fn clone<'a>(data: Self::Ref<'a>) -> Self;
 }
 
-unsafe impl<C: Component> Bundle for C {
+unsafe impl<T: Component> Bundle for T {
     type Ref<'a> = &'a Self;
-    type MutRef<'a> = &'a mut Self;
+    type Mut<'a> = &'a mut Self;
 
     type WrappedRef<'a> = Option<Self::Ref<'a>>;
-    type WrappedMutRef<'a> = Option<Self::MutRef<'a>>;
+    type WrappedMut<'a> = Option<Self::Mut<'a>>;
 
     #[inline]
     fn empty_ref<'a>() -> Self::WrappedRef<'a> {
@@ -152,71 +156,81 @@ unsafe impl<C: Component> Bundle for C {
     }
 
     #[inline]
-    fn empty_mut_ref<'a>() -> Self::WrappedMutRef<'a> {
+    fn empty_mut<'a>() -> Self::WrappedMut<'a> {
         None
     }
 
     #[inline]
+    fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>> {
+        data
+    }
+
+    #[inline]
+    fn some_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::Mut<'a>> {
+        data
+    }
+
+    #[inline]
     fn init_component_ids(func: &mut impl FnMut(ComponentId)) {
-        func(Components::init::<C>())
+        func(Components::init::<T>())
     }
 
     #[inline]
     fn get_component_ids(func: &mut impl FnMut(ComponentId)) {
-        func(Components::get_id_from::<C>().unwrap())
+        func(Components::get_id_from::<T>().unwrap())
     }
 
     #[inline]
     unsafe fn from_components<'a>(
         func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
     ) -> Self::WrappedRef<'a> {
-        Some(&*func(Components::get_id_from::<C>().unwrap())?.cast::<Self>())
+        Some(&*func(Components::get_id_from::<T>().unwrap())?.cast::<Self>())
     }
 
     #[inline]
     unsafe fn from_components_unchecked<'a>(
         func: &mut impl FnMut(ComponentId) -> *const u8,
     ) -> Self::Ref<'a> {
-        &*func(Components::get_id_from::<C>().unwrap()).cast::<Self>()
+        &*func(Components::get_id_from::<T>().unwrap()).cast::<Self>()
     }
 
     #[inline]
     unsafe fn from_components_mut<'a>(
         func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
-    ) -> Self::WrappedMutRef<'a> {
-        Some(&mut *func(Components::get_id_from::<C>().unwrap())?.cast::<Self>())
+    ) -> Self::WrappedMut<'a> {
+        Some(&mut *func(Components::get_id_from::<T>().unwrap())?.cast::<Self>())
     }
 
     #[inline]
     unsafe fn from_components_unchecked_mut<'a>(
         func: &mut impl FnMut(ComponentId) -> *mut u8,
-    ) -> Self::MutRef<'a> {
-        &mut *func(Components::get_id_from::<C>().unwrap()).cast::<Self>()
+    ) -> Self::Mut<'a> {
+        &mut *func(Components::get_id_from::<T>().unwrap()).cast::<Self>()
     }
 
     #[inline]
     unsafe fn get_components(self, func: &mut impl FnMut(ComponentId, *mut u8)) {
         func(
-            Components::get_id_from::<C>().unwrap(),
+            Components::get_id_from::<T>().unwrap(),
             &mut ManuallyDrop::new(self) as *mut ManuallyDrop<Self> as *mut u8,
         )
     }
 }
 
-impl<C: Component + Clone> CloneBundle for C {
+impl<T: Component + Clone> CloneBundle for T {
     fn clone<'a>(data: Self::Ref<'a>) -> Self {
         data.clone()
     }
 }
 
 macro_rules! component_tuple_impl {
-    ($(($c:ident, $n:expr)),*) => {
+    ($($c:ident),*) => {
         unsafe impl<$($c: Component + Bundle),*> Bundle for ($($c,)*) {
             type Ref<'a> = ($($c::Ref<'a>,)*);
-            type MutRef<'a> = ($($c::MutRef<'a>,)*);
+            type Mut<'a> = ($($c::Mut<'a>,)*);
 
             type WrappedRef<'a> = ($($c::WrappedRef<'a>,)*);
-            type WrappedMutRef<'a> = ($($c::WrappedMutRef<'a>,)*);
+            type WrappedMut<'a> = ($($c::WrappedMut<'a>,)*);
 
             #[inline]
             fn empty_ref<'a>() -> Self::WrappedRef<'a> {
@@ -224,8 +238,22 @@ macro_rules! component_tuple_impl {
             }
 
             #[inline]
-            fn empty_mut_ref<'a>() -> Self::WrappedMutRef<'a> {
-                ($($c::empty_mut_ref(),)*)
+            fn empty_mut<'a>() -> Self::WrappedMut<'a> {
+                ($($c::empty_mut(),)*)
+            }
+
+            #[inline]
+            fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>> {
+                #[allow(non_snake_case)]
+                let ($($c,)*) = data;
+                Some(($( $c::some_ref_or_none($c)?, )*))
+            }
+
+            #[inline]
+            fn some_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::Mut<'a>> {
+                #[allow(non_snake_case)]
+                let ($($c,)*) = data;
+                Some(($( $c::some_mut_or_none($c)?, )*))
             }
 
             #[inline]
@@ -255,13 +283,13 @@ macro_rules! component_tuple_impl {
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_mut<'a>(func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMutRef<'a> {
+            unsafe fn from_components_mut<'a>(func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Self::WrappedMut<'a> {
                 ($($c::from_components_mut(func),)*)
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_unchecked_mut<'a>(func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::MutRef<'a> {
+            unsafe fn from_components_unchecked_mut<'a>(func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::Mut<'a> {
                 ($($c::from_components_unchecked_mut(func),)*)
             }
 
