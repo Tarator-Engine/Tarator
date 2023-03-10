@@ -230,12 +230,12 @@ fn callback() {
         }
     }
 
-    let mut world = World::new();
-
     Position::add_callback::<MyCallback>();
     UUID::add_callback::<MyCallback>();
     Color::add_callback::<MyCallback>();
     Zst::add_callback::<MyCallback>();
+
+    let mut world = World::new();
 
     for _ in 0..4 {
         let entity = world.entity_create();

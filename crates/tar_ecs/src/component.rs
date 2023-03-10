@@ -30,6 +30,9 @@ use crate::{
 pub unsafe trait Component: Sized + Send + Sync + 'static {
     #[inline]
     fn add_callback<T: Callback<Self>>() {
+        unsafe {
+            Components::new();
+        }
         Components::add_callback::<T, Self>()
     }
 }
