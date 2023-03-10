@@ -251,7 +251,7 @@ pub struct ComponentQuery<'a, T: Bundle> {
 }
 
 impl<'a, T: Bundle> ComponentQuery<'a, T> {
-    pub fn new(archetype_ids: &Vec<ArchetypeId>, archetypes: &'a mut Archetypes) -> Self {
+    pub fn new(archetype_ids: &Vec<ArchetypeId>, archetypes: &'a Archetypes) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
         for id in archetype_ids {
@@ -322,7 +322,7 @@ pub struct ComponentQueryMut<'a, T: Bundle> {
 }
 
 impl<'a, T: Bundle> ComponentQueryMut<'a, T> {
-    pub fn new(archetype_ids: &Vec<ArchetypeId>, archetypes: &'a mut Archetypes) -> Self {
+    pub fn new(archetype_ids: &Vec<ArchetypeId>, archetypes: &'a Archetypes) -> Self {
         let mut tables = Vec::with_capacity(archetype_ids.len());
 
         for id in archetype_ids {

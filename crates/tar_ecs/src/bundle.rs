@@ -1,7 +1,7 @@
 use std::{any::type_name, collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
-    component::{Component, ComponentId, Components},
+    component::{Component, ComponentHashId, ComponentId, Components},
     store::sparse::SparseSetIndex,
 };
 use fxhash::{hash, FxBuildHasher};
@@ -350,7 +350,12 @@ pub struct BundleHashId(usize);
 impl BundleHashId {
     #[inline]
     pub fn new<T: Bundle>() -> Self {
-        Self(hash(type_name::<T>()))
+        Self::new_from_str(type_name::<T>())
+    }
+
+    #[inline]
+    pub fn new_from_str(name: &'static str) -> Self {
+        Self(hash(name))
     }
 
     #[inline]
@@ -432,6 +437,7 @@ impl Bundles {
     pub fn init<T: Bundle>() -> BundleId {
         let mut components = Vec::new();
         T::init_component_ids(&mut |id| components.push(id));
+
         let len = components.len();
         components.sort();
         components.dedup();
@@ -461,11 +467,66 @@ impl Bundles {
         id
     }
 
+    pub fn init_from_name(name: &'static str) -> BundleId {
+        let mut this = unsafe { BUNDLES.write() };
+        let this = this.as_mut().unwrap();
+
+        this.ids
+            .get(&BundleHashId::new_from_str(name))
+            .map(|id| *id)
+            .unwrap_or_else(|| {
+                let names: Vec<_> = name
+                    .strip_prefix("(")
+                    .unwrap_or_else(|| name)
+                    .strip_suffix(")")
+                    .unwrap_or_else(|| name)
+                    .split(", ")
+                    .collect();
+
+                let mut components = Vec::with_capacity(names.len());
+
+                for n in names {
+                    components.push(Components::get_id(ComponentHashId::new_from_str(n)).unwrap())
+                }
+
+                let len = components.len();
+                components.sort();
+                components.dedup();
+                assert!(
+                    len == components.len(),
+                    "Bundle with duplicate components detected!"
+                );
+
+                let components = BundleComponents::new(components);
+
+                let mut index = 0;
+                for bundle in &this.bundles {
+                    if bundle == &components {
+                        let id = BundleId::new(index);
+                        this.ids.insert(BundleHashId::new_from_str(name), id);
+
+                        return id;
+                    }
+
+                    index += 1;
+                }
+
+                panic!("Bundle ({})contains uninitialized components!", name)
+            })
+    }
+
     pub fn get_bundle<T>(id: BundleId, func: impl FnOnce(&BundleComponents) -> T) -> T {
         let this = unsafe { BUNDLES.read() };
         let this = this.as_ref().unwrap();
 
         let bundle = this.bundles.get(id.index()).unwrap();
         func(bundle)
+    }
+
+    pub fn get_bundle_id(hash_id: BundleHashId) -> Option<BundleId> {
+        let this = unsafe { BUNDLES.read() };
+        let this = this.as_ref().unwrap();
+
+        this.ids.get(&hash_id).map(|id| *id)
     }
 }

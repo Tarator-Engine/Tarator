@@ -238,8 +238,8 @@ impl World {
     }
 
     #[inline]
-    pub fn entity_callback<T: Callback<Fake>>(&self, entity: Entity, callback: &mut T) {
-        Self::inner_entity_callback::<T>(entity, callback, &self.archetypes, &self.entities)
+    pub fn entity_callback<T: Callback<Fake>>(&mut self, entity: Entity, callback: &mut T) {
+        Self::inner_entity_callback::<T>(entity, callback, &mut self.archetypes, &self.entities)
     }
 
     /// Iterates over every stored [`Bundle`].
@@ -252,6 +252,11 @@ impl World {
     #[inline]
     pub fn component_query_mut<'a, T: Bundle>(&'a mut self) -> ComponentQueryMut<'a, T> {
         Self::inner_component_query_mut(&mut self.archetypes)
+    }
+
+    #[inline]
+    pub fn component_query_tables(&mut self, name: &'static str) -> Vec<Arc<RwLock<Table>>> {
+        Self::inner_component_query_tables(name, &mut self.archetypes)
     }
 
     /// Clones every [`CloneBundle`] into a [`Vec`]
@@ -561,7 +566,35 @@ impl World {
         ComponentQueryMut::new(&archetype_ids, archetypes)
     }
 
-    pub fn inner_component_collect<'a, T: CloneBundle>(archetypes: &'a mut Archetypes) -> Vec<T> {
+    fn inner_component_query_tables(
+        name: &'static str,
+        archetypes: &mut Archetypes,
+    ) -> Vec<Arc<RwLock<Table>>> {
+        let id = Bundles::init_from_name(name);
+        let archetype_id = Bundles::get_bundle(id, |bundle| {
+            archetypes.get_id_from_components_or_create_with_capacity(bundle, 1)
+        });
+
+        // SAFETY:
+        // Archetype was just created or gotten
+        let archetype = unsafe { archetypes.get_unchecked(archetype_id.index()) };
+        let mut archetype_ids: Vec<_> = archetype.parents().map(|id| *id).collect();
+        archetype_ids.push(archetype_id);
+
+        let mut tables = Vec::with_capacity(archetype_ids.len());
+
+        for id in archetype_ids {
+            if let Some(archetype) = archetypes.get(id) {
+                tables.push(archetype.table())
+            } else {
+                debug_assert!(false, "Invalid Id was passed!");
+            }
+        }
+
+        tables
+    }
+
+    fn inner_component_collect<'a, T: CloneBundle>(archetypes: &'a mut Archetypes) -> Vec<T> {
         let mut result_bundles = Vec::new();
         for bundle in Self::inner_component_query::<T>(archetypes) {
             result_bundles.push(<T as CloneBundle>::clone(bundle));

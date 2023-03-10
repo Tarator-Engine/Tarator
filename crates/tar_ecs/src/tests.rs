@@ -1,3 +1,5 @@
+use std::any::type_name;
+
 use crate::prelude::*;
 
 #[derive(Component, Default)]
@@ -10,6 +12,17 @@ struct Position {
 impl Position {
     fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
+    }
+}
+
+#[derive(Component)]
+struct Label {
+    name: String,
+}
+
+impl Label {
+    fn new(name: impl Into<String>) -> Self {
+        Label { name: name.into() }
     }
 }
 
@@ -283,10 +296,10 @@ fn single_entity_multiple_components_raw() {
     world.entity_set(entity, Position::new(16.0, 16.0, 42.0));
     world.entity_set(entity, Color::new(1.0, 0.0, 1.0, 1.0));
 
-    let (table, index) = world.entity_get_table_and_index(entity).unwrap();
-    let table = table.read();
-
     let (uuid, position, color) = unsafe {
+        let (table, index) = world.entity_get_table_and_index(entity).unwrap();
+        let table = table.read();
+
         (
             &*table
                 .get_unchecked_raw(ComponentHashId::new::<UUID>(), index)
@@ -311,4 +324,39 @@ fn single_entity_multiple_components_raw() {
     assert!(color.g == 0.0);
     assert!(color.b == 1.0);
     assert!(color.a == 1.0);
+}
+
+#[test]
+fn query_component_tables_raw() {
+    use crate::component::ComponentHashId;
+
+    let mut world = World::new();
+
+    for n in 0..5 {
+        let entity = world.entity_create();
+        let data = (UUID::new(n), Label::new("Baba"));
+        world.entity_set(entity, data);
+    }
+
+    for table in world.component_query_tables(type_name::<(Label, UUID)>()) {
+        let table = table.read();
+
+        for n in 0..table.len() {
+            let (label, uuid) = unsafe {
+                (
+                    &*table
+                        .get_unchecked_raw(ComponentHashId::new::<Label>(), n)
+                        .unwrap()
+                        .cast::<Label>(),
+                    &*table
+                        .get_unchecked_raw(ComponentHashId::new::<UUID>(), n)
+                        .unwrap()
+                        .cast::<UUID>(),
+                )
+            };
+
+            assert!(n as u128 == uuid.id);
+            assert!(format!("Baba") == label.name);
+        }
+    }
 }
