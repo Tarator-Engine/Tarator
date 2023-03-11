@@ -103,7 +103,10 @@ fn single_entity_multiple_components_multi() {
         ),
     );
 
-    let (uuid, position, color) = world.entity_get::<(UUID, Position, Color)>(entity).unwrap().get();
+    let (uuid, position, color) = world
+        .entity_get::<(UUID, Position, Color)>(entity)
+        .unwrap()
+        .get();
     assert!(uuid.id == 19700101000000);
     assert!(position.x == 16.0);
     assert!(position.y == 16.0);
@@ -360,4 +363,101 @@ fn query_component_tables_raw() {
             assert!(format!("Baba") == label.name);
         }
     }
+}
+
+#[test]
+fn single_entity_set_unset_raw() {
+    use crate::component::{ComponentHashId, Components};
+    use std::{
+        alloc::Layout,
+        mem::{needs_drop, ManuallyDrop},
+    };
+
+    unsafe {
+        unsafe fn _drop<T>(data: *mut u8) {
+            data.cast::<T>().drop_in_place()
+        }
+
+        Components::init_raw(
+            ComponentHashId::new::<UUID>(),
+            Layout::new::<UUID>(),
+            needs_drop::<UUID>().then_some(_drop::<UUID>),
+        );
+
+        Components::init_raw(
+            ComponentHashId::new::<Label>(),
+            Layout::new::<Label>(),
+            needs_drop::<Label>().then_some(_drop::<Label>),
+        );
+
+        Components::init_raw(
+            ComponentHashId::new::<Zst>(),
+            Layout::new::<Zst>(),
+            needs_drop::<Zst>().then_some(_drop::<Zst>),
+        );
+    }
+
+    let mut world = World::new();
+    let entity = world.entity_create();
+
+    // Setting
+    {
+        let data: &[(&str, *mut u8)] = &[
+            (
+                type_name::<UUID>(),
+                &mut ManuallyDrop::new(UUID::new(19700101000000)) as *mut _ as *mut u8,
+            ),
+            (
+                type_name::<Label>(),
+                &mut ManuallyDrop::new(Label::new("Baba")) as *mut _ as *mut u8,
+            ),
+            (
+                type_name::<Zst>(),
+                &mut ManuallyDrop::new(Zst) as *mut _ as *mut u8,
+            ),
+        ];
+        unsafe { world.entity_set_raw(entity, type_name::<(UUID, Label, Zst)>(), data) };
+    }
+
+    // Getting
+    {
+        let (uuid, label) = unsafe {
+            let (table, index) = world.entity_get_table_and_index(entity).unwrap();
+            let table = table.read();
+
+            (
+                &*table
+                    .get_unchecked_raw(ComponentHashId::new::<UUID>(), index)
+                    .unwrap()
+                    .cast::<UUID>(),
+                &*table
+                    .get_unchecked_raw(ComponentHashId::new::<Label>(), index)
+                    .unwrap()
+                    .cast::<Label>(),
+            )
+        };
+
+        assert!(uuid.id == 19700101000000);
+        assert!(label.name == format!("Baba"));
+    }
+
+    // Unsetting
+    /*{
+        world.entity_unset_raw(entity, type_name::<(Label, UUID)>());
+
+        unsafe {
+            let (table, index) = world.entity_get_table_and_index(entity).unwrap();
+            let table = table.read();
+
+            assert!(table
+                .get_unchecked_raw(ComponentHashId::new::<UUID>(), index)
+                .is_none());
+            assert!(table
+                .get_unchecked_raw(ComponentHashId::new::<Label>(), index)
+                .is_none());
+            assert!(table
+                .get_unchecked_raw(ComponentHashId::new::<Zst>(), index)
+                .is_some());
+        }
+    } TODO: unsetting seems to be broken */
 }

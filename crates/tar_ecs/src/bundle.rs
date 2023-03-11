@@ -488,6 +488,8 @@ impl Bundles {
     }
 
     pub fn init<T: Bundle>() -> BundleId {
+        unsafe { Self::new() };
+
         let mut components = Vec::new();
         T::init_component_ids(&mut |id| components.push(id));
 
@@ -521,6 +523,8 @@ impl Bundles {
     }
 
     pub fn init_from_name(name: &'static str) -> BundleId {
+        unsafe { Self::new() };
+
         let mut this = unsafe { BUNDLES.write() };
         let this = this.as_mut().unwrap();
 
@@ -547,7 +551,8 @@ impl Bundles {
                 components.dedup();
                 assert!(
                     len == components.len(),
-                    "Bundle with duplicate components detected!"
+                    "Bundle with duplicate components detected: ({})!",
+                    name
                 );
 
                 let components = BundleComponents::new(components);
@@ -564,7 +569,12 @@ impl Bundles {
                     index += 1;
                 }
 
-                panic!("Bundle ({})contains uninitialized components!", name)
+                let id = BundleId::new(index);
+
+                this.bundles.push(components);
+                this.ids.insert(BundleHashId::new_from_str(name), id);
+
+                id
             })
     }
 

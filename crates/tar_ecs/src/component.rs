@@ -106,12 +106,20 @@ impl ComponentInfo {
     }
 
     #[inline]
-    pub fn new_from<T: Component>() -> Self {
+    pub fn new(layout: Layout, drop: Option<unsafe fn(*mut u8)>) -> Self {
         Self {
-            drop: needs_drop::<T>().then_some(Self::inner_drop::<T>),
-            layout: Layout::new::<T>(),
+            drop,
+            layout,
             callbacks: ComponentCallbacks::new(),
         }
+    }
+
+    #[inline]
+    pub fn new_from<T: Component>() -> Self {
+        Self::new(
+            Layout::new::<T>(),
+            needs_drop::<T>().then_some(Self::inner_drop::<T>),
+        )
     }
 
     #[inline]
@@ -154,6 +162,8 @@ impl Components {
     }
 
     pub fn init<T: Component>() -> ComponentId {
+        unsafe { Self::new() };
+
         let mut this = unsafe { COMPONENTS.write() };
         let this = this.as_mut().unwrap();
 
@@ -170,7 +180,29 @@ impl Components {
             })
     }
 
+    pub unsafe fn init_raw(
+        hash_id: ComponentHashId,
+        layout: Layout,
+        drop: Option<unsafe fn(*mut u8)>,
+    ) -> ComponentId {
+        unsafe { Self::new() };
+
+        let mut this = unsafe { COMPONENTS.write() };
+        let this = this.as_mut().unwrap();
+
+        this.ids.get(&hash_id).map(|id| *id).unwrap_or_else(|| {
+            let index = this.infos.len();
+            let id = ComponentId::new(index);
+            this.ids.insert(hash_id, id);
+            this.infos.push(ComponentInfo::new(layout, drop));
+
+            id
+        })
+    }
+
     pub fn add_callback<T: Callback<U>, U: Component>() {
+        unsafe { Self::new() };
+
         let mut this = unsafe { COMPONENTS.write() };
         let this = this.as_mut().unwrap();
 
@@ -206,6 +238,7 @@ impl Components {
         info.callbacks.add::<T, U>(callback_id);
     }
 
+    #[inline]
     pub fn get_info<T>(id: ComponentId, func: impl FnOnce(&ComponentInfo) -> T) -> T {
         let this = unsafe { COMPONENTS.read() };
         let this = this.as_ref().unwrap();
@@ -214,20 +247,24 @@ impl Components {
         func(info)
     }
 
+    #[inline]
     pub fn get_id_from<T: Component>() -> Option<ComponentId> {
         Self::get_id(ComponentHashId::new::<T>())
     }
 
+    #[inline]
     pub fn get_id(id: ComponentHashId) -> Option<ComponentId> {
         let this = unsafe { COMPONENTS.read() };
         let this = this.as_ref().unwrap();
         this.ids.get(&id).map(|id| *id)
     }
 
+    #[inline]
     pub fn get_callback_id_from<T: Callback<Fake>>() -> Option<CallbackId> {
         Self::get_callback_id(TypeId::of::<T>())
     }
 
+    #[inline]
     pub fn get_callback_id(id: TypeId) -> Option<CallbackId> {
         let this = unsafe { COMPONENTS.read() };
         let this = this.as_ref().unwrap();

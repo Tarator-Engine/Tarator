@@ -77,6 +77,31 @@ impl Table {
     }
 
     #[inline]
+    pub unsafe fn init_raw(&mut self, entity: Entity, data: &[(&'static str, *mut u8)]) {
+        self.entities.push(entity);
+
+        let len = self.len();
+
+        // SAFETY:
+        // We initialize `component` in our store via [`RawStore::push()`]
+        for (name, data) in data {
+            let component_id = Components::get_id(ComponentHashId::new_from_str(*name))
+                .expect("Uninitializec Component!");
+
+            let store = self
+                .components
+                .get_mut(component_id)
+                .expect("Component is not part of this archetype!");
+
+            if store.len() == len {
+                store.replace_unchecked(len - 1, *data);
+            } else {
+                store.push(*data);
+            }
+        }
+    }
+
+    #[inline]
     pub fn set<T: Bundle>(&mut self, index: usize, data: T) {
         debug_assert!(
             index < self.len(),
@@ -95,6 +120,30 @@ impl Table {
                     .expect("Component is not part of this archetype!");
                 store.replace_unchecked(index, component);
             });
+        }
+    }
+
+    #[inline]
+    pub unsafe fn set_raw(&mut self, index: usize, data: &[(&'static str, *mut u8)]) {
+        debug_assert!(
+            index < self.len(),
+            "Index is out of bounds! ({}>={})",
+            index,
+            self.len()
+        );
+
+        // SAFETY:
+        // We initialize `component` in our store via [`RawStore::push`]
+        for (name, data) in data {
+            let component_id = Components::get_id(ComponentHashId::new_from_str(*name))
+                .expect("Uninitializec Component!");
+
+            let store = self
+                .components
+                .get_mut(component_id)
+                .expect("Component is not part of this archetype!");
+
+            store.replace_unchecked(index, *data);
         }
     }
 
@@ -352,7 +401,7 @@ impl<'a, T: Bundle> TRef<'a, T> {
     pub fn new(data: T::Ref<'a>, table: RwLockReadGuard<'a, Table>) -> Self {
         Self { data, table }
     }
-    
+
     #[inline]
     pub fn get(&self) -> T::Ref<'a> {
         self.data
