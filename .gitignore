@@ -4,4 +4,5 @@ crates/*/target/
 crates/*/Cargo.lock/
 .github/
 assets/
-res_int/
+.idea/
+.vscode/
