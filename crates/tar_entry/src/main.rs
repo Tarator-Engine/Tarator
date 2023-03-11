@@ -1,5 +1,4 @@
-
-fn main() {
-    let mut scr = tar_scripting::Scripting::default();
-    scr.load_scripts().unwrap();
+#[tokio::main]
+async fn main() {
+    tar_core::run().await;
 }
