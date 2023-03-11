@@ -5,3 +5,4 @@ crates/*/Cargo.lock/
 .github/
 assets/
 .idea/
+.vscode/
