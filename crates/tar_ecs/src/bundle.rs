@@ -57,7 +57,7 @@ use tar_ecs_macros::foreach_tuple;
 ///
 /// SAFETY:
 /// - Manual implementations are discouraged
-/// - [`Bundle::WrappedRef`] and [`Bundle::WrappedMutRef`] are supposed to be wrapped in[`Option`]
+/// - [`Bundle::WrappedRef`] and [`Bundle::WrappedMut`] are supposed to be wrapped in[`Option`]
 pub unsafe trait Bundle: Send + Sync + 'static {
     /// Implemented as a tuple of [`Component`] references
     type Ref<'a>: Copy;
@@ -65,6 +65,7 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     /// Implemented as a tuple of mutable [`Component`] references
     type Mut<'a>;
 
+    /// Implemented as a tuple of mutable [`Component`] raw pointer
     type RawMut: Copy;
 
     /// Implemented as a tuple of [`Component`] references wrapped in [`Option`]
@@ -74,26 +75,32 @@ pub unsafe trait Bundle: Send + Sync + 'static {
     type WrappedMut<'a>;
 
     /// Returns a tuple of [`None`] values, used to return from a function, if for example an
-    /// [`Entity`] doesn't exist.
+    /// [`Entity`](crate::entity::Entity) doesn't exist.
     fn empty_ref<'a>() -> Self::WrappedRef<'a>;
 
     /// Returns a tuple of [`None`] values, used to return from a function, if for example an
-    /// [`Entity`] doesn't exist.
+    /// [`Entity`](crate::entity::Entity) doesn't exist.
     fn empty_mut<'a>() -> Self::WrappedMut<'a>;
 
+    /// Turns [`Bundle::RawMut`] into [`Bundle::Ref`]
     unsafe fn into_ref<'a>(data: Self::RawMut) -> Self::Ref<'a>;
 
+    /// Turns [`Bundle::RawMut`] into [`Bundle::Mut`]
     unsafe fn into_mut<'a>(data: Self::RawMut) -> Self::Mut<'a>;
 
+    /// Turn [`Bundle::WrappedRef`] into [`Some(_)`] if all [`Bundle::WrappedRef`]s are [`Some(_)`] or into [`None`]
     fn some_ref_or_none<'a>(data: Self::WrappedRef<'a>) -> Option<Self::Ref<'a>>;
 
+    /// Turn [`Bundle::WrappedMut`] into [`Some(_)`] if all [`Bundle::WrappedMut`]s are [`Some(_)`] or into [`None`]
     fn some_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::Mut<'a>>;
 
+    /// Turn [`Bundle::WrappedMut`] into [`Some(_)`] if all [`Bundle::WrappedMut`]s are [`Some(_)`] or into [`None`]
     fn some_raw_mut_or_none<'a>(data: Self::WrappedMut<'a>) -> Option<Self::RawMut>;
 
-    /// Initializes and gets the [`ComponentId`]s via `func`.
+    /// Initializes and gets the [`ComponentId`]s via `func`
     fn init_component_ids(func: &mut impl FnMut(ComponentId));
 
+    /// Gets the [`ComponentId`]s via `func`
     fn get_component_ids(func: &mut impl FnMut(ComponentId));
 
     /// Returns a tuple of references to the components in the order of `Self`. The references are

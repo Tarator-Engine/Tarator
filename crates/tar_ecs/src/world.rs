@@ -1,5 +1,3 @@
-use parking_lot::RwLock;
-
 use crate::{
     archetype::{ArchetypeId, Archetypes},
     bundle::{Bundle, Bundles, CloneBundle},
@@ -11,6 +9,9 @@ use crate::{
         table::{TMut, TRef, Table},
     },
 };
+
+use parking_lot::RwLock;
+
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
@@ -320,9 +321,9 @@ impl World {
         archetypes: &mut Archetypes,
         entities: &mut Entities,
     ) {
-        let entity_meta = entities
-            .get_mut(entity)
-            .expect(format!("{:#?} is no more valid!", entity).as_str());
+        let Some(entity_meta) = entities.get_mut(entity) else {
+            return;
+        };
 
         let archetype_id = 'relocate: {
             if entity_meta.is_empty() {
