@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 tar_ecs_macros = { path = "macros" }
+parking_lot = "0.12"
+fxhash = "0.2"
