@@ -28,6 +28,7 @@ use crate::{
 /// SAFETY:
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
+    /// Adds a [`Callback`] to this [`Component`], which can be used to anonymously run functions
     #[inline]
     fn add_callback<T: Callback<Self>>() {
         unsafe {

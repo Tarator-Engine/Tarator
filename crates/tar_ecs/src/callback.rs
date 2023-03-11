@@ -3,6 +3,35 @@ use crate::{
     store::sparse::{MutSparseSet, SparseSetIndex},
 };
 
+/// Callbacks provide a way to run functions anonymously on components without the need having the concrete type of the component.
+///
+/// # Example
+///
+/// ```
+/// use tar_ecs::prelude::*;
+///
+/// #[derive(Component)]
+/// struct MyNum(u32);
+///
+/// #[derive(Callback)]
+/// struct MyCallback(u32);
+///
+/// impl Callback<MyNum> for MyCallback {
+///     fn callback(&mut self, component: &mut MyNum) {
+///         component.0 += self.0;
+///     }
+/// }
+///
+/// fn main() {
+///     MyNum::add_callback::<MyCallback>();
+///
+///     let mut world = World::new();
+///     let entity = world.entity_create();
+///     world.entity_set(entity, MyNum(5));
+///     world.entity_callback(entity, &mut MyCallback(12));
+///     assert!(17 == world.entity_get::<MyNum>(entity).unwrap().get().0);
+/// }
+/// ```
 pub trait Callback<T: Component>: Sized + 'static {
     fn callback(&mut self, component: &mut T);
 }
