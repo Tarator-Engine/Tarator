@@ -9,4 +9,5 @@ edition = "2021"
 libc = "0.2.139"
 libloading = "0.7.4"
 ron = "0.8"
-serde = {version = "1", features = ["derive"]}
+serde = { version = "1", features = ["derive"] }
+tar_types = { path = "../tar_types" }

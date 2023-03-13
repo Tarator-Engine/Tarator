@@ -14,7 +14,11 @@ members = [
   "crates/tar_ecs/macros",
   "crates/tar_gui",
   "crates/tar_types",
+  "crates/tar_scripting",
+  "crates/tar_types",
+  "crates/tar_abi",
 ]
+exclude = ["scripts/"]
 
 
 [profile.dev.package.tar_res]

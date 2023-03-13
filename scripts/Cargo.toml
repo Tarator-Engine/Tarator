@@ -10,3 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 tar_types = { path = "../crates/tar_types" }
+tar_abi = { path = "../crates/tar_abi" }
+tar_ecs = { path = "../crates/tar_ecs" }
+libc = "0.2"
