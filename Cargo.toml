@@ -1,6 +1,17 @@
-[workspace.package]
+[package]
+name = "tarator"
 version="0.1.0"
 edition="2021"
+license-file = "LICENSE"
+description = "A rust game engine wie an ECS and a UI."
+homepage = "https://github.com/Tarator-Engine/Tarator"
+documentation = "https://docs.rs/tarator"
+repository = "https://github.com/Tarator-Engine/Tarator"
+readme = "README.md"
+
+[[bin]]
+name = "main"
+path = "crates/tar_entry/src/main.rs"
 
 [workspace]
 resolver="2"
