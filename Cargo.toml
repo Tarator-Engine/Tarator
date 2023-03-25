@@ -10,7 +10,7 @@ repository = "https://github.com/Tarator-Engine/Tarator"
 readme = "README.md"
 
 [[bin]]
-name = "main"
+name = "tarator"
 path = "crates/tar_entry/src/main.rs"
 
 [workspace]
