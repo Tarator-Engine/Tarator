@@ -10,6 +10,7 @@ pub enum Frequency {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct System {
     pub name: String,
+    pub inputs: Vec<String>,
     pub frequency: Frequency,
 }
 

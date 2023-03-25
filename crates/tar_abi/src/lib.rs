@@ -1,20 +1,19 @@
 extern crate proc_macro;
 
+use syn::{__private::quote::quote, parse_quote};
 use tar_types::script::{FileContent, Frequency, System};
 
-use proc_macro::{TokenStream, TokenTree};
+use proc_macro::TokenStream;
 
 #[proc_macro_attribute]
 #[allow(non_snake_case)]
 pub fn System(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut fin = String::from("use libc::c_void;");
-
-    fin.push_str("use tar_ecs::world::World;");
-    fin.push_str("#[no_mangle]fn ");
-
-    let mut item = item.into_iter();
-
-    let frequency = attr.into_iter().next().unwrap().to_string();
+    //TODO!: this works but it sucks
+    let frequency = attr
+        .into_iter()
+        .next()
+        .expect("You have to define a frequency")
+        .to_string();
 
     let frequency = if frequency == "Update" {
         Frequency::Update
@@ -26,13 +25,57 @@ pub fn System(attr: TokenStream, item: TokenStream) -> TokenStream {
         panic!("{frequency} is not a valid frequency");
     };
 
-    if item.next().unwrap().to_string() != "fn" {
-        panic!("no additional function clarification required");
+    let ast = syn::parse_macro_input!(item as syn::Item);
+
+    let mut func = if let syn::Item::Fn(func) = ast {
+        func
+    } else {
+        panic!("System macro can only be applied to functions")
+    };
+
+    let name = func.sig.ident.to_string();
+
+    // add no_mangle attribute to preserve function name after compilation
+    func.attrs.push(parse_quote!(#[no_mangle]));
+
+    let ins = &mut func.sig.inputs;
+
+    let mut new_stmts = vec![];
+
+    let null_ptr: syn::Type = parse_quote!(*mut ::libc::c_void);
+
+    let mut inputs = vec![];
+
+    for input in ins {
+        let pat = match input {
+            syn::FnArg::Receiver(_) => panic!("self not supported in function signature"),
+            syn::FnArg::Typed(t) => t,
+        };
+
+        inputs.push(quote!(#pat).to_string());
+
+        let name = if let syn::Pat::Ident(i) = *pat.pat.clone() {
+            i.ident
+        } else {
+            unreachable!()
+        };
+
+        let new_stmt: syn::Stmt = parse_quote!(let #pat = unsafe {::std::mem::transmute(#name)};);
+        new_stmts.push(new_stmt);
+        *pat.ty = null_ptr.clone();
+        println!("input");
     }
-    let name = item.next().unwrap().to_string();
+
+    // add the conversions to usable types
+    let mut tmp = func.block.stmts;
+    func.block.stmts = new_stmts;
+    func.block.stmts.append(&mut tmp);
+
+    println!("{name}");
 
     let system = FileContent::System(System {
         name: name.clone(),
+        inputs,
         frequency,
     });
 
@@ -40,53 +83,5 @@ pub fn System(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     std::fs::write(format!("../.scr/{name}.scr"), system_string).unwrap();
 
-    fin.push_str(&name);
-    fin.push_str("(world: *mut c_void) {");
-    fin.push_str("let world: &mut World = unsafe{ std::mem::transmute(world) };");
-
-    parse_args(item.next().unwrap(), &mut fin);
-    fin.push_str(&(item.next().unwrap().to_string()));
-
-    fin.push_str("}");
-    fin.parse().unwrap()
-}
-
-fn parse_args(args: TokenTree, fin: &mut String) {
-    if let TokenTree::Group(g) = args {
-        let mut s = g.stream().into_iter();
-        let mut done = false;
-        while !done {
-            let t = s.next();
-            if let Some(TokenTree::Ident(p)) = t {
-                fin.push_str("let mut ");
-                fin.push_str(&p.to_string());
-                fin.push_str(" = world.component_query_mut::<");
-                s.next();
-                match s.next().unwrap() {
-                    TokenTree::Ident(i) => {
-                        let name = i.to_string();
-                        if name == "Iter" {
-                            s.next();
-                            fin.push_str(&(s.next().unwrap().to_string()));
-                            fin.push_str(">();");
-                            s.next();
-                            s.next();
-                        } else {
-                            fin.push_str(&(name));
-                            fin.push_str(">().next().unwrap();");
-                            s.next();
-                        }
-                    }
-                    TokenTree::Group(g) => {
-                        fin.push_str(&(g.to_string()));
-                        fin.push_str(">().next().unwrap();");
-                        s.next();
-                    }
-                    _ => panic!("something went very wrong"),
-                }
-            } else {
-                done = true;
-            }
-        }
-    }
+    quote!(#func).into()
 }

@@ -10,3 +10,4 @@ proc-macro = true
 serde = "1"
 ron = "0.8.0"
 tar_types = { path = "../tar_types" }
+syn = { version = "1", features = ["full"] }
