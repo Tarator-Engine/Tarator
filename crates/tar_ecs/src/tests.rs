@@ -183,17 +183,17 @@ fn component_query() {
     check_component::<Position>(&mut world, 7);
     check_component::<Rotation>(&mut world, 5);
     check_component::<Player>(&mut world, 4);
-    check_component::<Label>(&mut world, 3);
+    check_component::<Label>(&mut world, 4);
     check_component::<(Position, Rotation)>(&mut world, 4);
     check_component::<(Position, Player)>(&mut world, 3);
-    check_component::<(Position, Label)>(&mut world, 2);
+    check_component::<(Position, Label)>(&mut world, 3);
     check_component::<(Position, Rotation, Player)>(&mut world, 2);
     check_component::<(Position, Rotation, Label)>(&mut world, 2);
     check_component::<(Position, Rotation, Player, Label)>(&mut world, 1);
 
     check_component::<(Rotation, Position)>(&mut world, 4);
     check_component::<(Player, Position)>(&mut world, 3);
-    check_component::<(Label, Position)>(&mut world, 2);
+    check_component::<(Label, Position)>(&mut world, 3);
     check_component::<(Player, Rotation, Position)>(&mut world, 2);
     check_component::<(Label, Rotation, Position)>(&mut world, 2);
     check_component::<(Label, Player, Rotation, Position)>(&mut world, 1);

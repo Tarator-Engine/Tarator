@@ -315,7 +315,6 @@ impl<TI: TypeInfo, Location> World<TI, Location> {
         let o_world = unsafe { mem::transmute::<_, &mut World<TI, Inner>>(self) as *mut World<TI, Inner> };
 
         for indexer in querier {
-            println!("IDs: {:?}", indexer.table().component_ids().collect::<Vec<_>>());
             let data = unsafe { T::from_components_as_ref(&(*o_world).type_info, &mut |id| {
                 indexer.get(id)
             }).unwrap() };

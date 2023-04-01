@@ -44,8 +44,6 @@ impl Table {
             b_u.cmp(&a_u)
         });
 
-        println!("Ids: {:?}", &ids);
-
         let mut indexer = MutSparseSet::new();
         let mut size = 0;
         let mut align = 1;

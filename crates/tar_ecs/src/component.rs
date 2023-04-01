@@ -25,10 +25,11 @@ pub struct Empty;
 
 identifier!(ComponentId, u32);
 
+#[derive(Debug)]
 pub struct ComponentInfo {
     drop: Option<unsafe fn(*mut u8)>,
     layout: Layout,
-    callbacks: Callbacks
+    callbacks: Callbacks,
 }
 
 impl ComponentInfo {

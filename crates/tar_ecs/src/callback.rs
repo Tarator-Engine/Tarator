@@ -20,6 +20,7 @@ identifier!(CallbackId, u32);
 
 pub type CallbackFunc = unsafe fn(*mut u8, *mut u8);
 
+#[derive(Debug)]
 pub struct Callbacks {
     callbacks: MutSparseSet<CallbackId, CallbackFunc>,
 }

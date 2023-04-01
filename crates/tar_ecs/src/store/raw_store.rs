@@ -27,7 +27,7 @@ impl RawStore {
             item_layout,
             capacity: (item_layout.size() == 0).then(|| usize::MAX).unwrap_or_else(|| 0),
             len: 0,
-            data: std::ptr::null_mut()
+            data: (item_layout.size() == 0).then(|| std::ptr::NonNull::<u8>::dangling().as_ptr()).unwrap_or_else(|| std::ptr::null_mut())
         }
     }
 

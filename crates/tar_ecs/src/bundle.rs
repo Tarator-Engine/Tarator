@@ -1,7 +1,7 @@
 use std::{mem, collections::HashSet, ops::Add};
 
 use crate::{
-    component::{ Empty, Component, ComponentId, ComponentName },
+    component::{ Component, ComponentId, ComponentName },
     type_info::TypeInfo
 };
 use fxhash::FxBuildHasher;
@@ -101,7 +101,7 @@ macro_rules! component_tuple_impl {
             type Ref<'a> = ($($c::Ref<'a>,)*);
             type Mut<'a> = ($($c::Mut<'a>,)*);
             
-            const NAMES: &'static [&'static str] = &[$($c::NAME,)*Empty::NAME];
+            const NAMES: &'static [&'static str] = &[$($c::NAME,)*];
 
             #[inline]
             #[allow(unused_variables)]
