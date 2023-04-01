@@ -1,5 +1,4 @@
-use crate::archetype::ArchetypeId;
-
+use crate::bundle::BundleId;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Entity(u32, u32);
@@ -29,7 +28,7 @@ impl Entity {
 /// incremented (in order to recycle it's existanse).
 #[derive(Debug)]
 pub struct EntityMeta {
-    pub archetype_id: ArchetypeId,
+    pub bundle_id: BundleId,
     pub index: usize,
     pub version: u32
 }
@@ -38,7 +37,7 @@ impl EntityMeta {
     #[inline]
     pub const fn new() -> Self {
         Self {
-            archetype_id: ArchetypeId::INVALID,
+            bundle_id: BundleId::INVALID,
             version: 0,
             index: 0
         }
@@ -46,7 +45,7 @@ impl EntityMeta {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.archetype_id == ArchetypeId::EMPTY
+        self.bundle_id == BundleId::EMPTY
     }
 }
 
@@ -101,14 +100,14 @@ impl Entities {
 
         let free = &mut self.meta[self.free_next];
         // Free entities should have an [`ArchetypeId`] variant [`ArchetypeId::INVALID`]
-        debug_assert!(free.archetype_id == ArchetypeId::INVALID);
+        debug_assert!(free.bundle_id == BundleId::INVALID);
 
         // set `free_next` to the index our free had pointed to
         self.free_next = free.index;
         self.free_count -= 1;
 
         // Set our freed [`EntityMeta`]
-        free.archetype_id = ArchetypeId::EMPTY;
+        free.bundle_id = BundleId::EMPTY;
         free.index = 0;
 
         // SAFETY:
@@ -126,12 +125,12 @@ impl Entities {
         // Ignore if:
         // - Version differs
         // - Entity is already destroyed
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+        if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
         }
 
         let old_meta = EntityMeta {
-            archetype_id: meta.archetype_id,
+            bundle_id: meta.bundle_id,
             version: meta.version,
             index: meta.index
         };
@@ -144,7 +143,7 @@ impl Entities {
         self.free_next = index;
         self.free_count += 1;
 
-        meta.archetype_id = ArchetypeId::INVALID;
+        meta.bundle_id = BundleId::INVALID;
 
         Some(old_meta)
     }
@@ -154,7 +153,7 @@ impl Entities {
     pub fn get(&self, entity: Entity) -> Option<&EntityMeta> {
         let meta = &self.meta[entity.id() as usize];
 
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+        if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
         }
 
@@ -166,7 +165,7 @@ impl Entities {
     pub fn get_mut(&mut self, entity: Entity) -> Option<&mut EntityMeta> {
         let meta = self.meta.get_mut(entity.id() as usize)?;
 
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+        if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
         }
 
@@ -174,13 +173,13 @@ impl Entities {
     }
 
     #[inline]
-    pub unsafe fn get_unchecked(&self, index: usize) -> &EntityMeta {
-        self.meta.get_unchecked(index) 
+    pub unsafe fn get_unchecked(&self, entity: Entity) -> &EntityMeta {
+        self.meta.get_unchecked(entity.id() as usize) 
     }
 
     #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntityMeta {
-        self.meta.get_unchecked_mut(index) 
+    pub unsafe fn get_unchecked_mut(&mut self, entity: Entity) -> &mut EntityMeta {
+        self.meta.get_unchecked_mut(entity.id() as usize) 
     }
 
     /// Returns how many [`Entity`]s are currently dead

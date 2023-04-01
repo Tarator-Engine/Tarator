@@ -1,6 +1,7 @@
 //! Big portions of this code where looked up from
 //! <https://docs.rs/bevy_ecs/latest/src/bevy_ecs/storage/sparse_set.rs.html>
 
+use core::slice::GetManyMutError;
 use std::{
     marker::PhantomData,
     hash::Hash
@@ -56,6 +57,13 @@ macro_rules! impl_sparse_array {
             pub fn get(&self, index: I) -> Option<&V> {
                 let index = index.as_usize();
                 self.values.get(index).map(|v| v.as_ref()).unwrap_or(None)
+            }
+
+            #[inline]
+            pub fn get_many_mut<const N: usize>(&mut self, indices: [usize; N]) -> Result<[&mut V; N], GetManyMutError<N>> {
+                self.values
+                    .get_many_mut(indices)
+                    .map(|v| v.map(|v| v.as_mut().unwrap()))
             }
         }
     };
@@ -159,6 +167,11 @@ macro_rules! impl_sparse_set {
             pub fn get_mut(&mut self, index: I) -> Option<&mut V> {
                 let dense = &mut self.dense;
                 self.sparse.get(index).map(move |dense_index| unsafe { dense.get_unchecked_mut(*dense_index) })
+            }
+
+            pub fn get_many_mut<const N: usize>(&mut self, index: [usize; N]) -> Result<[&mut V; N], GetManyMutError<N>> {
+                let dense = &mut self.dense;
+                self.sparse.get_many_mut(index).map(move |dense_index| unsafe { dense.get_many_unchecked_mut(dense_index.map(|i| *i)) })
             }
 
             pub fn indices(&self) -> impl Iterator<Item = I> + '_ {

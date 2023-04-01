@@ -1,89 +1,49 @@
+use tar_ecs_macros::identifier;
+
 use crate::{
     component::Component,
-    store::sparse::{MutSparseSet, SparseSetIndex},
+    store::sparse::MutSparseSet,
 };
 
+pub type CallbackName = &'static str;
+
+pub unsafe trait InnerCallback: Sized + Send + Sync + 'static {
+    const NAME: CallbackName;
+}
+
 /// Callbacks provide a way to run functions anonymously on components without the need having the concrete type of the component.
-///
-/// # Example
-///
-/// ```
-/// use tar_ecs::prelude::*;
-///
-/// #[derive(Component)]
-/// struct MyNum(u32);
-///
-/// #[derive(Callback)]
-/// struct MyCallback(u32);
-///
-/// impl Callback<MyNum> for MyCallback {
-///     fn callback(&mut self, component: &mut MyNum) {
-///         component.0 += self.0;
-///     }
-/// }
-///
-/// fn main() {
-///     MyNum::add_callback::<MyCallback>();
-///
-///     let mut world = World::new();
-///     let entity = world.entity_create();
-///     world.entity_set(entity, MyNum(5));
-///     world.entity_callback(entity, &mut MyCallback(12));
-///     assert!(17 == world.entity_get::<MyNum>(entity).unwrap().get().0);
-/// }
-/// ```
-pub trait Callback<T: Component>: Sized + 'static {
+pub trait Callback<T: Component>: InnerCallback + Sized + Send + Sync + 'static {
     fn callback(&mut self, component: &mut T);
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct CallbackId(u32);
-
-impl CallbackId {
-    #[inline]
-    pub const fn new(index: usize) -> Self {
-        Self(index as u32)
-    }
-
-    #[inline]
-    pub const fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl SparseSetIndex for CallbackId {
-    #[inline]
-    fn from_usize(value: usize) -> Self {
-        Self::new(value)
-    }
-
-    #[inline]
-    fn as_usize(&self) -> usize {
-        self.index()
-    }
-}
+identifier!(CallbackId, u32);
 
 pub type CallbackFunc = unsafe fn(*mut u8, *mut u8);
 
-pub struct ComponentCallbacks {
+pub struct Callbacks {
     callbacks: MutSparseSet<CallbackId, CallbackFunc>,
 }
 
-impl ComponentCallbacks {
+impl Callbacks {
     #[inline]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             callbacks: MutSparseSet::new(),
         }
     }
 
-    unsafe fn inner_callback<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
-        T::callback(&mut *callback.cast::<T>(), &mut *component.cast::<U>())
+    #[inline]
+    pub fn add(&mut self, id: CallbackId, func: CallbackFunc) {
+        self.callbacks.insert(id, func)
     }
 
     #[inline]
-    pub fn add<T: Callback<U>, U: Component>(&mut self, id: CallbackId) {
-        self.callbacks.insert(id, Self::inner_callback::<T, U>);
+    pub fn add_from<T: Callback<U>, U: Component>(&mut self, id: CallbackId) {
+        unsafe fn callback<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
+            T::callback(&mut *callback.cast::<T>(), &mut *component.cast::<U>())
+        }
+
+        self.add(id, callback::<T, U>)
     }
 
     #[inline]
