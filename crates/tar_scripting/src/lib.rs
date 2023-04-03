@@ -1,11 +1,11 @@
-use std::{any::type_name, fs, io, process::Command};
+use std::{fs, io, process::Command};
 
 use libc::c_void;
 use libloading::{Library, Symbol};
 use tar_ecs::{component::ComponentHashId, world::World};
 use tar_types::{
-    components::{Rendering, Transform},
-    script::{Component, FileContent, Frequency, System},
+    components::Transform,
+    script::{Component, FileContent, System},
 };
 
 #[rustfmt::skip]
@@ -19,8 +19,8 @@ enum SystemSym<'lib> {
     Sys7(Symbol<'lib, fn (*mut c_void, *mut c_void, *mut c_void, *mut c_void, *mut c_void, *mut c_void, *mut c_void, )>),
 }
 
-const MANIFEST_PATH: &'static str = "scripts/Cargo.toml";
-const INT_SCRIPTS_PATH: &'static str = ".scr/";
+const MANIFEST_PATH: &str = "scripts/Cargo.toml";
+const INT_SCRIPTS_PATH: &str = ".scr/";
 
 #[derive(Debug, Default)]
 pub struct Scripting {
@@ -45,7 +45,7 @@ impl Scripting {
                 // unwrap-justify: files should only be written to by macro
                 let file: FileContent = ron::from_str(&content).unwrap();
                 match file {
-                    FileContent::System(s) => self.systems.push(s.into()),
+                    FileContent::System(s) => self.systems.push(s),
                     FileContent::Component(c) => self.components.push(c),
                 }
             }

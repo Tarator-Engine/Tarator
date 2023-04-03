@@ -27,7 +27,7 @@ impl StoreMesh {
         object_name: &String,
         mesh_name: &String,
     ) -> Result<Self> {
-        let name = g_mesh.name().map(|s| s.into()).unwrap_or(mesh_name.clone());
+        let name = g_mesh.name().map_or(mesh_name.clone(), std::convert::Into::into);
 
         let mut primitives: Vec<StorePrimitive> = vec![];
         for (i, g_prim) in g_mesh.primitives().enumerate() {

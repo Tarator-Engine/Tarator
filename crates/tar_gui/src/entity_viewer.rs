@@ -1,6 +1,6 @@
 use tar_types::{components::Info, EngineState};
 
-pub fn entity_list(ui: &mut egui::Ui, world: &mut tar_ecs::world::World, state: &mut EngineState) {
+pub fn entity_list(ui: &mut egui::Ui, world: &mut tar_ecs::world::World, _state: &mut EngineState) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         let entitys = world.component_query::<Info>();
         for info in entitys {
@@ -16,9 +16,9 @@ pub fn entity_list(ui: &mut egui::Ui, world: &mut tar_ecs::world::World, state: 
 }
 
 pub fn component_viewer(
-    ui: &mut egui::Ui,
-    world: &mut tar_ecs::world::World,
-    state: &mut EngineState,
+    _ui: &mut egui::Ui,
+    _world: &mut tar_ecs::world::World,
+    _state: &mut EngineState,
 ) {
 }
 

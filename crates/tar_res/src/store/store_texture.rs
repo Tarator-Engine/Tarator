@@ -42,7 +42,7 @@ impl StoreTexture {
         let store_path = format!(
             "{dir}{}-{}-{}.png",
             material_name,
-            g_texture.name().map(|s| s.into()).unwrap_or("texture"),
+            g_texture.name().map_or("texture", |s| s),
             format!("{tex_ty:?}")
         );
 
@@ -72,18 +72,16 @@ impl StoreTexture {
                 if uri.starts_with("data:") {
                     let encoded = uri.split(',').nth(1).unwrap();
                     let decoder = base64::prelude::BASE64_STANDARD;
-                    let data = decoder.decode(&encoded).unwrap();
+                    let data = decoder.decode(encoded).unwrap();
                     let mime_type = if let Some(ty) = mime_type {
                         ty
                     } else {
-                        uri.split(',')
-                            .nth(0)
+                        uri.split(',').next()
                             .unwrap()
                             .split(':')
                             .nth(1)
                             .unwrap()
-                            .split(';')
-                            .nth(0)
+                            .split(';').next()
                             .unwrap()
                     };
 
@@ -137,7 +135,7 @@ impl StoreTexture {
             }
         }
 
-        println!("saving to {}", store_path);
+        println!("saving to {store_path}");
 
         Ok(Self {
             index: g_texture.index(),
