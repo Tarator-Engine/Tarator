@@ -6,8 +6,9 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input, parse_quote,
     token::Comma,
-    DeriveInput, Ident, LitInt, Result,
+    DeriveInput, Ident, LitInt, Result
 };
+
 
 struct ForeachTuple {
     macro_ident: Ident,
@@ -74,7 +75,7 @@ pub fn foreach_tuple(input: TokenStream) -> TokenStream {
     })
 }
 
-#[proc_macro_derive(Component, attributes(component))]
+#[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
 
@@ -83,23 +84,86 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
         .predicates
         .push(parse_quote! { Self: Send + Sync + 'static });
 
-    let struct_name = &ast.ident;
+    let name = &ast.ident;
+    let name_str = format!("\"{}\"", name);
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
-    TokenStream::from(quote! {
-        unsafe impl #impl_generics Component for #struct_name #type_generics #where_clause {}
-    })
+    quote! {
+        unsafe impl #impl_generics Component for #name #type_generics #where_clause {
+            const NAME: ComponentName = #name_str;
+        }
+    }.into()
 }
 
-#[proc_macro_derive(Callback, attributes(callback))]
+#[proc_macro_derive(Callback)]
 pub fn derive_callback(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
-    let struct_name = &ast.ident;
+    let name = &ast.ident;
+    let name_str = format!("\"{}\"", name);
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
-    TokenStream::from(quote! {
-        impl #impl_generics Callback<Fake> for #struct_name #type_generics #where_clause {
-            fn callback(&mut self, _: &mut Fake) {}
+    quote! {
+        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {
+            const NAME: CallbackName = #name_str;
         }
-    })
+
+        impl #impl_generics Callback<Empty> for #name #type_generics #where_clause {
+            fn callback(&mut self, _: &mut Empty) {}
+        }
+    }.into()
+}
+
+
+struct Identifier {
+    ident: Ident,
+    int: Ident
+}
+
+impl Parse for Identifier {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident = input.parse::<Ident>()?;
+        input.parse::<Comma>()?;
+        let int = input.parse::<Ident>()?;
+        Ok(Self { ident, int })
+    }
+}
+
+#[proc_macro]
+pub fn identifier(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as Identifier);
+    let name = ast.ident;
+    let int = ast.int;
+
+    quote! {
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+        pub struct #name(#int);
+
+        impl #name {
+            pub const EMPTY: Self = Self::new(0);
+            pub const INVALID: Self = Self::new(#int::MAX);
+
+            #[inline]
+            pub const fn new(index: #int) -> Self {
+                Self(index)
+            }
+
+            #[inline]
+            pub const fn id(self) -> #int {
+                self.0
+            }
+        }
+
+        impl crate::store::sparse::SparseSetIndex for #name {
+            #[inline]
+            fn from_usize(value: usize) -> Self {
+                Self::new(value as #int)
+            }
+        
+            #[inline]
+            fn as_usize(&self) -> usize {
+                self.0 as usize
+            }
+        }
+
+    }.into()
 }

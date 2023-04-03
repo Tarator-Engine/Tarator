@@ -1,383 +1,370 @@
+use std::{
+    alloc::Layout,
+    ptr
+};
+
 use crate::{
-    bundle::Bundle,
-    component::{ComponentHashId, ComponentId, Components},
+    bundle::{BundleId, Bundle, BundleNames},
+    component::ComponentId,
     entity::Entity,
     store::{
         raw_store::RawStore,
-        sparse::{MutSparseSet, SparseSet},
-    },
+        sparse::{ SparseSet, MutSparseSet }
+    }, type_info::TypeInfo
 };
-use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
+
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentItem {
+    index: usize,
+    size: usize,
+    drop: Option<unsafe fn(*mut u8)>
+}
+
 
 #[derive(Debug)]
 pub struct Table {
-    components: SparseSet<ComponentId, RawStore>,
-    entities: Vec<Entity>,
+    store: RawStore,
+    indexer: SparseSet<ComponentId, ComponentItem>,
+    entities: Vec<Entity>
 }
 
 impl Table {
     #[inline]
-    pub unsafe fn empty() -> Self {
-        Self {
-            components: SparseSet::new(),
-            entities: Vec::new(),
-        }
-    }
+    pub unsafe fn new(bundle_id: BundleId, type_info: &impl TypeInfo) -> Self {
 
-    #[inline]
-    pub unsafe fn set_empty(&mut self, entity: Entity) {
-        self.entities.push(entity);
-    }
-}
+        let mut ids: Vec<_> = type_info.get_bundle_info(bundle_id, |info| info.component_ids().iter().map(|id| *id).collect()).unwrap();
 
-impl Table {
-    pub fn with_capacity<'a>(
-        component_ids: impl Iterator<Item = &'a ComponentId>,
-        capacity: usize,
-    ) -> Self {
-        let mut component_set = MutSparseSet::new();
+        ids.sort_by(|a, b| {
+            debug_assert!(a != b, "Duplicate components not yet supported!");
 
-        for component_id in component_ids {
-            Components::get_info(*component_id, |info| {
-                let store =
-                    unsafe { RawStore::with_capacity(info.layout(), info.drop(), capacity) };
-                component_set.insert(*component_id, store);
-            });
-        }
+            let a_u = type_info.get_component_info(*a, |info| info.layout().size()).unwrap();
+            let b_u = type_info.get_component_info(*b, |info| info.layout().size()).unwrap();
 
-        Self {
-            components: component_set.lock(),
-            entities: Vec::with_capacity(capacity),
-        }
-    }
+            b_u.cmp(&a_u)
+        });
 
-    #[inline]
-    pub fn init<T: Bundle>(&mut self, entity: Entity, data: T) {
-        self.entities.push(entity);
+        let mut indexer = MutSparseSet::new();
+        let mut size = 0;
+        let mut align = 1;
 
-        let len = self.len();
 
-        // SAFETY:
-        // We initialize `component` in our store via [`RawStore::push()`]
-        unsafe {
-            data.get_components(&mut |component_id, component| {
-                let store = self
-                    .components
-                    .get_mut(component_id)
-                    .expect("Component is not part of this archetype!");
-
-                // If the [`Component`] already has been initialized, drop/replace the last index
-                if store.len() == len {
-                    store.replace_unchecked(len - 1, component);
-                } else {
-                    store.push(component);
+        for id in ids {
+            type_info.get_component_info(id, |info| {
+                let layout = info.layout();
+                indexer.insert(id, ComponentItem {
+                    index: size,
+                    size: layout.size(),
+                    drop: info.drop()
+                });
+        
+                size += layout.size();
+        
+                if layout.align() > align {
+                    align = layout.align()
                 }
             });
         }
-    }
 
-    #[inline]
-    pub fn set<T: Bundle>(&mut self, index: usize, data: T) {
-        debug_assert!(
-            index < self.len(),
-            "Index is out of bounds! ({}>={})",
-            index,
-            self.len()
-        );
+        size = (size == 0).then(|| 0).unwrap_or_else(|| (size + 7) & !7);
 
-        // SAFETY:
-        // We initialize `component` in our store via [`RawStore::push`]
-        unsafe {
-            data.get_components(&mut |component_id, component| {
-                let store = self
-                    .components
-                    .get_mut(component_id)
-                    .expect("Component is not part of this archetype!");
-                store.replace_unchecked(index, component);
-            });
+        let layout = Layout::from_size_align(size, align).unwrap();
+
+        Self {
+            store: RawStore::new(layout),
+            indexer: indexer.lock(),
+            entities: Vec::new()
         }
     }
 
-    pub unsafe fn foreach_at(&mut self, index: usize, func: impl Fn(ComponentId, *mut u8)) {
-        debug_assert!(
-            index < self.len(),
-            "Index is out of bounds! ({}>={})",
-            index,
-            self.len()
-        );
-
-        for (id, store) in self.components.iter_mut() {
-            let data = store.get_unchecked_mut(index);
-            func(*id, data);
-        }
+    pub fn entities(&self) -> &Vec<Entity> {
+        &self.entities
     }
 
-    /// Performs a swap_remove and moves the removed into the parent. The returned [`Entity`] is
-    /// the [`Entity`] that may have been relocated by the process.
-    ///
-    /// SAFETY:
-    /// - Unset components in the parent have to be set immediately after this call
-    /// - `index` has to be valid
-    #[must_use = "The returned variant may contain a relocated Entity!"]
-    pub unsafe fn move_into_parent(
-        &mut self,
-        parent: &mut RwLockWriteGuard<Self>,
-        index: usize,
-    ) -> Option<Entity> {
-        debug_assert!(
-            index < self.len(),
-            "Index is out of bounds! ({}>={})",
-            index,
-            self.len()
-        );
-
-        let is_last = index == self.len() - 1;
-
-        let swapped_entity = if is_last {
-            self.entities.pop();
-
-            None
-        } else {
-            self.entities.swap_remove(index);
-
-            // SAFETY:
-            // We just moved in a new entity
-            Some(unsafe { *self.entities.get_unchecked(index) })
-        };
-
-        for (component_id, parent_raw_store) in parent.components.iter_mut() {
-            if let Some(raw_store) = self.components.get_mut(*component_id) {
-                let ptr = raw_store.swap_remove_and_forget_unchecked(index);
-                parent_raw_store.push(ptr);
-            }
-        }
-
-        swapped_entity
-    }
-
-    /// Performs a swap_remove and moves the removed into the child. The returned [`Entity`] is
-    /// the [`Entity`] that may have been relocated by the process.
-    ///
-    // SAFETY:
-    // - Drops the components which are not in the child
-    /// - `index` has to be valid
-    pub unsafe fn move_into_child(
-        &mut self,
-        child: &mut RwLockWriteGuard<Self>,
-        index: usize,
-    ) -> Option<Entity> {
-        debug_assert!(
-            index < self.len(),
-            "Index is out of bounds! ({}>={})",
-            index,
-            self.len()
-        );
-
-        let is_last = index == self.len() - 1;
-
-        let swapped_entity = if is_last {
-            self.entities.pop();
-
-            None
-        } else {
-            self.entities.swap_remove(index);
-
-            // SAFETY:
-            // We just moved in a new entity
-            Some(unsafe { *self.entities.get_unchecked(index) })
-        };
-
-        for (component_id, raw_store) in self.components.iter_mut() {
-            if let Some(child_raw_store) = child.components.get_mut(*component_id) {
-                let ptr = raw_store.swap_remove_and_forget_unchecked(index);
-                child_raw_store.push(ptr);
-            } else {
-                raw_store.swap_remove_and_drop_unchecked(index);
-            }
-        }
-
-        swapped_entity
-    }
-
-    /// Performs a swap_remove. The returned [`Entity`] is the [`Entity`] that may have been
-    /// relocated by the process.
-    ///
-    // SAFETY:
-    // - Drops all components at `index`
-    // - `index` has to be valid
-    pub unsafe fn drop_entity(&mut self, index: usize) -> Option<Entity> {
-        debug_assert!(
-            index < self.len(),
-            "Index is out of bounds! ({}>={})",
-            index,
-            self.len()
-        );
-
-        let is_last = index == self.len() - 1;
-
-        let swapped_entity = if is_last {
-            self.entities.pop();
-
-            None
-        } else {
-            self.entities.swap_remove(index);
-
-            // SAFETY:
-            // We just moved in a new entity
-            Some(unsafe { *self.entities.get_unchecked(index) })
-        };
-
-        for (_, raw_store) in self.components.iter_mut() {
-            raw_store.swap_remove_and_drop_unchecked(index);
-        }
-
-        swapped_entity
-    }
-}
-
-impl Table {
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    #[inline]
-    pub unsafe fn get<'a, T: Bundle>(&self, index: usize) -> Option<T::Ref<'a>> {
-        T::some_ref_or_none(T::from_components(&mut |id| {
-            let raw_store = self.components.get(id)?;
-            Some(raw_store.get_unchecked(index))
-        }))
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    /// - Returned references may be invalid
-    #[inline]
-    pub unsafe fn get_unchecked<'a, T: Bundle>(&self, index: usize) -> T::Ref<'a> {
-        T::from_components_unchecked(&mut |id| {
-            let raw_store = self.components.get(id).unwrap();
-            raw_store.get_unchecked(index)
-        })
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    #[inline]
-    pub unsafe fn get_mut<'a, T: Bundle>(&mut self, index: usize) -> Option<T::Mut<'a>> {
-        T::some_mut_or_none(T::from_components_mut(&mut |id| {
-            let raw_store = self.components.get_mut(id)?;
-            Some(raw_store.get_unchecked_mut(index))
-        }))
-    }
-
-    #[inline]
-    pub unsafe fn get_raw_mut<'a, T: Bundle>(&mut self, index: usize) -> Option<T::RawMut> {
-        T::some_raw_mut_or_none(T::from_components_mut(&mut |id| {
-            let raw_store = self.components.get_mut(id)?;
-            Some(raw_store.get_unchecked_mut(index))
-        }))
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    /// - Returned mutable references may be invalid
-    #[inline]
-    pub unsafe fn get_unchecked_mut<'a, T: Bundle>(&mut self, index: usize) -> T::Mut<'a> {
-        T::from_components_unchecked_mut(&mut |id| {
-            let raw_store = self.components.get_mut(id).unwrap();
-            raw_store.get_unchecked_mut(index)
-        })
-    }
-
-    pub unsafe fn get_unchecked_raw(
-        &self,
-        component: ComponentHashId,
-        index: usize,
-    ) -> Option<*const u8> {
-        let id = Components::get_id(component)?;
-        let raw_store = self.components.get(id)?;
-
-        Some(raw_store.get_unchecked(index))
-    }
-
-    pub unsafe fn get_unchecked_mut_raw(
-        &mut self,
-        component: ComponentHashId,
-        index: usize,
-    ) -> Option<*mut u8> {
-        let id = Components::get_id(component)?;
-        let raw_store = self.components.get_mut(id)?;
-
-        Some(raw_store.get_unchecked_mut(index))
-    }
-}
-
-impl Table {
-    #[inline]
-    pub fn get_entity(&self, index: usize) -> Option<Entity> {
-        self.entities.get(index).map(|entity| *entity)
-    }
-
-    #[inline]
-    pub fn entities(&self) -> Vec<Entity> {
-        self.entities.clone()
-    }
-
-    #[inline]
-    pub fn contains(&self, component_id: ComponentId) -> bool {
-        self.components.contains(component_id)
-    }
-
-    #[inline]
     pub fn component_ids(&self) -> impl Iterator<Item = ComponentId> + '_ {
-        self.components.indices()
+        self.indexer.indices()
     }
 
-    #[inline]
-    pub fn is_empty_table(&self) -> bool {
-        self.components.len() == 0
+    pub fn contains(&self, id: ComponentId) -> bool {
+        self.indexer.contains(id)
     }
 
-    #[inline]
+    pub unsafe fn push_from<T: Bundle>(&mut self, entity: Entity, data: T, type_info: &impl TypeInfo) {
+        self.entities.push(entity);
+        let alloc = self.store.alloc();
+
+        data.get_components(type_info, &mut |id, data| {
+            let item = self.indexer.get(id).unwrap();
+            ptr::copy(data, alloc.add(item.index), item.size);
+        });
+    }
+
+    pub unsafe fn push(&mut self, entity: Entity, names: BundleNames, data: &[*mut u8], type_info: &impl TypeInfo) {
+        self.entities.push(entity);
+        let alloc = self.store.alloc();
+
+        for (i, name) in names.iter().enumerate() {
+            let id = type_info.get_component_id(*name).expect("Component not initialized!");
+            let item = self.indexer.get(id).expect("Component not part of table!");
+            let src = data.get_unchecked(i);
+
+            ptr::copy(*src, alloc.add(item.index), item.size);
+        }
+    }
+
+    pub unsafe fn set_from<T: Bundle>(&mut self, index: usize, data: T, type_info: &impl TypeInfo) {
+        debug_assert!(index < self.len());
+
+        let store_data = self.store.get_unchecked_mut(index);
+
+        data.get_components(type_info, &mut |id, data| {
+            let item = self.indexer.get(id).expect("Component not part of table!");
+
+            let dst = store_data.add(item.index);
+
+            if let Some(drop) = item.drop {
+                drop(dst)
+            }
+
+            if item.size != 0 {
+                ptr::copy_nonoverlapping(data, dst, item.size)
+            }
+        })
+    }
+
+    pub unsafe fn set(&mut self, index: usize, names: BundleNames, data: &[*mut u8], type_info: &impl TypeInfo) {
+        debug_assert!(index < self.len());
+
+        let store_data = self.store.get_unchecked_mut(index);
+
+        for (i, name) in names.iter().enumerate() {
+            let id = type_info.get_component_id(*name).expect("Component not initialized!");
+            let item = self.indexer.get(id).expect("Component not part of table!");
+
+            let dst = store_data.add(item.index);
+
+            if let Some(drop) = item.drop {
+                drop(dst)
+            }
+
+            if item.size != 0 {
+                ptr::copy_nonoverlapping(data[i], dst, item.size)
+            }
+        }
+    }
+
+    pub unsafe fn init_from<T: Bundle>(&mut self, index: usize, data: T, type_info: &impl TypeInfo) {
+        debug_assert!(index < self.len());
+
+        let indexer = RowIndexer::new(index, self);
+
+        data.get_components(type_info, &mut |id, data| {
+            let size = indexer.get_size(id).unwrap();
+            if size != 0 {
+                let dst = indexer.get_unchecked(id);
+                ptr::copy_nonoverlapping(data, dst, size);
+            }
+        })
+    }
+
+    pub unsafe fn init(&mut self, index: usize, names: BundleNames, data: &[*mut u8], type_info: &impl TypeInfo) {
+        debug_assert!(index < self.len());
+
+        let store_data = self.store.get_unchecked_mut(index);
+
+        for (i, name) in names.iter().enumerate() {
+            let id = type_info.get_component_id(*name).expect("Component not initialized!");
+            let item = self.indexer.get(id).expect("Component not part of table!");
+            let dst = store_data.add(item.index);
+
+            if item.size != 0 {
+                ptr::copy_nonoverlapping(data[i], dst, item.size)
+            }
+        }
+    }
+
+    pub unsafe fn move_into(&mut self, other: &mut Self, index: usize) -> Option<Entity> {
+        let src_data = self.store.swap_remove_and_forget_unchecked(index);
+        let dst_data = other.store.alloc();
+
+        for (src_id, src_item) in self.indexer.iter() {
+            if src_item.size != 0 {
+                let src = src_data.add(src_item.index);
+                
+                if let Some(dst_item) = other.indexer.get(*src_id) {
+                    debug_assert!(src_item.size == dst_item.size);
+                    
+                    let dst = dst_data.add(dst_item.index);
+
+                    ptr::copy_nonoverlapping(src, dst, src_item.size)
+                } else if let Some(drop) = src_item.drop {
+                    drop(src)
+                }
+            }
+        }
+
+        let is_last = self.entities.len() - 1 == index;
+        if is_last {
+            let entity = self.entities.pop()?;
+            other.entities.push(entity);
+
+            None
+        } else {
+            let entity = self.entities.swap_remove(index);
+            other.entities.push(entity);
+            
+            Some(unsafe { *self.entities.get_unchecked(index) })
+        }
+    }
+
+    pub unsafe fn drop_component(&mut self, index: usize, id: ComponentId) {
+        debug_assert!(index < self.len());
+        
+        let item = self.indexer.get(id).expect("Component not part of table!");
+        let src_data = self.store.get_unchecked_mut(index);
+
+        if let Some(drop) = item.drop {
+            let data = src_data.add(item.index);
+            drop(data);
+        }
+    }
+
+    pub unsafe fn drop(&mut self, index: usize) -> Option<Entity> {
+        let dealloc = self.store.swap_remove_and_forget_unchecked(index);
+
+        for item in self.indexer.values() {
+            if let Some(drop) = item.drop {
+                // TODO: Use after free when panicing possible
+                drop(dealloc.add(item.index))
+            }
+        }
+
+        let is_last = self.entities.len() - 1 == index;
+        if is_last {
+            self.entities.pop()
+        } else {
+            Some(self.entities.swap_remove(index))
+        }
+    }
+
     pub fn len(&self) -> usize {
-        self.entities.len()
+        self.store.len()
     }
 }
 
-pub struct TRef<'a, T: Bundle> {
-    data: T::Ref<'a>,
-    #[allow(unused)]
-    table: RwLockReadGuard<'a, Table>,
-}
-
-impl<'a, T: Bundle> TRef<'a, T> {
-    #[inline]
-    pub fn new(data: T::Ref<'a>, table: RwLockReadGuard<'a, Table>) -> Self {
-        Self { data, table }
-    }
-    
-    #[inline]
-    pub fn get(&self) -> T::Ref<'a> {
-        self.data
+impl Drop for Table {
+    fn drop(&mut self) {
+        while self.store.len() > 0 {
+            unsafe {
+                let data = self.store.swap_remove_and_forget_unchecked(self.store.len() - 1);
+                for (_, item) in self.indexer.iter() {
+                    if let Some(drop) = item.drop {
+                        drop(data.add(item.index))
+                    }
+                }
+            }
+        }
+        unsafe { self.store.dealloc() }
     }
 }
 
-pub struct TMut<'a, T: Bundle> {
-    data: T::RawMut,
-    #[allow(unused)]
-    table: RwLockWriteGuard<'a, Table>,
+unsafe impl Send for Table {}
+// May be careless, but that's what I'm right now anyway, soo...
+unsafe impl Sync for Table {}
+
+
+pub trait Indexer: Sized {
+    type Output;
+
+    unsafe fn new(row: usize, table: *mut Table) -> Self;
+    fn get(&self, id: ComponentId) -> Option<Self::Output>;
+    unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output;
+    fn get_size(&self, id: ComponentId) -> Option<usize>;
+    fn table<'a>(&'a self) -> &'a Table;
 }
 
-impl<'a, T: Bundle> TMut<'a, T> {
+pub struct RowIndexer {
+    table: *mut Table,
+    row: usize
+}
+
+impl Indexer for RowIndexer {
+    type Output = *mut u8;
+
     #[inline]
-    pub fn new(data: T::RawMut, table: RwLockWriteGuard<'a, Table>) -> Self {
-        Self { data, table }
+    unsafe fn new(row: usize, table: *mut Table) -> Self {
+        debug_assert!(row < (*table).store.len());
+
+        Self { table, row }
     }
 
     #[inline]
-    pub fn get(&self) -> T::Ref<'a> {
-        unsafe { T::into_ref(self.data) }
+    fn get(&self, id: ComponentId) -> Option<Self::Output> {
+        unsafe {
+            let data = (*self.table).store.get_unchecked_mut(self.row);
+            let item = (*self.table).indexer.get(id)?;
+            Some(data.add(item.index))
+        }
     }
 
     #[inline]
-    pub fn get_mut(&mut self) -> T::Mut<'a> {
-        unsafe { T::into_mut(self.data) }
+    unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output {
+        unsafe {
+            let data = (*self.table).store.get_unchecked_mut(self.row);
+            let item = (*self.table).indexer.get(id).unwrap();
+            data.add(item.index)
+        }
+    }
+
+    #[inline]
+    fn get_size(&self, id: ComponentId) -> Option<usize> {
+        unsafe { (*self.table).indexer.get(id).map(|item| item.size) }
+    }
+
+    fn table<'a>(&'a self) -> &'a Table {
+        unsafe { &*self.table }
+    }
+}
+
+pub struct ConstRowIndexer {
+    table: *const Table,
+    row: usize
+}
+
+impl Indexer for ConstRowIndexer {
+    type Output = *const u8;
+
+    #[inline]
+    unsafe fn new(row: usize, table: *mut Table) -> Self {
+        debug_assert!(row < (*table).store.len());
+
+        Self { table, row }
+    }
+
+    #[inline]
+    fn get(&self, id: ComponentId) -> Option<Self::Output> {
+        unsafe {
+            let data = (*self.table).store.get_unchecked(self.row);
+            let item = (*self.table).indexer.get(id)?;
+            Some(data.add(item.index))
+        }
+    }
+
+    #[inline]
+    unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output {
+        unsafe {
+            let data = (*self.table).store.get_unchecked(self.row);
+            let item = (*self.table).indexer.get(id).unwrap();
+            data.add(item.index)
+        }
+    }
+
+    #[inline]
+    fn get_size(&self, id: ComponentId) -> Option<usize> {
+        unsafe { (*self.table).indexer.get(id).map(|item| item.size) }
+    }
+
+    fn table<'a>(&'a self) -> &'a Table {
+        unsafe { &*self.table }
     }
 }
