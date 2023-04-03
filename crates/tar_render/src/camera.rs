@@ -180,32 +180,40 @@ impl CameraController {
 
     pub fn process_keyboard(&mut self, key: VirtualKeyCode, state: ElementState) -> bool {
         let amount = if state == ElementState::Pressed {
+            println!("pressed");
             1.0
         } else {
+            println!("released");
             0.0
         };
         match key {
             VirtualKeyCode::W | VirtualKeyCode::Up => {
+                println!("w");
                 self.amount_forward = amount;
                 true
             }
             VirtualKeyCode::S | VirtualKeyCode::Down => {
+                println!("s");
                 self.amount_backward = amount;
                 true
             }
             VirtualKeyCode::A | VirtualKeyCode::Left => {
+                println!("a");
                 self.amount_left = amount;
                 true
             }
             VirtualKeyCode::D | VirtualKeyCode::Right => {
+                println!("d");
                 self.amount_right = amount;
                 true
             }
             VirtualKeyCode::Space => {
+                println!("up");
                 self.amount_up = amount;
                 true
             }
             VirtualKeyCode::LShift => {
+                println!("down");
                 self.amount_down = amount;
                 true
             }

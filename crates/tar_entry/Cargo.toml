@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 tar_core = { path = "../tar_core" }
 tokio = { version = "1", features = ["full"] }
+tar_scripting = { path = "../tar_scripting" }

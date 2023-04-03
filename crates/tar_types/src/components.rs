@@ -74,3 +74,20 @@ impl Default for Camera {
         }
     }
 }
+
+/// This component stores basic entity info e.g. name
+/// it is required for it to be shown in the editor
+#[derive(Debug, Clone, Component)]
+pub struct Info {
+    pub name: String,
+    pub id: uuid::Uuid,
+}
+
+impl Default for Info {
+    fn default() -> Self {
+        Self {
+            name: "test".into(),
+            id: uuid::Uuid::new_v4(),
+        }
+    }
+}
