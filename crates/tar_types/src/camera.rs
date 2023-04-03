@@ -3,7 +3,7 @@ use winit::dpi::PhysicalSize;
 
 use crate::{
     components::{Camera, Transform},
-    prims::{Euler, Mat4, Point3, Vec3},
+    prims::{Mat4, Point3, Vec3},
 };
 
 #[derive(Debug)]
@@ -15,7 +15,7 @@ pub struct CameraParams {
 
 /// takes in the output from a call to [`tar_ecs::world::World::component_collect`]
 /// and transforms it into the parameters required for rendering
-pub fn get_cam_params(cam: (Transform, Camera), size: PhysicalSize<u32>) -> CameraParams {
+#[must_use] pub fn get_cam_params(cam: (Transform, Camera), size: PhysicalSize<u32>) -> CameraParams {
     let cam_comp = cam.1;
     let transform = cam.0;
 
@@ -24,7 +24,7 @@ pub fn get_cam_params(cam: (Transform, Camera), size: PhysicalSize<u32>) -> Came
     let n = cam_comp.znear;
     let pos = transform.pos;
 
-    let euler = Euler::from(transform.rot);
+    let euler = transform.rot;
 
     let (sin_pitch, cos_pitch) = euler.x.0.sin_cos();
     let (sin_yaw, cos_yaw) = euler.y.0.sin_cos();

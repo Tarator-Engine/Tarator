@@ -118,8 +118,8 @@ pub struct AssetCache {
     last_update: chrono::DateTime<chrono::Utc>,
 }
 
-const ASSET_PATH: &'static str = "assets/";
-const CACHE_NAME: &'static str = "cache.rmp";
+const ASSET_PATH: &str = "assets/";
+const CACHE_NAME: &str = "cache.rmp";
 
 pub type FSID = uuid::Uuid;
 
@@ -157,11 +157,11 @@ pub async fn get_cache() -> Result<AssetCache> {
     rmp_serde::from_slice(std::fs::read(path)?.as_slice()).map_err(|e| Error::RmpD { e })
 }
 
-pub fn format_model_name(model_id: uuid::Uuid) -> String {
+#[must_use] pub fn format_model_name(model_id: uuid::Uuid) -> String {
     format!("model-{model_id}.tarm")
 }
 
-pub fn format_img_name(mat_name: String, ty: &'static str) -> String {
+#[must_use] pub fn format_img_name(mat_name: String, ty: &'static str) -> String {
     format!("img-{mat_name}-{ty}.png")
 }
 

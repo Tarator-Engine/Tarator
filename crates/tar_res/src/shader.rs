@@ -28,11 +28,11 @@ bitflags! {
 }
 
 impl ShaderFlags {
-    pub fn as_strings(self) -> Vec<String> {
+    #[must_use] pub fn as_strings(self) -> Vec<String> {
         (0..15)
             .map(|i| 1u16 << i)
             .filter(|i| self.bits & i != 0)
-            .map(|i| format!("{:?}", ShaderFlags::from_bits_truncate(i)))
+            .map(|i| format!("{:?}", Self::from_bits_truncate(i)))
             .collect()
     }
 }
@@ -74,7 +74,7 @@ let material = {}(
             self.emissive_factor,
             self.alpha_cutoff,
         )
-        .replace(&['[', ']'], "")
+        .replace(['[', ']'], "")
     }
 }
 

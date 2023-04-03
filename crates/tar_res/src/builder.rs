@@ -62,7 +62,7 @@ fn build_node(
                 .clone()
                 .nodes
                 .iter()
-                .find(|n| (*n).index == *id)
+                .find(|n| n.index == *id)
                 .ok_or(Error::NonexistentNode)?,
             object.clone(),
             w_info.clone(),
@@ -102,7 +102,7 @@ fn build_mesh(
         let mesh = object
             .meshes
             .iter()
-            .find(|m| (*m).index == *id)
+            .find(|m| m.index == *id)
             .ok_or(Error::NonexistentMesh)?;
 
         let prims = &mesh.primitives;
@@ -130,7 +130,7 @@ fn build_primitive(
     w_info: Arc<WgpuInfo>,
 ) -> Result<Primitive> {
     let timer = tar_utils::start_timer_msg("started building primitive");
-    let num_indices = prim.indices.as_ref().map(|i| i.len()).unwrap_or(0) as u32;
+    let num_indices = prim.indices.as_ref().map_or(0, std::vec::Vec::len) as u32;
     let num_vertices = prim.vertices.len() as u32;
 
     let vertices = w_info
@@ -169,15 +169,7 @@ fn build_primitive(
 
     tar_utils::log_timing("loaded primitive in ", timer);
 
-    Ok(Primitive {
-        num_vertices,
-        vertices,
-        num_indices,
-        indices,
-        instances,
-        num_instances,
-        material,
-    })
+    Ok(Primitive { vertices, num_vertices, indices, num_indices, instances, num_instances, material })
 }
 
 fn build_material(
@@ -194,35 +186,35 @@ fn build_material(
 
     let base_obj = object.clone();
     let info_clone = w_info.clone();
-    let base_tex = mat.base_color_texture.clone();
+    let base_tex = mat.base_color_texture;
 
     let base_color_thread =
         std::thread::spawn(move || build_texture(base_tex, base_obj, info_clone));
 
     let obj_clone = object.clone();
     let info_clone = w_info.clone();
-    let met_rou_tex = mat.metallic_roughness_texture.clone();
+    let met_rou_tex = mat.metallic_roughness_texture;
 
     let metallic_roughness_thread =
         std::thread::spawn(move || build_texture(met_rou_tex, obj_clone, info_clone));
 
     let obj_clone = object.clone();
     let info_clone = w_info.clone();
-    let normal_tex = mat.normal_texture.clone();
+    let normal_tex = mat.normal_texture;
 
     let normal_thread =
         std::thread::spawn(move || build_texture(normal_tex, obj_clone, info_clone));
 
     let obj_clone = object.clone();
     let info_clone = w_info.clone();
-    let occ_tex = mat.occlusion_texture.clone();
+    let occ_tex = mat.occlusion_texture;
 
     let occlusion_thread =
         std::thread::spawn(move || build_texture(occ_tex, obj_clone, info_clone));
 
     let obj_clone = object.clone();
     let info_clone = w_info.clone();
-    let emissive_tex = mat.emissive_texture.clone();
+    let emissive_tex = mat.emissive_texture;
 
     let emissive_thread =
         std::thread::spawn(move || build_texture(emissive_tex, obj_clone, info_clone));
@@ -396,7 +388,7 @@ fn build_texture(
 
     let dims = (img.width(), img.height());
 
-    use image::DynamicImage::*;
+    use image::DynamicImage::{ImageLuma8, ImageLumaA8, ImageRgb8, ImageRgba8};
     let (format, data_layout, data): (_, _, Vec<u8>) = match &img {
         ImageLuma8(d) => (
             wgpu::TextureFormat::R8Unorm, // TODO: confirm if these are correct
