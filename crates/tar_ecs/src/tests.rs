@@ -1,363 +1,204 @@
-use std::any::type_name;
+use std::{alloc::Layout, mem};
 
-use crate::prelude::*;
+use crate::{prelude::*};
 
-#[derive(Component, Default)]
-struct Position {
-    x: f32,
-    y: f32,
-    z: f32,
-}
+#[derive(Component, Clone)]
+struct Position([u32; 2]);
+impl CheckElement for Position {}
 
-impl Position {
-    fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
+#[derive(Component, Clone)]
+struct Rotation(u32);
+impl CheckElement for Rotation {}
+
+#[derive(Component, Clone)]
+struct Label(String);
+impl CheckElement for Label {}
+
+#[derive(Component, Clone)]
+struct Player;
+impl CheckElement for Player {}
+
+trait CheckElement: Component {}
+
+#[derive(Callback)]
+struct CheckComponents(usize);
+
+impl<C: CheckElement> Callback<C> for CheckComponents {
+    fn callback(&mut self, _: &mut C) {
+        self.0 += 1;
     }
 }
 
-#[derive(Component)]
-struct Label {
-    name: String,
+
+unsafe fn drop_fn<T>(data: *mut u8) {
+    data.cast::<T>().drop_in_place()
 }
 
-impl Label {
-    fn new(name: impl Into<String>) -> Self {
-        Label { name: name.into() }
-    }
+unsafe fn cb_fn<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
+    (*callback.cast::<T>()).callback(&mut *component.cast::<U>());
 }
 
-#[derive(Clone, Component, Default)]
-struct UUID {
-    id: u128,
-}
-
-impl UUID {
-    fn new(id: u128) -> Self {
-        Self { id }
-    }
-}
-
-#[derive(Component, Default)]
-struct Color {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
-}
-
-impl Color {
-    fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self { r, g, b, a }
-    }
-}
-
-#[derive(Component, Eq, PartialEq)]
-struct Zst;
 
 #[test]
-fn single_entity_single_component() {
+fn callback() {
     let mut world = World::new();
+
+    world.component_add_callback::<CheckComponents, Position>();
+    world.component_add_callback::<CheckComponents, Rotation>();
+    world.component_add_callback::<CheckComponents, Player>();
+    world.component_add_callback::<CheckComponents, Label>();
+    
+    let entity = world.entity_create();
+    world.entity_set(entity, (
+        Position([0, 0]),
+        Rotation(0),
+        Player,
+        Label("".into())
+    ));
+    
+    let mut check = CheckComponents(0);
+    world.entity_callback(entity, &mut check);
+    assert!(check.0 == 4);
+}
+
+#[test]
+fn callback_raw() {
+unsafe {
+    let mut world = World::new();
+    let callback_id = world.callback_init_raw(CheckComponents::NAME);
+
+    // Position
+    let component_info = ComponentInfo::new(Layout::new::<Position>(), mem::needs_drop::<Position>().then_some(drop_fn::<Position>));
+    let component_id = world.component_init_raw(Position::NAME, component_info);
+    world.component_add_callback_raw(component_id, callback_id, cb_fn::<CheckComponents, Position>);
+    
+    // Rotation
+    let component_info = ComponentInfo::new(Layout::new::<Rotation>(), mem::needs_drop::<Rotation>().then_some(drop_fn::<Rotation>));
+    let component_id = world.component_init_raw(Rotation::NAME, component_info);
+    world.component_add_callback_raw(component_id, callback_id, cb_fn::<CheckComponents, Rotation>);
+
+    // Player
+    let component_info = ComponentInfo::new(Layout::new::<Player>(), mem::needs_drop::<Player>().then_some(drop_fn::<Player>));
+    let component_id = world.component_init_raw(Player::NAME, component_info);
+    world.component_add_callback_raw(component_id, callback_id, cb_fn::<CheckComponents, Player>);
+    
+    // Label
+    let component_info = ComponentInfo::new(Layout::new::<Label>(), mem::needs_drop::<Label>().then_some(drop_fn::<Label>));
+    let component_id = world.component_init_raw(Label::NAME, component_info);
+    world.component_add_callback_raw(component_id, callback_id, cb_fn::<CheckComponents, Label>);
 
     let entity = world.entity_create();
-    world.entity_set(entity, UUID::new(19700101000000));
-
-    let getter = world.entity_get::<UUID>(entity).unwrap();
-    assert!(getter.get().id == 19700101000000);
+    world.entity_set_raw(entity, <(Position, Rotation, Player, Label)>::NAMES, &[
+        (&mut mem::ManuallyDrop::new(Position([0, 0]))) as *mut _ as *mut u8,
+        (&mut mem::ManuallyDrop::new(Rotation(0))     ) as *mut _ as *mut u8,
+        (&mut mem::ManuallyDrop::new(Player)          ) as *mut _ as *mut u8,
+        (&mut mem::ManuallyDrop::new(Label("".into()))) as *mut _ as *mut u8
+    ]);
+    let mut check = CheckComponents(0);
+    world.entity_callback_raw(entity, CheckComponents::NAME, &mut check as *mut _ as *mut u8);
+    assert!(check.0 == 4);
+}
 }
 
 #[test]
-fn single_entity_multiple_components_single() {
+fn component_querier() {
     let mut world = World::new();
 
-    let entity = world.entity_create();
-    world.entity_set(entity, UUID::new(19700101000000));
-    world.entity_set(entity, Position::new(16.0, 16.0, 42.0));
-    world.entity_set(entity, Color::new(1.0, 0.0, 1.0, 1.0));
-
-    let (uuid, position, color) = (
-        world.entity_get::<UUID>(entity).unwrap().get(),
-        world.entity_get::<Position>(entity).unwrap().get(),
-        world.entity_get::<Color>(entity).unwrap().get(),
-    );
-    assert!(uuid.id == 19700101000000);
-    assert!(position.x == 16.0);
-    assert!(position.y == 16.0);
-    assert!(position.z == 42.0);
-    assert!(color.r == 1.0);
-    assert!(color.g == 0.0);
-    assert!(color.b == 1.0);
-    assert!(color.a == 1.0);
-}
-
-#[test]
-fn single_entity_multiple_components_multi() {
-    let mut world = World::new();
-
-    let entity = world.entity_create();
-    world.entity_set(
-        entity,
-        (
-            UUID::new(19700101000000),
-            Position::new(16.0, 16.0, 42.0),
-            Color::new(1.0, 0.0, 1.0, 1.0),
-        ),
-    );
-
-    let (uuid, position, color) = world.entity_get::<(UUID, Position, Color)>(entity).unwrap().get();
-    assert!(uuid.id == 19700101000000);
-    assert!(position.x == 16.0);
-    assert!(position.y == 16.0);
-    assert!(position.z == 42.0);
-    assert!(color.r == 1.0);
-    assert!(color.g == 0.0);
-    assert!(color.b == 1.0);
-    assert!(color.a == 1.0);
-}
-
-#[test]
-fn entity_query() {
-    let mut world = World::new();
-
-    for _ in 0..5 {
+    for _ in 0..10 {
         let entity = world.entity_create();
-        world.entity_set(entity, UUID::new(19700101000000));
+        world.entity_set(entity, Position([99, 99]));
     }
 
-    for entity in world.entity_collect::<UUID>() {
-        let uuid = world.entity_get::<UUID>(entity).unwrap().get();
-        assert!(uuid.id == 19700101000000);
+    for _ in 0..10 {
+        let entity = world.entity_create();
+        world.entity_set(entity, (Position([99, 99]), Player));
     }
+
+    for _ in 0..10 {
+        let entity = world.entity_create();
+        world.entity_set(entity, (Position([99, 99]), Rotation(0)));
+    }
+
+unsafe {
+    let querier = world.component_querier(Position::NAMES);
+    let id = world.component_init::<Position>();
+
+    let mut i = 0;
+    for indexer in querier {
+        let data = indexer.get(id).unwrap().cast::<Position>();
+        assert!((*data).0 == [99, 99]);
+        i += 1;
+    }
+    
+    assert!(i == 30, "{i}");
+}
 }
 
 #[test]
 fn component_query() {
     let mut world = World::new();
 
-    for n in 5..10 {
-        let entity = world.entity_create();
-        world.entity_set(entity, UUID::new(n));
-    }
+    fn init_entity<T: CloneBundle>(world: &mut World, data: T) {
+        println!("{:?}", T::NAMES);
 
-    for n in 0..5 {
-        let entity = world.entity_create();
-        world.entity_set(entity, (UUID::new(n), Position::new(16.0, 16.0, 42.0)));
-    }
-
-    let mut n = 0;
-    for uuid in world.component_query::<UUID>() {
-        assert!(uuid.id == n, "{} : {}", uuid.id, n);
-        n += 1;
-    }
-
-    assert!(n == 10, "Expected 10 iterations of UUID, made {}", n);
-
-    for position in world.component_query::<Position>() {
-        assert!(position.x == 16.0);
-        assert!(position.y == 16.0);
-        assert!(position.z == 42.0);
-    }
-}
-
-#[test]
-fn zst() {
-    let mut world = World::new();
-
-    let entity = world.entity_create();
-    world.entity_set(entity, Zst);
-
-    for query_entity in world.entity_collect::<Zst>() {
-        assert!(entity == query_entity);
-    }
-
-    for zst in world.component_query::<Zst>() {
-        assert!(*zst == Zst);
-    }
-}
-
-#[test]
-fn component_clone() {
-    let mut world = World::new();
-
-    for _ in 0..10 {
-        let entity = world.entity_create();
-        world.entity_set(entity, UUID::new(16));
-    }
-
-    for mut uuid in world.component_collect::<UUID>() {
-        assert!(uuid.id == 16);
-        uuid.id = 42;
-    }
-
-    for uuid in world.component_query::<UUID>() {
-        assert!(uuid.id == 16);
-    }
-}
-
-#[test]
-fn collect_entity_by_empty_unit() {
-    let mut world = World::new();
-    let entity = world.entity_create();
-    world.entity_set(entity, (Zst, UUID::new(42), Position::new(16., 16., 42.)));
-
-    for _ in world.entity_collect::<()>() {
-        let position = world.entity_get::<Position>(entity).unwrap().get();
-        let uuid = world.entity_get::<UUID>(entity).unwrap().get();
-        assert!(uuid.id == 42);
-        assert!(position.x == 16.);
-        assert!(position.y == 16.);
-        assert!(position.z == 42.);
-        return;
-    }
-
-    panic!("Should've already returned!");
-}
-
-#[test]
-fn callback() {
-    #[derive(Callback)]
-    struct MyCallback(u32);
-
-    impl Callback<Position> for MyCallback {
-        fn callback(&mut self, _: &mut Position) {
-            self.0 += 1;
+        for _ in 0..1 {
+            let entity = world.entity_create();
+            world.entity_set(entity, data.clone());    
         }
     }
 
-    impl Callback<UUID> for MyCallback {
-        fn callback(&mut self, _: &mut UUID) {
-            self.0 += 1;
+    init_entity(&mut world, Position([0, 0]));
+    init_entity(&mut world, Rotation(0));
+    init_entity(&mut world, Player);
+    init_entity(&mut world, Label("Entity".to_owned()));
+    init_entity(&mut world, (Position([0, 0]), Rotation(0)) );
+    init_entity(&mut world, (Position([0, 0]), Player) );
+    init_entity(&mut world, (Position([0, 0]), Label("Entity".to_owned())) );
+    init_entity(&mut world, (Position([0, 0]), Rotation(0), Player) );
+    init_entity(&mut world, (Position([0, 0]), Rotation(0), Label("Entity".to_owned())) );
+    init_entity(&mut world, (Position([0, 0]), Rotation(0), Player, Label("Entity".to_owned())) );
+
+    fn check_component<T: Bundle>(world: &mut World, rec: usize) {
+        println!("{:?}", T::NAMES);
+
+        let mut count = 0;
+        world.component_query::<T>(|_, _| {
+            count += 1;
+        });
+        assert!(count == rec, "{} : {:?}", count, T::NAMES);
+        
+        world.component_query_mut::<T>(|_, _| {
+            count += 1;
+        });
+        assert!(count == rec * 2, "{} : {:?}", count, T::NAMES);
+        
+        unsafe {
+            world.component_query_raw(T::NAMES, |_, _| {
+                count += 1;
+            });
         }
+        assert!(count == rec * 3, "{} : {:?}", count, T::NAMES);
     }
 
-    impl Callback<Color> for MyCallback {
-        fn callback(&mut self, _: &mut Color) {
-            self.0 += 1;
-        }
-    }
+    check_component::<Position>(&mut world, 7);
+    check_component::<Rotation>(&mut world, 5);
+    check_component::<Player>(&mut world, 4);
+    check_component::<Label>(&mut world, 4);
+    check_component::<(Position, Rotation)>(&mut world, 4);
+    check_component::<(Position, Player)>(&mut world, 3);
+    check_component::<(Position, Label)>(&mut world, 3);
+    check_component::<(Position, Rotation, Player)>(&mut world, 2);
+    check_component::<(Position, Rotation, Label)>(&mut world, 2);
+    check_component::<(Position, Rotation, Player, Label)>(&mut world, 1);
 
-    impl Callback<Zst> for MyCallback {
-        fn callback(&mut self, _: &mut Zst) {
-            self.0 += 1;
-        }
-    }
+    check_component::<(Rotation, Position)>(&mut world, 4);
+    check_component::<(Player, Position)>(&mut world, 3);
+    check_component::<(Label, Position)>(&mut world, 3);
+    check_component::<(Player, Rotation, Position)>(&mut world, 2);
+    check_component::<(Label, Rotation, Position)>(&mut world, 2);
+    check_component::<(Label, Player, Rotation, Position)>(&mut world, 1);
 
-    Position::add_callback::<MyCallback>();
-    UUID::add_callback::<MyCallback>();
-    Color::add_callback::<MyCallback>();
-    Zst::add_callback::<MyCallback>();
-
-    let mut world = World::new();
-
-    for _ in 0..4 {
-        let entity = world.entity_create();
-        let data = (Position::default(), UUID::default(), Color::default(), Zst);
-        world.entity_set(entity, data);
-    }
-
-    let mut cb = MyCallback(0);
-    for entity in world.entity_collect::<()>() {
-        world.entity_callback(entity, &mut cb);
-    }
-
-    assert!(cb.0 == 16, "{} != 16", cb.0);
-}
-
-#[test]
-fn single_entity_single_component_raw() {
-    use crate::component::ComponentHashId;
-
-    let mut world = World::new();
-
-    let entity = world.entity_create();
-    world.entity_set(entity, UUID::new(19700101000000));
-
-    let (table, index) = world.entity_get_table_and_index(entity).unwrap();
-    let hash_id = ComponentHashId::new::<UUID>();
-
-    unsafe {
-        assert!(
-            (*table
-                .write()
-                .get_unchecked_raw(hash_id, index)
-                .unwrap()
-                .cast::<UUID>())
-            .id == 19700101000000
-        );
-    }
-}
-
-#[test]
-fn single_entity_multiple_components_raw() {
-    use crate::component::ComponentHashId;
-
-    let mut world = World::new();
-
-    let entity = world.entity_create();
-    world.entity_set(entity, UUID::new(19700101000000));
-    world.entity_set(entity, Position::new(16.0, 16.0, 42.0));
-    world.entity_set(entity, Color::new(1.0, 0.0, 1.0, 1.0));
-
-    let (uuid, position, color) = unsafe {
-        let (table, index) = world.entity_get_table_and_index(entity).unwrap();
-        let table = table.read();
-
-        (
-            &*table
-                .get_unchecked_raw(ComponentHashId::new::<UUID>(), index)
-                .unwrap()
-                .cast::<UUID>(),
-            &*table
-                .get_unchecked_raw(ComponentHashId::new::<Position>(), index)
-                .unwrap()
-                .cast::<Position>(),
-            &*table
-                .get_unchecked_raw(ComponentHashId::new::<Color>(), index)
-                .unwrap()
-                .cast::<Color>(),
-        )
-    };
-
-    assert!(uuid.id == 19700101000000);
-    assert!(position.x == 16.0);
-    assert!(position.y == 16.0);
-    assert!(position.z == 42.0);
-    assert!(color.r == 1.0);
-    assert!(color.g == 0.0);
-    assert!(color.b == 1.0);
-    assert!(color.a == 1.0);
-}
-
-#[test]
-fn query_component_tables_raw() {
-    use crate::component::ComponentHashId;
-
-    let mut world = World::new();
-
-    for n in 0..5 {
-        let entity = world.entity_create();
-        let data = (UUID::new(n), Label::new("Baba"));
-        world.entity_set(entity, data);
-    }
-
-    for table in world.component_query_tables(type_name::<(Label, UUID)>()) {
-        let table = table.read();
-
-        for n in 0..table.len() {
-            let (label, uuid) = unsafe {
-                (
-                    &*table
-                        .get_unchecked_raw(ComponentHashId::new::<Label>(), n)
-                        .unwrap()
-                        .cast::<Label>(),
-                    &*table
-                        .get_unchecked_raw(ComponentHashId::new::<UUID>(), n)
-                        .unwrap()
-                        .cast::<UUID>(),
-                )
-            };
-
-            assert!(n as u128 == uuid.id);
-            assert!(format!("Baba") == label.name);
-        }
-    }
+    world.component_query::<Label>(|_, label| {
+        assert!(label.0.as_str() == "Entity");
+    });
 }
