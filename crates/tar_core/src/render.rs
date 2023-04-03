@@ -71,7 +71,7 @@ pub fn render_fn(
     surface: Arc<wgpu::Surface>,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-    world: Arc<Mutex<tar_ecs::world::World>>,
+    world: Arc<Mutex<tar_ecs::prelude::World>>,
 ) {
     // let int_camera = tar_render::camera::IntCamera::new(
     //     (0.0, 5.0, 10.0),

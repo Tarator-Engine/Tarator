@@ -1,7 +1,7 @@
 use crate::{
     bundle::{ Bundle, CloneBundle, BundleId, BundleNames },
     callback::{ CallbackName, Callback, CallbackId, CallbackFunc },
-    component::{ Empty, ComponentId, Component, ComponentInfo },
+    component::{ Empty, ComponentId, Component, ComponentInfo, ComponentName },
     entity::{ Entities, Entity },
     store::{
         sparse::SparseSetIndex, table::{RowIndexer, ConstRowIndexer, Table, Indexer},
@@ -177,7 +177,7 @@ impl<TI: TypeInfo> World<TI, Outer> {
         let bundle_id = self.type_info.insert_bundle(info);
         self.archetypes.try_init(bundle_id, &self.type_info);
 
-        let [old_a, new_a] = self.archetypes.get_many_mut([meta.bundle_id.as_usize(), bundle_id.as_usize()]).unwrap();
+        let (old_a, new_a) = self.archetypes.get_2_mut(meta.bundle_id, bundle_id).unwrap();
         let (old_t, new_t) = (old_a.table_mut(), new_a.table_mut());
         let (old_index, new_index) = (meta.index, new_t.len());
 
@@ -241,7 +241,7 @@ impl<TI: TypeInfo> World<TI, Outer> {
         let bundle_id = self.type_info.insert_bundle(info);
         self.archetypes.try_init(bundle_id, &self.type_info);
 
-        let [old_a, new_a] = self.archetypes.get_many_mut([meta.bundle_id.as_usize(), bundle_id.as_usize()]).unwrap();
+        let (old_a, new_a) = self.archetypes.get_2_mut(meta.bundle_id, bundle_id).unwrap();
         let (old_t, new_t) = (old_a.table_mut(), new_a.table_mut());
         let (old_index, new_index) = (meta.index, new_t.len());
 
@@ -264,11 +264,11 @@ impl<TI: TypeInfo> World<TI, Outer> {
         }
     }
 
-    pub unsafe fn entity_unset_raw(&mut self, name: BundleNames, entity: Entity) {
+    pub unsafe fn entity_unset_raw(&mut self, _name: BundleNames, _entity: Entity) {
         todo!()
     }
 
-    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
+    pub fn entity_unset<T: Bundle>(&mut self, _entity: Entity) {
         todo!()
     }
 }
@@ -506,6 +506,18 @@ impl<TI: TypeInfo, Location> World<TI, Location> {
     }
 }
 
+impl<TI: TypeInfo, Location> World<TI, Location> {
+    #[inline]
+    pub fn component_id_raw(&self, name: ComponentName) -> Option<ComponentId> {
+        self.type_info.get_component_id(name)
+    }
+
+    #[inline]
+    pub fn component_id<T: Component>(&self) -> Option<ComponentId> {
+        self.type_info.get_component_id_from::<T>()
+    }
+}
+
 impl<TI: TypeInfo> World<TI, Outer> {
     #[inline]
     pub fn callback_init_raw(&mut self, name: CallbackName) -> CallbackId {
@@ -525,16 +537,6 @@ impl<TI: TypeInfo> World<TI, Outer> {
     #[inline]
     pub fn component_init<T: Component>(&mut self) -> ComponentId {
         self.type_info.init_component_from::<T>()
-    }
-
-    #[inline]
-    pub fn component_id_raw(&self, name: &'static str) -> Option<ComponentId> {
-        self.type_info.get_component_id(name)
-    }
-
-    #[inline]
-    pub fn component_id<T: Component>(&self) -> Option<ComponentId> {
-        self.type_info.get_component_id_from::<T>()
     }
 
     #[inline]

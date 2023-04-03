@@ -2,7 +2,7 @@ use std::{fs, io, process::Command};
 
 use libc::c_void;
 use libloading::{Library, Symbol};
-use tar_ecs::{component::ComponentHashId, world::World};
+use tar_ecs::{bundle::BundleNames, prelude::*};
 use tar_types::{
     components::Transform,
     script::{Component, FileContent, System},
@@ -32,7 +32,7 @@ impl Scripting {
     pub fn load_scripts(&mut self) -> io::Result<()> {
         Command::new("cargo")
             .args(["b", "--manifest-path", MANIFEST_PATH])
-            .env("CARGO_TARGET_DIR", ".scr/")
+            .env("CARGO_TARGET_DIR", INT_SCRIPTS_PATH)
             .status()
             .unwrap();
         for e in fs::read_dir(INT_SCRIPTS_PATH)? {
@@ -91,44 +91,24 @@ fn run_system(sys: &System, world: &mut World, lib: &Library) {
         _ => panic!("only 1-7 inputs are supported"),
     };
 
-    let tmp_inputs = vec![
-        "tar_types::components::Transform",
-        // "tar_types::components::Rendering",
-    ];
+    let tmp_inputs = Transform::NAMES;
 
-    let mut fin_tables: Vec<Vec<*const u8>> = vec![];
+    world.component_init::<Transform>();
 
-    for input in tmp_inputs {
-        let tables = world.component_query_tables(input);
-
-        let inp = tables
-            .iter()
-            .map(|t| {
-                let table = t.read();
-
-                let mut transforms = vec![];
-                for i in 0..table.len() {
-                    let transform = unsafe {
-                        table
-                            .get_unchecked_raw(ComponentHashId::new_from_str(input), i)
-                            .unwrap()
-                    };
-                    transforms.push(transform);
-                }
-                transforms
-            })
-            .collect::<Vec<_>>();
-
-        let t = inp[0].clone();
-        fin_tables.push(t);
+    let mut transforms = vec![];
+    unsafe {
+        let component_id = world.component_id_raw(tmp_inputs[0]).unwrap();
+        world.component_query_raw_mut(tmp_inputs, |_, indexer| {
+            transforms.push(indexer.get_unchecked(component_id));
+        });
     }
 
     // func(unsafe { std::mem::transmute(&mut t) });
 
     match sym {
-        SystemSym::Sys1(s) => s(unsafe { std::mem::transmute(&mut fin_tables[0]) }),
-        SystemSym::Sys2(s) => s(unsafe { std::mem::transmute(&mut fin_tables[0]) }, unsafe {
-            std::mem::transmute(&mut fin_tables[1])
+        SystemSym::Sys1(s) => s(unsafe { std::mem::transmute(&mut transforms) }),
+        SystemSym::Sys2(s) => s(unsafe { std::mem::transmute(&mut transforms) }, unsafe {
+            std::mem::transmute(&mut transforms)
         }),
 
         _ => todo!("support a larger range of inputs"),

@@ -1,9 +1,6 @@
 use tar_ecs_macros::identifier;
 
-use crate::{
-    component::Component,
-    store::sparse::MutSparseSet,
-};
+use crate::{component::Component, store::sparse::MutSparseSet};
 
 pub type CallbackName = &'static str;
 

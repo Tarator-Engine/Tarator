@@ -6,9 +6,8 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input, parse_quote,
     token::Comma,
-    DeriveInput, Ident, LitInt, Result
+    DeriveInput, Ident, LitInt, Result,
 };
-
 
 struct ForeachTuple {
     macro_ident: Ident,
@@ -82,16 +81,32 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     ast.generics
         .make_where_clause()
         .predicates
-        .push(parse_quote! { Self: Send + Sync + 'static });
+        .push(parse_quote! { Self: Sized + Send + Sync + 'static });
 
     let name = &ast.ident;
-    let name_str = format!("\"{}\"", name);
+    let name_str = format!("\"{name}\"").to_lowercase();
+    let info_fn = format!("\"{name}_get_info\"").to_lowercase();
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
+
     quote! {
         unsafe impl #impl_generics Component for #name #type_generics #where_clause {
             const NAME: ComponentName = #name_str;
+
+            #[no_mangle]
+            #[export_name = #info_fn]
+            fn get_info() -> ComponentInfo {
+                unsafe fn drop<T>(data: *mut u8) {
+                    data.cast::<T>().drop_in_place()
+                }
+
+                ComponentInfo::new(
+                    std::alloc::Layout::new::<Self>(),
+                    std::mem::needs_drop::<Self>().then_some(drop::<Self>),
+                )
+            }
         }
-    }.into()
+    }
+    .into()
 }
 
 #[proc_macro_derive(Callback)]
@@ -110,13 +125,13 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
         impl #impl_generics Callback<Empty> for #name #type_generics #where_clause {
             fn callback(&mut self, _: &mut Empty) {}
         }
-    }.into()
+    }
+    .into()
 }
-
 
 struct Identifier {
     ident: Ident,
-    int: Ident
+    int: Ident,
 }
 
 impl Parse for Identifier {
@@ -158,12 +173,13 @@ pub fn identifier(input: TokenStream) -> TokenStream {
             fn from_usize(value: usize) -> Self {
                 Self::new(value as #int)
             }
-        
+
             #[inline]
             fn as_usize(&self) -> usize {
                 self.0 as usize
             }
         }
 
-    }.into()
+    }
+    .into()
 }
