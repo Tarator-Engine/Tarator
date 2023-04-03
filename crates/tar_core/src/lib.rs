@@ -8,7 +8,7 @@ use std::{sync::{Arc, Barrier}, f32::consts::FRAC_2_PI};
 use cgmath::{InnerSpace};
 use parking_lot::{MutexGuard, Mutex};
 use tar_ecs::{prelude::Entity, world::World};
-use tar_types::{components::{Transform, Rendering, Camera}, prims::{Vec3}};
+use tar_types::{components::{Transform, Rendering, Camera, Info}, prims::{Vec3}};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -399,11 +399,11 @@ pub async fn run() {
                     errors.remove(*r);
                 }
 
-                tar_gui::gui(&context, &mut state, &mut file_dialogue);
+                tar_gui::gui(&context, &mut state, &mut file_dialogue, &mut world);
 
                 if let Some((id, _)) = &state.add_object {
                     let e = world.entity_create();
-                    world.entity_set(e, (Transform::default(), Rendering {model_id: *id}));
+                    world.entity_set(e, (Transform::default(), Rendering {model_id: *id}, Info::default()));
                     entities.push(e);
                 }
 

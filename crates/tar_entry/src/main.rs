@@ -1,4 +1,6 @@
 #[tokio::main]
 async fn main() {
-    tar_core::run().await;
+    let mut s = tar_scripting::Scripting::default();
+    s.load_scripts().unwrap();
+    s.test_scripting();
 }

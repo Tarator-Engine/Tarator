@@ -87,7 +87,6 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let name = &ast.ident;
     let name_str = format!("\"{}\"", name);
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
-
     quote! {
         unsafe impl #impl_generics Component for #name #type_generics #where_clause {
             const NAME: ComponentName = #name_str;
