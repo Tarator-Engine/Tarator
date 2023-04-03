@@ -7,7 +7,7 @@ use std::{sync::{Arc, Barrier}, f32::consts::FRAC_2_PI};
 
 use cgmath::{InnerSpace};
 use parking_lot::{MutexGuard, Mutex};
-use tar_ecs::{prelude::Entity, world::World};
+use tar_ecs::prelude::*;
 use tar_types::{components::{Transform, Rendering, Camera, Info}, prims::{Vec3}};
 use winit::{
     event::*,
@@ -27,60 +27,62 @@ fn input(
     cam: &Entity,
     world: &mut World
 ) {
-    let (_, mut cam) = world.entity_get_mut::<(Transform, Camera)>(*cam).unwrap().get_mut();
-    match event {
-        WindowEvent::KeyboardInput {
-            input:
-                KeyboardInput {
-                    virtual_keycode: Some(key),
-                    state,
-                    ..
-                },
-            ..
-        } => {
-            
+    world.entity_get_mut::<(Transform, Camera), _>(*cam, |_, (_, cam)| {
+        match event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => {
+                
 
-            let amount = if *state == ElementState::Pressed {
-                1.0
-            } else {
-                0.0
-            };
-            match key {
-                VirtualKeyCode::W | VirtualKeyCode::Up => {
-                    cam.amount_forward = amount;
-                    
+                let amount = if *state == ElementState::Pressed {
+                    1.0
+                } else {
+                    0.0
+                };
+                match key {
+                    VirtualKeyCode::W | VirtualKeyCode::Up => {
+                        cam.amount_forward = amount;
+                        
+                    }
+                    VirtualKeyCode::S | VirtualKeyCode::Down => {
+                        cam.amount_backward = amount;
+                        
+                    }
+                    VirtualKeyCode::A | VirtualKeyCode::Left => {
+                        cam.amount_left = amount;
+                        
+                    }
+                    VirtualKeyCode::D | VirtualKeyCode::Right => {
+                        cam.amount_right = amount;
+                        
+                    }
+                    VirtualKeyCode::Space => {
+                        cam.amount_up = amount;
+                    }
+                    VirtualKeyCode::LShift => {
+                        cam.amount_down = amount;
+                    }
+                    _ => (),
                 }
-                VirtualKeyCode::S | VirtualKeyCode::Down => {
-                    cam.amount_backward = amount;
-                    
-                }
-                VirtualKeyCode::A | VirtualKeyCode::Left => {
-                    cam.amount_left = amount;
-                    
-                }
-                VirtualKeyCode::D | VirtualKeyCode::Right => {
-                    cam.amount_right = amount;
-                    
-                }
-                VirtualKeyCode::Space => {
-                    cam.amount_up = amount;
-                }
-                VirtualKeyCode::LShift => {
-                    cam.amount_down = amount;
-                }
-                _ => (),
+        
+            },
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                cam.mouse_pressed = *state == ElementState::Pressed;
             }
-    
-        },
-        WindowEvent::MouseInput {
-            button: MouseButton::Left,
-            state,
-            ..
-        } => {
-            cam.mouse_pressed = *state == ElementState::Pressed;
+            _ => (),
         }
-        _ => (),
     }
+    ).unwrap();
 }
 
 fn update(
@@ -88,42 +90,43 @@ fn update(
     world: &mut World,
     dt: std::time::Duration,
 ) {
-    let (mut t, mut cam) = world.entity_get_mut::<(Transform, Camera)>(*cam).unwrap().get_mut();
-    // UPDATE CAMERA
-    let dt = dt.as_secs_f32();
+    world.entity_get_mut::<(Transform, Camera), _>(*cam, |_, (t, cam)| {
+        // UPDATE CAMERA
+        let dt = dt.as_secs_f32();
 
-    // Move forward/backward and left/right
-    let (yaw_sin, yaw_cos) = t.rot.y.0.sin_cos();
-    let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
-    let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
-    t.pos += forward * (cam.amount_forward - cam.amount_backward) * cam.speed * dt;
-    t.pos += right * (cam.amount_right - cam.amount_left) * cam.speed * dt;
+        // Move forward/backward and left/right
+        let (yaw_sin, yaw_cos) = t.rot.y.0.sin_cos();
+        let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+        t.pos += forward * (cam.amount_forward - cam.amount_backward) * cam.speed * dt;
+        t.pos += right * (cam.amount_right - cam.amount_left) * cam.speed * dt;
 
-    // Move up/down. Since we don't use roll, we can just
-    // modify the y coordinate directly.
-    t.pos.y += (cam.amount_up - cam.amount_down) * cam.speed * dt;
+        // Move up/down. Since we don't use roll, we can just
+        // modify the y coordinate directly.
+        t.pos.y += (cam.amount_up - cam.amount_down) * cam.speed * dt;
 
-    // Rotate
-    t.rot.y += cgmath::Rad(cam.rotate_horizontal) * cam.sensitivity * dt;
-    t.rot.x += cgmath::Rad(-cam.rotate_vertical) * cam.sensitivity * dt;
+        // Rotate
+        t.rot.y += cgmath::Rad(cam.rotate_horizontal) * cam.sensitivity * dt;
+        t.rot.x += cgmath::Rad(-cam.rotate_vertical) * cam.sensitivity * dt;
 
-    // If process_mouse isn't called every frame, these values
-    // will not get set to zero, and the camera will rotate
-    // when moving in a non cardinal direction.
-    cam.rotate_horizontal = 0.0;
-    cam.rotate_vertical = 0.0;
+        // If process_mouse isn't called every frame, these values
+        // will not get set to zero, and the camera will rotate
+        // when moving in a non cardinal direction.
+        cam.rotate_horizontal = 0.0;
+        cam.rotate_vertical = 0.0;
 
-    // Keep the camera's angle from going too high/low.
-    if t.rot.x < -cgmath::Rad(SAFE_FRAC_PI_2) {
-        t.rot.x = -cgmath::Rad(SAFE_FRAC_PI_2);
-    } else if t.rot.x > cgmath::Rad(SAFE_FRAC_PI_2) {
-        t.rot.x = cgmath::Rad(SAFE_FRAC_PI_2);
-    }
+        // Keep the camera's angle from going too high/low.
+        if t.rot.x < -cgmath::Rad(SAFE_FRAC_PI_2) {
+            t.rot.x = -cgmath::Rad(SAFE_FRAC_PI_2);
+        } else if t.rot.x > cgmath::Rad(SAFE_FRAC_PI_2) {
+            t.rot.x = cgmath::Rad(SAFE_FRAC_PI_2);
+        }
 
-    // not necessary I think 
-    // TODO!: find out if this is needed
-    // UPDATE VIEW PROJECTION MATRIX
-    // cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+        // not necessary I think 
+        // TODO!: find out if this is needed
+        // UPDATE VIEW PROJECTION MATRIX
+        // cam.uniform.update_view_proj(&cam.cam, &cam.proj);
+    }).unwrap();
 }
 
 
@@ -369,19 +372,17 @@ pub async fn run() {
                 }
                 winit_events = vec![];
 
-                {
-                    let (_, mut cam) = world.entity_get_mut::<(Transform, Camera)>(cam).unwrap().get_mut();
+                world.entity_get_mut::<(Transform, Camera), _>(cam, |_, (_, cam)| {
                     if cam.mouse_pressed {
                         cam.rotate_horizontal = state.mouse_movement.0 as f32;
                         cam.rotate_vertical = state.mouse_movement.1 as f32;
                     }
-                }
+                }).unwrap();
 
-                {
-                    if entities.len() > 0{
-                        let (mut t, _) = world.entity_get_mut::<(Transform, Rendering)>(entities[0]).unwrap().get_mut();
-                        t.pos.x = f32::sin(start_time.elapsed().as_secs_f32());
-                    }
+                if entities.len() > 0{
+                    world.entity_get_mut::<(Transform, Rendering), _>(entities[0], |_, (t, _)|
+                        t.pos.x = f32::sin(start_time.elapsed().as_secs_f32())
+                    ).unwrap();
                 }
 
                 update(&cam, &mut world, state.dt);

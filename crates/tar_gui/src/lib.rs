@@ -2,7 +2,7 @@ mod entity_viewer;
 
 use egui::Color32;
 use egui_file::FileDialog;
-use tar_ecs::world::World;
+use tar_ecs::prelude::World;
 
 pub fn gui(
     context: &egui::Context,

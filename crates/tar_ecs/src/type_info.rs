@@ -3,19 +3,32 @@ use std::collections::{HashMap, HashSet};
 use fxhash::FxBuildHasher;
 
 use crate::{
-    component::{ Component, ComponentId, ComponentInfo, ComponentName },
-    bundle::{ BundleId, BundleInfo, Bundle, BundleNames },
-    store::sparse::{ SparseSetIndex },
-    callback::{ Callback, CallbackId, CallbackFunc, CallbackName} 
+    bundle::{Bundle, BundleId, BundleInfo, BundleNames},
+    callback::{Callback, CallbackFunc, CallbackId, CallbackName},
+    component::{Component, ComponentId, ComponentInfo, ComponentName},
+    store::sparse::SparseSetIndex,
 };
 
 pub trait TypeInfo: Sized {
     unsafe fn init_component(&mut self, name: ComponentName, info: ComponentInfo) -> ComponentId;
     fn get_component_id(&self, name: ComponentName) -> Option<ComponentId>;
-    fn get_component_info<T>(&self, component_id: ComponentId, func: impl FnOnce(&ComponentInfo) -> T) -> Option<T>;
-    unsafe fn get_component_info_mut<T>(&mut self, component_id: ComponentId, func: impl FnOnce(&mut ComponentInfo) -> T) -> Option<T>;
-    
-    unsafe fn component_add_callback(&mut self, component_id: ComponentId, callback_id: CallbackId, func: CallbackFunc);
+    fn get_component_info<T>(
+        &self,
+        component_id: ComponentId,
+        func: impl FnOnce(&ComponentInfo) -> T,
+    ) -> Option<T>;
+    unsafe fn get_component_info_mut<T>(
+        &mut self,
+        component_id: ComponentId,
+        func: impl FnOnce(&mut ComponentInfo) -> T,
+    ) -> Option<T>;
+
+    unsafe fn component_add_callback(
+        &mut self,
+        component_id: ComponentId,
+        callback_id: CallbackId,
+        func: CallbackFunc,
+    );
     fn init_callback(&mut self, name: CallbackName) -> CallbackId;
     fn get_callback_id(&self, name: &'static str) -> Option<CallbackId>;
 
@@ -42,7 +55,7 @@ pub trait TypeInfo: Sized {
         unsafe fn callback<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
             (*callback.cast::<T>()).callback(&mut *component.cast::<U>())
         }
-        
+
         let callback_id = self.init_callback_from::<T, _>();
         let component_id = self.init_component_from::<U>();
         unsafe { self.component_add_callback(component_id, callback_id, callback::<T, U>) }
@@ -66,7 +79,7 @@ pub trait TypeInfo: Sized {
     }
 
     fn init_bundle_from<T: Bundle>(&mut self) -> BundleId {
-        T::init_component_ids(self, &mut |_|());
+        T::init_component_ids(self, &mut |_| ());
         self.init_bundle(T::NAMES)
     }
 
@@ -81,13 +94,12 @@ pub trait TypeInfo: Sized {
     }
 }
 
-
 pub struct Local {
     bundles: Vec<BundleInfo>,
     bundles_unsorted: HashMap<BundleNames, BundleId, FxBuildHasher>,
     components: Vec<ComponentInfo>,
     component_ids: HashMap<ComponentName, ComponentId, FxBuildHasher>,
-    callback_ids: HashMap<CallbackName, CallbackId, FxBuildHasher>
+    callback_ids: HashMap<CallbackName, CallbackId, FxBuildHasher>,
 }
 
 impl Local {
@@ -98,19 +110,19 @@ impl Local {
             bundles_unsorted: HashMap::default(),
             components: Vec::new(),
             component_ids: HashMap::default(),
-            callback_ids: HashMap::default()
+            callback_ids: HashMap::default(),
         }
     }
 }
 
-impl TypeInfo for Local {    
+impl TypeInfo for Local {
     #[inline]
     unsafe fn init_component(&mut self, name: ComponentName, info: ComponentInfo) -> ComponentId {
         let index = self.components.len();
         self.components.push(info);
         let id = ComponentId::from_usize(index);
         self.component_ids.insert(name, id);
-        
+
         id
     }
 
@@ -120,25 +132,42 @@ impl TypeInfo for Local {
     }
 
     #[inline]
-    fn get_component_info<T>(&self, component_id: ComponentId, func: impl FnOnce(&ComponentInfo) -> T) -> Option<T> {
+    fn get_component_info<T>(
+        &self,
+        component_id: ComponentId,
+        func: impl FnOnce(&ComponentInfo) -> T,
+    ) -> Option<T> {
         Some(func(self.components.get(component_id.as_usize())?))
     }
 
     #[inline]
-    unsafe fn get_component_info_mut<T>(&mut self, component_id: ComponentId, func: impl FnOnce(&mut ComponentInfo) -> T) -> Option<T> {
+    unsafe fn get_component_info_mut<T>(
+        &mut self,
+        component_id: ComponentId,
+        func: impl FnOnce(&mut ComponentInfo) -> T,
+    ) -> Option<T> {
         Some(func(self.components.get_mut(component_id.as_usize())?))
     }
 
     #[inline]
-    unsafe fn component_add_callback(&mut self, component_id: ComponentId, callback_id: CallbackId, func: CallbackFunc) {
+    unsafe fn component_add_callback(
+        &mut self,
+        component_id: ComponentId,
+        callback_id: CallbackId,
+        func: CallbackFunc,
+    ) {
         self.get_component_info_mut(component_id, |info| unsafe {
             info.set_callback(callback_id, func)
-        }).expect("Callback wasn't initialized!")
+        })
+        .expect("Callback wasn't initialized!")
     }
 
     #[inline]
     fn init_callback(&mut self, name: CallbackName) -> CallbackId {
-        self.callback_ids.get(name).map(|id| *id).unwrap_or_else(|| CallbackId::from_usize(self.callback_ids.len()))
+        self.callback_ids
+            .get(name)
+            .map(|id| *id)
+            .unwrap_or_else(|| CallbackId::from_usize(self.callback_ids.len()))
     }
 
     #[inline]
@@ -151,7 +180,7 @@ impl TypeInfo for Local {
         let Some(bundle_info) = self.bundles.get(bundle_id.as_usize()) else {
             return;
         };
-        
+
         for id in bundle_info.component_ids() {
             if let Some(info) = self.components.get(id.as_usize()) {
                 func(*id, info);
@@ -160,16 +189,18 @@ impl TypeInfo for Local {
     }
 
     #[inline]
-    fn init_bundle(&mut self, names: BundleNames) -> BundleId {    
+    fn init_bundle(&mut self, names: BundleNames) -> BundleId {
         let mut set = HashSet::default();
 
         for name in names {
-            let id = self.get_component_id(name).expect("Component not initialized!");
+            let id = self
+                .get_component_id(name)
+                .expect("Component not initialized!");
             set.insert(id);
         }
-        
+
         let bundle_info = BundleInfo::new(set);
-        
+
         for (i, bi) in self.bundles.iter().enumerate() {
             if bi == &bundle_info {
                 let id = BundleId::from_usize(i);
@@ -177,12 +208,12 @@ impl TypeInfo for Local {
                 return id;
             }
         }
-        
+
         let index = self.bundles.len();
         self.bundles.push(bundle_info);
         let id = BundleId::from_usize(index);
         self.bundles_unsorted.insert(names, id);
-        
+
         id
     }
 

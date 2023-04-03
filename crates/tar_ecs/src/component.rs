@@ -1,10 +1,8 @@
 use std::{alloc::Layout, mem::needs_drop};
 
-use tar_ecs_macros::{Component, identifier};
+use tar_ecs_macros::{identifier, Component};
 
-use crate::{
-    callback::{CallbackFunc, CallbackId, Callbacks}
-};
+use crate::callback::{CallbackFunc, CallbackId, Callbacks};
 
 pub type ComponentName = &'static str;
 
@@ -18,6 +16,8 @@ pub type ComponentName = &'static str;
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
     const NAME: ComponentName;
+
+    fn get_info() -> ComponentInfo;
 }
 
 #[derive(Component)]
@@ -35,7 +35,11 @@ pub struct ComponentInfo {
 impl ComponentInfo {
     #[inline]
     pub const fn new(layout: Layout, drop: Option<unsafe fn(*mut u8)>) -> Self {
-        Self { drop, layout, callbacks: Callbacks::new() }
+        Self {
+            drop,
+            layout,
+            callbacks: Callbacks::new(),
+        }
     }
 
     #[inline]

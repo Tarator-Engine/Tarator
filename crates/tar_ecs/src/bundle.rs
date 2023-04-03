@@ -1,11 +1,11 @@
-use std::{mem, collections::HashSet, ops::Add};
+use std::{collections::HashSet, mem, ops::Add};
 
 use crate::{
-    component::{ Component, ComponentId, ComponentName },
-    type_info::TypeInfo
+    component::{Component, ComponentId, ComponentName},
+    type_info::TypeInfo,
 };
 use fxhash::FxBuildHasher;
-use tar_ecs_macros::{ foreach_tuple, identifier };
+use tar_ecs_macros::{foreach_tuple, identifier};
 
 pub type BundleNames = &'static [ComponentName];
 
@@ -15,11 +15,10 @@ pub type BundleNames = &'static [ComponentName];
 ///
 /// This is isefull to set and get [`Component`]s on a [`World`](crate::world::World), as setting
 /// or deleting every [`Component`] one by one can get a bit slow.
-/// 
+///
 /// SAFETY:
 /// - Manual implementations are discouraged
 pub unsafe trait Bundle: Sized + Send + Sync + 'static {
-
     const NAMES: &'static [&'static str];
 
     /// Implemented as a tuple of mutable [`Component`] raw pointer
@@ -30,7 +29,10 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// Initializes and gets the [`ComponentId`]s via `func`
     fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId));
 
-    unsafe fn from_components(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::Ptr;
+    unsafe fn from_components(
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId) -> *mut u8,
+    ) -> Self::Ptr;
 
     /// Returns a tuple of references to the components in the order of `Self`. The references are
     /// set using the return value of `func`.
@@ -39,8 +41,14 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// - Returning [`None`] from `func` is always safe
     /// - If the return value of `func` is [`Some`], the pointer has to point to valid data of
     /// [`ComponentId`] type
-    unsafe fn from_components_as_ref<'a>(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Option<Self::Ref<'a>>;
-    unsafe fn from_components_as_mut<'a>(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Option<Self::Mut<'a>>;
+    unsafe fn from_components_as_ref<'a>(
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
+    ) -> Option<Self::Ref<'a>>;
+    unsafe fn from_components_as_mut<'a>(
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
+    ) -> Option<Self::Mut<'a>>;
 
     /// Get the components of this [`Bundle`] with a corresponding [`ComponentId`]. This passes
     /// ownership to `func`.
@@ -48,7 +56,11 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// SAFETY:
     /// - pointer in `func` must be used, else will create memory leak if data has to be dropped
     /// - data in `func` must be manually dropped
-    unsafe fn get_components(self, type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId, *mut u8));
+    unsafe fn get_components(
+        self,
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId, *mut u8),
+    );
 }
 
 /// Helper-trait to clone [`Bundle`]s with ease, where every [`Component`] has [`Clone`]
@@ -70,21 +82,44 @@ unsafe impl<T: Component> Bundle for T {
     }
 
     #[inline]
-    unsafe fn from_components(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::Ptr {
-        func(type_info.get_component_id_from::<T>().expect("Component not initialized!")).cast::<Self>()
+    unsafe fn from_components(
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId) -> *mut u8,
+    ) -> Self::Ptr {
+        func(
+            type_info
+                .get_component_id_from::<T>()
+                .expect("Component not initialized!"),
+        )
+        .cast::<Self>()
     }
 
-    unsafe fn from_components_as_ref<'a>(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Option<Self::Ref<'a>> {
+    unsafe fn from_components_as_ref<'a>(
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
+    ) -> Option<Self::Ref<'a>> {
         func(type_info.get_component_id_from::<T>()?).map(|data| &*data.cast::<T>())
     }
 
-    unsafe fn from_components_as_mut<'a>(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Option<Self::Mut<'a>> {
+    unsafe fn from_components_as_mut<'a>(
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
+    ) -> Option<Self::Mut<'a>> {
         func(type_info.get_component_id_from::<T>()?).map(|data| &mut *data.cast::<T>())
     }
 
     #[inline]
-    unsafe fn get_components(self, type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId, *mut u8)) {
-        func(type_info.get_component_id_from::<T>().expect("Component not initialized!"), (&mut mem::ManuallyDrop::new(self)) as *mut _ as *mut u8 )
+    unsafe fn get_components(
+        self,
+        type_info: &impl TypeInfo,
+        func: &mut impl FnMut(ComponentId, *mut u8),
+    ) {
+        func(
+            type_info
+                .get_component_id_from::<T>()
+                .expect("Component not initialized!"),
+            (&mut mem::ManuallyDrop::new(self)) as *mut _ as *mut u8,
+        )
     }
 }
 
@@ -100,7 +135,7 @@ macro_rules! component_tuple_impl {
             type Ptr = ($($c::Ptr,)*);
             type Ref<'a> = ($($c::Ref<'a>,)*);
             type Mut<'a> = ($($c::Mut<'a>,)*);
-            
+
             const NAMES: &'static [&'static str] = &[$($c::NAME,)*];
 
             #[inline]
@@ -148,12 +183,11 @@ macro_rules! component_tuple_impl {
 
 foreach_tuple!(component_tuple_impl, 0, 15, T);
 
-
 identifier!(BundleId, u32);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BundleInfo {
-    component_ids: HashSet<ComponentId, FxBuildHasher>
+    component_ids: HashSet<ComponentId, FxBuildHasher>,
 }
 
 impl BundleInfo {
