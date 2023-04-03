@@ -29,7 +29,7 @@ impl Parse for ForeachTuple {
             idents.push(input.parse::<Ident>()?);
         }
 
-        Ok(ForeachTuple {
+        Ok(Self {
             macro_ident,
             start,
             end,

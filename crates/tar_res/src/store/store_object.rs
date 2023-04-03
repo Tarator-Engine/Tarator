@@ -1,6 +1,6 @@
 use std::{path::Path, vec};
 
-use tar_utils::*;
+use tar_utils::{log_timing, relog_timing, start_timer_msg};
 
 use serde::{Deserialize, Serialize};
 

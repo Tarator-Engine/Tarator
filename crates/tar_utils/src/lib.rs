@@ -6,7 +6,7 @@ use std::time::Instant;
 ///
 /// # Returns
 /// - Instant of current time
-pub fn start_timer() -> Instant {
+#[must_use] pub fn start_timer() -> Instant {
     Instant::now()
 }
 
@@ -14,14 +14,14 @@ pub fn start_timer() -> Instant {
 ///
 /// # Returns
 /// - Instant of current time
-pub fn start_timer_msg(msg: &str) -> Instant {
+#[must_use] pub fn start_timer_msg(msg: &str) -> Instant {
     dbg!(msg);
     Instant::now()
 }
 
 /// logs the elapsed time since the given instant and a message
 /// additionally it returns a new instant
-pub fn relog_timing(msg: &str, timer: Instant) -> Instant {
+#[must_use] pub fn relog_timing(msg: &str, timer: Instant) -> Instant {
     let msg = format!("{msg}{:?}", timer.elapsed());
     dbg!(msg);
     start_timer()

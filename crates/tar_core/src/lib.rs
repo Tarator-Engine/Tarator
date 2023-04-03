@@ -10,7 +10,7 @@ use parking_lot::{MutexGuard, Mutex};
 use tar_ecs::prelude::*;
 use tar_types::{components::{Transform, Rendering, Camera, Info}, prims::{Vec3}};
 use winit::{
-    event::*,
+    event::{DeviceEvent, ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -24,7 +24,7 @@ const SAFE_FRAC_PI_2: f32 = FRAC_2_PI - 0.0001;
 /// Takes a window event and a renderer and an event
 fn input(
     event: &WindowEvent,
-    cam: &Entity,
+    cam: Entity,
     world: &mut World
 ) {
     world.entity_get_mut::<(Transform, Camera), _>(*cam, |_, (_, cam)| {
@@ -86,7 +86,7 @@ fn input(
 }
 
 fn update(
-    cam: &Entity,
+    cam: Entity,
     world: &mut World,
     dt: std::time::Duration,
 ) {
@@ -191,7 +191,7 @@ async fn build_renderer_extras(
     )
     .await;
 
-    return (game_renderer, device, queue, surface, config, adapter);
+    (game_renderer, device, queue, surface, config, adapter)
 }
 
 pub async fn run() {
@@ -214,7 +214,7 @@ pub async fn run() {
         .with_title(title)
         // .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
         .build(&event_loop)
-        .unwrap();
+        .expect("failed to aquire window");
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -262,9 +262,9 @@ pub async fn run() {
     
 
     let r_barrier = pre_render_finished.clone();
-    let s_clone = surface.clone();
-    let d_clone = device.clone();
-    let q_clone = queue.clone();
+    let s_clone = surface;
+    let d_clone = device;
+    let q_clone = queue;
     let engine_state = db.clone();
     let w_clone = world.clone();
     let render_thread = std::thread::spawn(move || {
@@ -316,58 +316,58 @@ pub async fn run() {
                     frames = 0;
                 }
 
-                for event in &winit_events {
-                    if let Some(e) = event {
-                        match e {
-                            Event::WindowEvent {
-                                ref event,
-                                window_id,
-                            } if window_id == &window.id() => {
+                // flatten skips all instances where the event is None
+                for event in winit_events.iter().flatten() {
+                    let e: &Event<()> = event;
+                    match e {
+                        Event::WindowEvent {
+                            ref event,
+                            window_id,
+                        } if window_id == &window.id() => {
 
-                                let _res = egui_state.on_event(&context, &event);
+                            let _res = egui_state.on_event(&context, event);
 
-                                input(event, &cam, &mut world);
+                            input(event, cam, &mut world);
 
-                                // if state.mouse_in_view || !res.consumed {
-                                //     state.events.push(event.clone().to_static().unwrap());
-                                // }
-                                match event {
-                                    #[cfg(not(target_arch = "wasm32"))]
-                                    WindowEvent::CloseRequested
-                                    | WindowEvent::KeyboardInput {
-                                        input:
-                                            KeyboardInput {
-                                                state: ElementState::Pressed,
-                                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                                ..
-                                            },
-                                        ..
-                                    } => state.halt = true,
-                                    winit::event::WindowEvent::Resized(size) => {
-                                        // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
-                                        // See: https://github.com/rust-windowing/winit/issues/208
-                                        // This solves an issue where the app would panic when minimizing on Windows.
-                                        if size.width > 0 && size.height > 0 {
-                                            state.size = *size;
-                                        }
+                            // if state.mouse_in_view || !res.consumed {
+                            //     state.events.push(event.clone().to_static().unwrap());
+                            // }
+                            match event {
+                                #[cfg(not(target_arch = "wasm32"))]
+                                WindowEvent::CloseRequested
+                                | WindowEvent::KeyboardInput {
+                                    input:
+                                        KeyboardInput {
+                                            state: ElementState::Pressed,
+                                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                                            ..
+                                        },
+                                    ..
+                                } => state.halt = true,
+                                winit::event::WindowEvent::Resized(size) => {
+                                    // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
+                                    // See: https://github.com/rust-windowing/winit/issues/208
+                                    // This solves an issue where the app would panic when minimizing on Windows.
+                                    if size.width > 0 && size.height > 0 {
+                                        state.size = *size;
                                     }
-
-                                    _ => (),
                                 }
-                            },
-                            Event::DeviceEvent {
-                                event: DeviceEvent::MouseMotion{ delta, },
-                                .. // We're not using device_id currently
-                            } => {
-                                state.mouse_movement.0 += delta.0;
-                                state.mouse_movement.1 += delta.1;
-                                state.mouse_pos.x += delta.0 as f32;
-                                state.mouse_pos.y += delta.1 as f32;
-                                
-                                state.mouse_in_view = state.view_rect.contains(state.mouse_pos);
+
+                                _ => (),
                             }
-                            _ => (),
+                        },
+                        Event::DeviceEvent {
+                            event: DeviceEvent::MouseMotion{ delta, },
+                            .. // We're not using device_id currently
+                        } => {
+                            state.mouse_movement.0 += delta.0;
+                            state.mouse_movement.1 += delta.1;
+                            state.mouse_pos.x += delta.0 as f32;
+                            state.mouse_pos.y += delta.1 as f32;
+                            
+                            state.mouse_in_view = state.view_rect.contains(state.mouse_pos);
                         }
+                        _ => (),
                     }
                 }
                 winit_events = vec![];
@@ -383,15 +383,16 @@ pub async fn run() {
                     world.entity_get_mut::<(Transform, Rendering), _>(entities[0], |_, (t, _)|
                         t.pos.x = f32::sin(start_time.elapsed().as_secs_f32())
                     ).unwrap();
+
                 }
 
-                update(&cam, &mut world, state.dt);
+                update(cam, &mut world, state.dt);
 
                 let input = egui_state.take_egui_input(&window);
                 context.begin_frame(input);
 
                 let mut remove = vec![];
-                for (i, err) in (&errors).iter().enumerate() {
+                for (i, err) in errors.iter().enumerate() {
                     if error_msg::error_message(&context, err) {
                         remove.push(i);
                     };
@@ -420,7 +421,7 @@ pub async fn run() {
                 MutexGuard::unlock_fair(world);
                 MutexGuard::unlock_fair(state);
 
-                if *(&render_thread.is_finished()) {
+                if render_thread.is_finished() {
                     print!("error: render thread has crashed");
                 }
 

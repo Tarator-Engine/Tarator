@@ -131,7 +131,7 @@ pub fn render_fn(
         }
 
         if let Some((id, path)) = state.add_object {
-            match path.split(".").last().unwrap() {
+            match path.split('.').last().unwrap() {
                 "rmp" => {
                     game_renderer.add_object(tar_render::GameObject::ImportedPath(&path), id);
                     loaded_objects.push(id);
@@ -143,8 +143,7 @@ pub fn render_fn(
                             path.split(|x| x == '\\' || x == '/')
                                 .last()
                                 .unwrap()
-                                .split(".")
-                                .nth(0)
+                                .split('.').next()
                                 .unwrap(),
                         ),
                         id,
@@ -224,7 +223,7 @@ pub fn render_fn(
                     &device,
                     &queue,
                     &mut encoder,
-                    &state.paint_jobs.as_ref(),
+                    state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 )
             };
@@ -233,7 +232,7 @@ pub fn render_fn(
                 &device,
                 &queue,
                 &mut encoder,
-                &state.paint_jobs.as_ref(),
+                state.paint_jobs.as_ref(),
                 &screen_descriptor,
             );
             {
@@ -252,7 +251,7 @@ pub fn render_fn(
 
                 egui_renderer.render(
                     &mut render_pass,
-                    &state.paint_jobs.as_ref(),
+                    state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 );
             }

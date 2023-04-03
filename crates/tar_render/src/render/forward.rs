@@ -158,7 +158,7 @@ impl ForwardRenderer {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -191,7 +191,7 @@ impl ForwardRenderer {
         // valve pls fix
 
         for (id, obj) in &mut self.objects {
-            if objects.iter().find(|o| o.1.model_id == *id).is_some() {
+            if objects.iter().any(|o| o.1.model_id == *id) {
                 obj.update_per_frame(&cam_params, &data, &self.queue, &self.meshes)?;
                 obj.draw(&mut render_pass, &self.meshes)?;
             }
