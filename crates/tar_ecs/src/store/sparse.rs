@@ -1,12 +1,7 @@
 //! Big portions of this code where looked up from
 //! <https://docs.rs/bevy_ecs/latest/src/bevy_ecs/storage/sparse_set.rs.html>
 
-use core::slice::GetManyMutError;
-use std::{
-    marker::PhantomData,
-    hash::Hash
-};
-
+use std::{hash::Hash, marker::PhantomData};
 
 /// Something that can be stored in a [`SparseSet`]
 pub trait SparseSetIndex: Clone + Eq + PartialEq + Hash {
@@ -29,19 +24,18 @@ macro_rules! impl_sparse_set_index {
 
 impl_sparse_set_index!(u8, u16, u32, u64, usize);
 
-
 /// Immutable: values cannot be changed after construction
 #[derive(Debug)]
 pub struct SparseArray<I, V = I> {
     values: Box<[Option<V>]>,
-    marker: PhantomData<I>
+    marker: PhantomData<I>,
 }
 
 /// Mutable: values can be changed after construction
 #[derive(Debug)]
 pub struct MutSparseArray<I, V = I> {
     values: Vec<Option<V>>,
-    marker: PhantomData<I>
+    marker: PhantomData<I>,
 }
 
 macro_rules! impl_sparse_array {
@@ -58,13 +52,6 @@ macro_rules! impl_sparse_array {
                 let index = index.as_usize();
                 self.values.get(index).map(|v| v.as_ref()).unwrap_or(None)
             }
-
-            #[inline]
-            pub fn get_many_mut<const N: usize>(&mut self, indices: [usize; N]) -> Result<[&mut V; N], GetManyMutError<N>> {
-                self.values
-                    .get_many_mut(indices)
-                    .map(|v| v.map(|v| v.as_mut().unwrap()))
-            }
         }
     };
 }
@@ -77,7 +64,7 @@ impl<I: SparseSetIndex, V> SparseArray<I, V> {
     pub fn new() -> Self {
         Self {
             values: Box::new([]),
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 }
@@ -87,7 +74,7 @@ impl<I: SparseSetIndex, V> MutSparseArray<I, V> {
     pub const fn new() -> Self {
         Self {
             values: Vec::new(),
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 
@@ -125,27 +112,24 @@ impl<I: SparseSetIndex, V> MutSparseArray<I, V> {
     pub fn lock(self) -> SparseArray<I, V> {
         SparseArray {
             values: self.values.into_boxed_slice(),
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct SparseSet<I, V: 'static> {
     dense: Box<[V]>,
     indices: Box<[I]>,
-    sparse: SparseArray<I, usize>
+    sparse: SparseArray<I, usize>,
 }
-
 
 #[derive(Debug)]
 pub struct MutSparseSet<I, V: 'static> {
     dense: Vec<V>,
     indices: Vec<I>,
-    sparse: MutSparseArray<I, usize>
+    sparse: MutSparseArray<I, usize>,
 }
-
 
 macro_rules! impl_sparse_set {
     ($ty:ident) => {
@@ -161,17 +145,28 @@ macro_rules! impl_sparse_set {
             }
 
             pub fn get(&self, index: I) -> Option<&V> {
-                self.sparse.get(index).map(|dense_index| unsafe { self.dense.get_unchecked(*dense_index) })
+                self.sparse
+                    .get(index)
+                    .map(|dense_index| unsafe { self.dense.get_unchecked(*dense_index) })
             }
 
             pub fn get_mut(&mut self, index: I) -> Option<&mut V> {
                 let dense = &mut self.dense;
-                self.sparse.get(index).map(move |dense_index| unsafe { dense.get_unchecked_mut(*dense_index) })
+                self.sparse
+                    .get(index)
+                    .map(move |dense_index| unsafe { dense.get_unchecked_mut(*dense_index) })
             }
 
-            pub fn get_many_mut<const N: usize>(&mut self, index: [usize; N]) -> Result<[&mut V; N], GetManyMutError<N>> {
-                let dense = &mut self.dense;
-                self.sparse.get_many_mut(index).map(move |dense_index| unsafe { dense.get_many_unchecked_mut(dense_index.map(|i| *i)) })
+            pub fn get_2_mut(&mut self, i1: I, i2: I) -> Option<(&mut V, &mut V)> {
+                let dense: *mut _ = &mut self.dense;
+                Some((
+                    self.sparse.get(i1).map(move |dense_index| unsafe {
+                        (*dense).get_unchecked_mut(*dense_index)
+                    })?,
+                    self.sparse.get(i2).map(move |dense_index| unsafe {
+                        (*dense).get_unchecked_mut(*dense_index)
+                    })?,
+                ))
             }
 
             pub fn indices(&self) -> impl Iterator<Item = I> + '_ {
@@ -193,13 +188,12 @@ macro_rules! impl_sparse_set {
             pub fn iter_mut(&mut self) -> impl Iterator<Item = (&I, &mut V)> {
                 self.indices.iter().zip(self.dense.iter_mut())
             }
-        } 
+        }
     };
 }
 
 impl_sparse_set!(SparseSet);
 impl_sparse_set!(MutSparseSet);
-
 
 impl<I: SparseSetIndex, V> SparseSet<I, V> {
     #[inline]
@@ -207,11 +201,10 @@ impl<I: SparseSetIndex, V> SparseSet<I, V> {
         Self {
             dense: Box::new([]),
             indices: Box::new([]),
-            sparse: SparseArray::new()
+            sparse: SparseArray::new(),
         }
     }
 }
-
 
 impl<I: SparseSetIndex, V> MutSparseSet<I, V> {
     #[inline]
@@ -219,7 +212,7 @@ impl<I: SparseSetIndex, V> MutSparseSet<I, V> {
         Self {
             dense: Vec::new(),
             indices: Vec::new(),
-            sparse: MutSparseArray::new()
+            sparse: MutSparseArray::new(),
         }
     }
 
@@ -239,7 +232,9 @@ impl<I: SparseSetIndex, V> MutSparseSet<I, V> {
 
     pub fn insert(&mut self, index: I, value: V) {
         if let Some(dense_index) = self.sparse.get(index.clone()).cloned() {
-            unsafe { *self.dense.get_unchecked_mut(dense_index) = value; }
+            unsafe {
+                *self.dense.get_unchecked_mut(dense_index) = value;
+            }
         } else {
             self.sparse.insert(index.clone(), self.dense.len());
             self.indices.push(index);
@@ -293,4 +288,3 @@ impl<I: SparseSetIndex, V> MutSparseSet<I, V> {
         }
     }
 }
-

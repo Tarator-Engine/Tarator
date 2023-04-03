@@ -177,7 +177,7 @@ impl<TI: TypeInfo> World<TI, Outer> {
         let bundle_id = self.type_info.insert_bundle(info);
         self.archetypes.try_init(bundle_id, &self.type_info);
 
-        let [old_a, new_a] = self.archetypes.get_many_mut([meta.bundle_id.as_usize(), bundle_id.as_usize()]).unwrap();
+        let (old_a, new_a) = self.archetypes.get_2_mut(meta.bundle_id, bundle_id).unwrap();
         let (old_t, new_t) = (old_a.table_mut(), new_a.table_mut());
         let (old_index, new_index) = (meta.index, new_t.len());
 
@@ -241,7 +241,7 @@ impl<TI: TypeInfo> World<TI, Outer> {
         let bundle_id = self.type_info.insert_bundle(info);
         self.archetypes.try_init(bundle_id, &self.type_info);
 
-        let [old_a, new_a] = self.archetypes.get_many_mut([meta.bundle_id.as_usize(), bundle_id.as_usize()]).unwrap();
+        let (old_a, new_a) = self.archetypes.get_2_mut(meta.bundle_id, bundle_id).unwrap();
         let (old_t, new_t) = (old_a.table_mut(), new_a.table_mut());
         let (old_index, new_index) = (meta.index, new_t.len());
 

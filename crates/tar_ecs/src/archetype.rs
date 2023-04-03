@@ -1,19 +1,13 @@
-use core::slice::GetManyMutError;
-
 use crate::{
     bundle::BundleId,
-    store::{
-        sparse::MutSparseSet,
-        table::Table
-    },
-    type_info::TypeInfo
+    store::{sparse::MutSparseSet, table::Table},
+    type_info::TypeInfo,
 };
-
 
 #[derive(Debug)]
 pub struct Archetype {
     table: Table,
-    parents: Vec<BundleId>
+    parents: Vec<BundleId>,
 }
 
 impl Archetype {
@@ -21,7 +15,7 @@ impl Archetype {
     pub fn new(bundle_id: BundleId, parents: Vec<BundleId>, type_info: &impl TypeInfo) -> Self {
         Self {
             table: unsafe { Table::new(bundle_id, type_info) },
-            parents
+            parents,
         }
     }
 
@@ -40,17 +34,16 @@ impl Archetype {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Archetypes {
-    archetypes: MutSparseSet<BundleId, Archetype>
+    archetypes: MutSparseSet<BundleId, Archetype>,
 }
 
 impl Archetypes {
     #[inline]
     pub unsafe fn new() -> Self {
         Self {
-            archetypes: MutSparseSet::new()
+            archetypes: MutSparseSet::new(),
         }
     }
 
@@ -60,21 +53,23 @@ impl Archetypes {
             return;
         }
 
-        let parents = type_info.get_bundle_info(bundle_id, |info| {
-            let mut parents = Vec::new();
+        let parents = type_info
+            .get_bundle_info(bundle_id, |info| {
+                let mut parents = Vec::new();
 
-            for (id, archetype) in self.archetypes.iter_mut() {
-                type_info.get_bundle_info(*id, |parent_info| {
-                    if info.is_superset(parent_info) {
-                        archetype.parents.push(bundle_id);
-                    } else if info.is_subset(parent_info) {
-                        parents.push(*id)
-                    }
-                });
-            }
-            
-            parents
-        }).expect("Bundle wasn't initialized!");
+                for (id, archetype) in self.archetypes.iter_mut() {
+                    type_info.get_bundle_info(*id, |parent_info| {
+                        if info.is_superset(parent_info) {
+                            archetype.parents.push(bundle_id);
+                        } else if info.is_subset(parent_info) {
+                            parents.push(*id)
+                        }
+                    });
+                }
+
+                parents
+            })
+            .expect("Bundle wasn't initialized!");
 
         let archetype = Archetype::new(bundle_id, parents, type_info);
         self.archetypes.insert(bundle_id, archetype);
@@ -93,7 +88,11 @@ impl Archetypes {
     }
 
     #[inline]
-    pub fn get_many_mut<const N: usize>(&mut self, indices: [usize; N]) -> Result<[&mut Archetype; N], GetManyMutError<N>> {
-        self.archetypes.get_many_mut(indices)
+    pub fn get_2_mut(
+        &mut self,
+        i1: BundleId,
+        i2: BundleId,
+    ) -> Option<(&mut Archetype, &mut Archetype)> {
+        self.archetypes.get_2_mut(i1, i2)
     }
 }

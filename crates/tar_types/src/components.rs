@@ -1,5 +1,5 @@
 use cgmath::Zero;
-use tar_ecs::prelude::Component;
+use tar_ecs::prelude::*;
 
 use crate::prims::{Euler, Rad, Vec3};
 
