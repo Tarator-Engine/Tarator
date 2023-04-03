@@ -118,12 +118,17 @@ impl Local {
 impl TypeInfo for Local {
     #[inline]
     unsafe fn init_component(&mut self, name: ComponentName, info: ComponentInfo) -> ComponentId {
-        let index = self.components.len();
-        self.components.push(info);
-        let id = ComponentId::from_usize(index);
-        self.component_ids.insert(name, id);
+        self.component_ids
+            .get(name)
+            .map(|id| *id)
+            .unwrap_or_else(|| {
+                let index = self.components.len();
+                self.components.push(info);
+                let id = ComponentId::from_usize(index);
+                self.component_ids.insert(name, id);
 
-        id
+                id
+            })
     }
 
     #[inline]
