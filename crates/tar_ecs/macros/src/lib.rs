@@ -91,19 +91,6 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     quote! {
         unsafe impl #impl_generics Component for #name #type_generics #where_clause {
             const NAME: ComponentName = #name_str;
-
-            #[no_mangle]
-            #[export_name = #info_fn]
-            fn get_info() -> ComponentInfo {
-                unsafe fn drop<T>(data: *mut u8) {
-                    data.cast::<T>().drop_in_place()
-                }
-
-                ComponentInfo::new(
-                    std::alloc::Layout::new::<Self>(),
-                    std::mem::needs_drop::<Self>().then_some(drop::<Self>),
-                )
-            }
         }
     }
     .into()

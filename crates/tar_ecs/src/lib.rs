@@ -11,7 +11,7 @@ pub mod world;
 mod tests;
 
 pub mod prelude {
-    pub type World = super::world::World<super::type_info::Local, super::world::Outer>;
+    pub type World = super::world::World<super::type_info::Local>;
 
     pub use super::bundle::{Bundle, CloneBundle};
     pub use super::callback::{Callback, CallbackName, InnerCallback};

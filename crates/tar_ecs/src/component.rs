@@ -16,8 +16,6 @@ pub type ComponentName = &'static str;
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
     const NAME: ComponentName;
-
-    fn get_info() -> ComponentInfo;
 }
 
 #[derive(Component)]

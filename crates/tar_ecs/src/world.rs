@@ -1,19 +1,17 @@
 use crate::{
-    bundle::{ Bundle, CloneBundle, BundleId, BundleNames },
-    callback::{ CallbackName, Callback, CallbackId, CallbackFunc },
-    component::{ Empty, ComponentId, Component, ComponentInfo, ComponentName },
+    bundle::{ Bundle, CloneBundle, BundleId },
+    callback::{ Callback, CallbackId },
+    component::{ Empty, ComponentId, Component },
     entity::{ Entities, Entity },
     store::{
-        sparse::SparseSetIndex, table::{RowIndexer, ConstRowIndexer, Table, Indexer},
+        sparse::SparseSetIndex,
+        table::{ RowIndexer, ConstRowIndexer, Table, Indexer },
     },
-    archetype::{Archetypes, Archetype}, type_info::{Local, TypeInfo}
+    archetype::{ Archetypes },
+    type_info::{ Local, TypeInfo }
 };
 
-use std::{
-    sync::atomic::{ AtomicUsize, Ordering },
-    marker::PhantomData,
-    mem
-};
+use std::sync::atomic::{ AtomicUsize, Ordering };
 
 /// Uniquely identifies a [`World`]. Multiple [`World`]s can also be created from different
 /// threads, and they'll still have an unique [`WorldId`].
@@ -57,30 +55,46 @@ impl SparseSetIndex for WorldId {
 }
 
 
-pub struct Inner;
-pub struct Outer;
-
-
 /// This is the core structure of an ecs instance. Multiple [`World`] can be created, even from
 /// different threads, each with an unique [`WorldId`].
 #[derive(Debug)]
-pub struct World<TI: TypeInfo, Location> {
+pub struct World<TI: TypeInfo> {
     id: WorldId,
     archetypes: Archetypes,
     entities: Entities,
-    type_info: TI,
-    location: PhantomData<Location>
+    type_info: TI
 }
 
-impl<TI: TypeInfo, Location> World<TI, Location> {
+impl<TI: TypeInfo> World<TI> {
     /// This [`World`]s [`WorldId`]
     #[inline]
     pub fn id(&self) -> WorldId {
         self.id
     }
-} 
 
-impl World<Local, Outer> {
+    #[inline]
+    pub fn component_id<T: Component>(&self) -> Option<ComponentId> {
+        self.type_info.get_component_id_from::<T>()
+    }
+
+    #[inline]
+    pub fn callback_init<T: Callback<Empty>>(&mut self) -> CallbackId {
+        self.type_info.init_callback_from::<T, Empty>()
+    }
+
+    #[inline]
+    pub fn component_init<T: Component>(&mut self) -> ComponentId {
+        self.type_info.init_component_from::<T>()
+    }
+
+    #[inline]
+    pub fn component_add_callback<T: Callback<U>, U: Component>(&mut self) {
+        self.type_info.component_add_callback_from::<T, U>()
+    }
+}
+
+
+impl World<Local> {
     /// Will panic if it gets called more than [`usize::MAX`] times
     #[inline]
     pub fn new() -> Self {
@@ -93,13 +107,12 @@ impl World<Local, Outer> {
             id: WorldId::new(),
             entities: Entities::new(),
             archetypes,
-            type_info,
-            location: PhantomData
+            type_info
         }
     }
 }
 
-impl<TI: TypeInfo> World<TI, Outer> {
+impl<TI: TypeInfo> World<TI> {
     /// Instantiate an [`Entity`] on this [`World`]. The returned [`Entity`] can be used to assign
     /// [`Component`]s on it using [`World::entity_set`], or again destroyed using
     /// [`World::entity_destroy`].
@@ -138,66 +151,6 @@ impl<TI: TypeInfo> World<TI, Outer> {
         if let Some(r_entity) = replaced_entity {
             let r_meta = unsafe { self.entities.get_unchecked_mut(r_entity) };
             r_meta.index = meta.index;
-        }
-    }
-
-    /// SAFETY:
-    /// - Tuple pairs have to be the same as the ones in name
-    /// - Tuple pair name and raw data have to be of exact same component
-    pub unsafe fn entity_set_raw(&mut self, entity: Entity, names: BundleNames, data: &[*mut u8]) {
-        let Some(meta) = self.entities.get_mut(entity) else {
-            return;
-        };
-        
-        let to_set_bundle_id = self.type_info.init_bundle(names);
-
-        let Some(info) = self.type_info.get_bundle_info(meta.bundle_id, |meta_info| {
-            self.type_info.get_bundle_info(to_set_bundle_id, |info| {
-
-                // No moving required    
-                if info.is_subset(meta_info) {        
-                    return None;
-                }
-                
-                let info = meta_info + info;
-                Some(info)
-            }).unwrap()
-        }).unwrap() else {  
-              
-            // No moving required    
-            let archetype = self.archetypes.get_mut(meta.bundle_id).unwrap();
-            let table = archetype.table_mut();
-            
-            unsafe { table.set(meta.index, names, data, &self.type_info) };
-            
-            return;
-        };
-
-        let bundle_id = self.type_info.insert_bundle(info);
-        self.archetypes.try_init(bundle_id, &self.type_info);
-
-        let (old_a, new_a) = self.archetypes.get_2_mut(meta.bundle_id, bundle_id).unwrap();
-        let (old_t, new_t) = (old_a.table_mut(), new_a.table_mut());
-        let (old_index, new_index) = (meta.index, new_t.len());
-
-        let replaced_entity = unsafe { old_t.move_into(new_t, old_index) };
-        
-        self.type_info.get_bundle_info(to_set_bundle_id, |info| for new_id in info.component_ids(){
-            for old_id in old_t.component_ids() {
-                if &old_id == new_id {
-                    unsafe { new_t.drop_component(new_index, *new_id); }
-                }
-            }
-        }).unwrap();
-
-        unsafe { new_t.init(new_index, names, data, &self.type_info); }
-        
-        meta.bundle_id = bundle_id;
-        meta.index = new_index;
-
-        if let Some(r_entity) = replaced_entity {
-            let r_meta = unsafe { self.entities.get_unchecked_mut(r_entity) };
-            r_meta.index = old_index
         }
     }
 
@@ -262,10 +215,6 @@ impl<TI: TypeInfo> World<TI, Outer> {
         }
     }
 
-    pub unsafe fn entity_unset_raw(&mut self, _name: BundleNames, _entity: Entity) {
-        todo!()
-    }
-
     pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
         let Some(meta) = self.entities.get_mut(entity) else {
             return;
@@ -307,119 +256,12 @@ impl<TI: TypeInfo> World<TI, Outer> {
     }
 }
 
-
-impl<TI: TypeInfo, Location> World<TI, Location> {
-    pub unsafe fn component_query_raw(
-        &mut self,
-        names: BundleNames,
-        mut func: impl FnMut(&mut World<TI, Inner>, ConstRowIndexer)
-    ) {
-        let querier = self.component_querier(names);
-        let o_world = mem::transmute::<_, &mut World<TI, Inner>>(self) as *mut _;
-        
-        for indexer in querier {
-            func(&mut *o_world, indexer)
-        }
-    }
-
-    pub unsafe fn component_query_raw_mut(
-        &mut self,
-        names: BundleNames,
-        mut func: impl FnMut(&mut World<TI, Inner>, RowIndexer)
-    ) {
-        let querier = self.component_querier_mut(names);
-        let o_world = mem::transmute::<_, &mut World<TI, Inner>>(self) as *mut _;
-        
-        for indexer in querier {
-            func(&mut *o_world, indexer)
-        }
-    }
-
-    /// Iterates over every stored [`Bundle`].
-    #[inline]
-    pub fn component_query<T: Bundle>(
-        &mut self,
-        mut func: impl for<'a> FnMut(&'a mut World<TI, Inner>, T::Ref<'a>)
-    ) {
-        let bundle_id = self.type_info.init_bundle_from::<T>();
-
-        self.archetypes.try_init(bundle_id, &self.type_info);
-        
-        let querier: RawComponentQuerier<ConstRowIndexer> = unsafe { RawComponentQuerier::new(&mut self.archetypes, bundle_id) };
-        let o_world = unsafe { mem::transmute::<_, &mut World<TI, Inner>>(self) as *mut World<TI, Inner> };
-
-        for indexer in querier {
-            let data = unsafe { T::from_components_as_ref(&(*o_world).type_info, &mut |id| {
-                indexer.get(id)
-            }).unwrap() };
-            func(unsafe { &mut *o_world }, data);
-        }
-    }
-
-    /// Iterates mutably over every stored [`Bundle`].
-    #[inline]
-    pub fn component_query_mut<T: Bundle>(
-        &mut self,
-        mut func: impl for<'a> FnMut(&mut World<TI, Inner>, T::Mut<'a>)
-    ) {
-        let bundle_id = self.type_info.init_bundle_from::<T>();
-
-        self.archetypes.try_init(bundle_id, &self.type_info);
-        
-        let querier: RawComponentQuerier<RowIndexer> = unsafe { RawComponentQuerier::new(&mut self.archetypes, bundle_id) };
-        let o_world = unsafe { mem::transmute::<_, &mut World<TI, Inner>>(self) as *mut World<TI, Inner> };
-
-        for indexer in querier {
-            let data = unsafe { T::from_components_as_mut(&(*o_world).type_info, &mut |id| {
-                indexer.get(id)
-            }).unwrap() };
-            func(unsafe { &mut *o_world }, data);
-        }
-    }
-
-    /// Clones every [`CloneBundle`] into a [`Vec`]
-    #[inline]
-    pub fn component_collect<T: CloneBundle>(&mut self) -> Vec<T> {
-        let mut bundles = Vec::new();
-        self.component_query::<T>(|_, bundle| bundles.push(T::clone_bundles(bundle)));
-
-        bundles
-    }
-
-    pub unsafe fn component_querier(&mut self, names: BundleNames) -> RawComponentQuerier<ConstRowIndexer> {
-        let bundle_id = self.type_info.get_bundle_id(&names).unwrap_or_else(|| self.type_info.init_bundle(names));
-        self.archetypes.try_init(bundle_id, &self.type_info);
-        RawComponentQuerier::new(&mut self.archetypes, bundle_id)
-    }
-
-    pub unsafe fn component_querier_mut(&mut self, names: BundleNames) -> RawComponentQuerier<RowIndexer> {
-        let bundle_id = self.type_info.get_bundle_id(&names).unwrap_or_else(|| self.type_info.init_bundle(names));
-        self.archetypes.try_init(bundle_id, &self.type_info);
-        RawComponentQuerier::new(&mut self.archetypes, bundle_id)
-    }
-}
-
-impl<TI: TypeInfo, Location> World<TI, Location> {
-    #[inline]
-    pub unsafe fn entity_get_raw<T>(
-        &mut self,
-        entity: Entity,
-        func: impl for<'a> FnOnce(&'a mut World<TI, Inner>, RowIndexer) -> T
-    ) -> Option<T> {
-        let meta = self.entities.get(entity)?;
-
-        let archetype = self.archetypes.get_mut(meta.bundle_id).unwrap();
-        let table = archetype.table_mut();
-        let indexer = RowIndexer::new(meta.index, table);
-        
-        Some(func(mem::transmute::<_, &mut World<TI, Inner>>(self), indexer))
-    }
-
+impl<TI: TypeInfo> World<TI> {
     #[inline]
     pub fn entity_get<T: Bundle, U>(
         &self,
         entity: Entity,
-        func: impl for <'a> FnOnce(&'a World<TI, Inner>, T::Ref<'a>) -> U
+        func: impl for <'a> FnOnce(T::Ref<'a>) -> U
     ) -> Option<U> {
         let meta = self.entities.get(entity)?;
 
@@ -429,14 +271,14 @@ impl<TI: TypeInfo, Location> World<TI, Location> {
 
         let bundle = unsafe { T::from_components_as_ref(&self.type_info, &mut |id| indexer.get(id) )? };
 
-        Some(func(unsafe { mem::transmute::<_, &World<TI, Inner>>(self) }, bundle))
+        Some(func(bundle))
     }
 
     #[inline]
     pub fn entity_get_mut<T: Bundle, U>(
         &mut self,
         entity: Entity,
-        func: impl for<'a> FnOnce(&'a mut World<TI, Inner>, T::Mut<'a>) -> U
+        func: impl for<'a> FnOnce(T::Mut<'a>) -> U
     ) -> Option<U> {
         let meta = self.entities.get(entity)?;
 
@@ -446,17 +288,21 @@ impl<TI: TypeInfo, Location> World<TI, Location> {
 
         let bundle = unsafe { T::from_components_as_mut(&self.type_info, &mut |id| indexer.get(id) )? };
 
-        Some(func(unsafe { mem::transmute::<_, &mut World<TI, Inner>>(self) }, bundle))
+        Some(func(bundle))
     }
 
-    pub fn entity_query<T: Bundle>(
+    /// SAFETY:
+    /// Calls to `entity_set`, `entity_unset`, or any component-prefixed function may result in
+    /// undefined behaviour
+    pub unsafe fn entity_query<T: Bundle>(
         &mut self,
-        mut func: impl FnMut(&mut World<TI, Inner>, &Entity)
+        mut func: impl FnMut(&mut World<TI>, &Entity)
     ) {
         let bundle_id = self.type_info.init_bundle_from::<T>();
 
         self.archetypes.try_init(bundle_id, &self.type_info);
-        let o_world = unsafe { mem::transmute::<_, *mut World<TI, Inner>>(self) };
+        let o_world: *mut Self = &mut *self;
+
         let o_archetype = unsafe { (*o_world).archetypes.get_mut(bundle_id).unwrap() };
         {
             let o_table = o_archetype.table_mut();
@@ -516,116 +362,81 @@ impl<TI: TypeInfo, Location> World<TI, Location> {
             });
         }
     }
-
-    #[inline]
-    pub fn entity_callback_raw(&mut self, entity: Entity, name: CallbackName, callback: *mut u8) {
-        let Some(meta) = self.entities.get(entity) else {
-            return;
-        };
-
-        let callback_id = self.type_info.init_callback(name);
-
-        let archetype = self.archetypes.get_mut(meta.bundle_id).unwrap();
-        let table = archetype.table_mut();
-
-        let indexer = unsafe { RowIndexer::new(meta.index, table) };
-
-        for component_id in table.component_ids() {
-            self.type_info.get_component_info(component_id, |info| {
-                if let Some(callback_fn) = info.get_callback(callback_id) {
-                    unsafe {callback_fn(callback, indexer.get(component_id).unwrap()) }
-                }
-            });
-        }
-    }
 }
 
-impl<TI: TypeInfo, Location> World<TI, Location> {
+impl<TI: TypeInfo> World<TI> {
+    /// Iterates over every stored [`Bundle`].
     #[inline]
-    pub fn component_id_raw(&self, name: ComponentName) -> Option<ComponentId> {
-        self.type_info.get_component_id(name)
-    }
+    pub fn component_query<T: Bundle>(
+        &mut self,
+        mut func: impl for<'a> FnMut(T::Ref<'a>)
+    ) {
+        let bundle_id = self.type_info.init_bundle_from::<T>();
 
-    #[inline]
-    pub fn component_id<T: Component>(&self) -> Option<ComponentId> {
-        self.type_info.get_component_id_from::<T>()
-    }
-}
+        self.archetypes.try_init(bundle_id, &self.type_info);
+        let root = self.archetypes.get(bundle_id).unwrap();
 
-impl<TI: TypeInfo> World<TI, Outer> {
-    #[inline]
-    pub fn callback_init_raw(&mut self, name: CallbackName) -> CallbackId {
-        self.type_info.init_callback(name)
-    }
-
-    #[inline]
-    pub fn callback_init<T: Callback<Empty>>(&mut self) -> CallbackId {
-        self.type_info.init_callback_from::<T, Empty>()
-    }
-
-    #[inline]
-    pub unsafe fn component_init_raw(&mut self, name: &'static str, info: ComponentInfo) -> ComponentId {
-        self.type_info.init_component(name, info)
-    }
-    
-    #[inline]
-    pub fn component_init<T: Component>(&mut self) -> ComponentId {
-        self.type_info.init_component_from::<T>()
-    }
-
-    #[inline]
-    pub unsafe fn component_add_callback_raw(&mut self, component_id: ComponentId, callback_id: CallbackId, func: CallbackFunc) {
-        self.type_info.component_add_callback(component_id, callback_id, func)
-    }
-
-    #[inline]
-    pub fn component_add_callback<T: Callback<U>, U: Component>(&mut self) {
-        self.type_info.component_add_callback_from::<T, U>()
-    }
-}
-
-#[derive(Debug)]
-pub struct RawComponentQuerier<I: Indexer> {
-    archetypes: *mut Archetypes,
-    archetype: *mut Archetype,
-    table: *mut Table,
-    parent_index: usize,
-    index: usize,
-    _phantom: PhantomData<I>
-}
-
-impl<I: Indexer> RawComponentQuerier<I> {
-    unsafe fn new(archetypes: *mut Archetypes, from: BundleId) -> Self {
-        let archetype = (*archetypes).get_mut(from).unwrap();
-        Self {
-            archetypes,
-            archetype,
-            table: archetype.table_mut(),
-            parent_index: 0,
-            index: 0,
-            _phantom: PhantomData
-        }
-    }
-}
-
-impl<I: Indexer> Iterator for RawComponentQuerier<I> {
-    type Item = I;
-
-    fn next(&mut self) -> Option<Self::Item> {
-unsafe {
-        if self.index == (*self.table).len() {
-            let bundle_id = (*self.archetype).parents().get(self.parent_index)?;
-            self.table = (*self.archetypes).get_mut(*bundle_id).unwrap().table_mut();
-            self.parent_index += 1;
-            self.index = 0;
-
-            return self.next();
+        #[inline]
+        fn query<T: Bundle>(type_info: &impl TypeInfo, table: &Table, func: &mut impl for<'a> FnMut(T::Ref<'a>)) {
+            for n in 0..table.len() {
+                let indexer = unsafe { ConstRowIndexer::new(n, table as *const _ as *mut _) };
+                let data = unsafe {
+                    T::from_components_as_ref(type_info, &mut |id| {
+                        indexer.get(id)
+                    }).unwrap()
+                };
+                func(data)
+            }
         }
 
-        let indexer = I::new(self.index, mem::transmute(self.table));
-        self.index += 1;
+        query::<T>(&self.type_info, root.table(), &mut func);
 
-        Some(indexer)
-}
+        for parent in root.parents() {
+            let archetype = self.archetypes.get(*parent).unwrap();
+            query::<T>(&self.type_info, archetype.table(), &mut func)
+        }
+    }
+
+    /// Iterates mutably over every stored [`Bundle`].
+    #[inline]
+    pub fn component_query_mut<T: Bundle>(
+        &mut self,
+        mut func: impl for<'a> FnMut(T::Mut<'a>)
+    ) {
+        let bundle_id = self.type_info.get_bundle_id_from::<T>().unwrap();
+
+        self.archetypes.try_init(bundle_id, &self.type_info);
+        let world: *mut Self = &mut *self;
+        let root = unsafe { (*world).archetypes.get_mut(bundle_id).unwrap() };
+            
+
+        #[inline]
+        fn query<T: Bundle>(type_info: &impl TypeInfo, table: &mut Table, func: &mut impl for<'a> FnMut(T::Mut<'a>)) {
+            for n in 0..table.len() {
+                let indexer = unsafe { RowIndexer::new(n, table) };
+                let data = unsafe {
+                    T::from_components_as_mut(type_info, &mut |id| {
+                        indexer.get(id)
+                    }).unwrap()
+                };
+                func(data)
+            }
+        }
+
+        query::<T>(unsafe { &(*world).type_info }, root.table_mut(), &mut func);
+
+        for parent in root.parents() {
+            let archetype = unsafe { (*world).archetypes.get_mut(*parent).unwrap() };
+            query::<T>(unsafe { &(*world).type_info }, archetype.table_mut(), &mut func)
+        }
+    }
+
+    /// Clones every [`CloneBundle`] into a [`Vec`]
+    #[inline]
+    pub fn component_collect<T: CloneBundle>(&mut self) -> Vec<T> {
+        let mut bundles = Vec::new();
+        self.component_query::<T>(|bundle| bundles.push(T::clone_bundles(bundle)));
+
+        bundles
     }
 }
