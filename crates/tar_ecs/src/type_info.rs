@@ -79,8 +79,10 @@ pub trait TypeInfo: Sized {
     }
 
     fn init_bundle_from<T: Bundle>(&mut self) -> BundleId {
-        T::init_component_ids(self, &mut |_| ());
-        self.init_bundle(T::NAMES)
+        self.get_bundle_id_from::<T>().unwrap_or_else(|| {
+            T::init_component_ids(self, &mut |_| {});
+            self.init_bundle(T::NAMES)
+        })
     }
 
     #[inline]
@@ -195,31 +197,34 @@ impl TypeInfo for Local {
 
     #[inline]
     fn init_bundle(&mut self, names: BundleNames) -> BundleId {
-        let mut set = HashSet::default();
+        self.get_bundle_id(names).unwrap_or_else(|| {
 
-        for name in names {
-            let id = self
-                .get_component_id(name)
-                .expect("Component not initialized!");
-            set.insert(id);
-        }
+            let mut set = HashSet::default();
 
-        let bundle_info = BundleInfo::new(set);
-
-        for (i, bi) in self.bundles.iter().enumerate() {
-            if bi == &bundle_info {
-                let id = BundleId::from_usize(i);
-                self.bundles_unsorted.insert(names, id);
-                return id;
+            for name in names {
+                let id = self
+                    .get_component_id(name)
+                    .expect("Component not initialized!");
+                set.insert(id);
             }
-        }
 
-        let index = self.bundles.len();
-        self.bundles.push(bundle_info);
-        let id = BundleId::from_usize(index);
-        self.bundles_unsorted.insert(names, id);
+            let bundle_info = BundleInfo::new(set);
 
-        id
+            for (i, bi) in self.bundles.iter().enumerate() {
+                if bi == &bundle_info {
+                    let id = BundleId::from_usize(i);
+                    self.bundles_unsorted.insert(names, id);
+                    return id;
+                }
+            }
+
+            let index = self.bundles.len();
+            self.bundles.push(bundle_info);
+            let id = BundleId::from_usize(index);
+            self.bundles_unsorted.insert(names, id);
+
+            id
+        })
     }
 
     #[inline]

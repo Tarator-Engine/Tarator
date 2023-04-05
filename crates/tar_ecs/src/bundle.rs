@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem, ops::Add};
+use std::{collections::HashSet, mem, ops::{Add, Sub}};
 
 use crate::{
     component::{Component, ComponentId, ComponentName},
@@ -227,3 +227,18 @@ impl Add for &BundleInfo {
         BundleInfo::new(set)
     }
 }
+
+impl Sub for &BundleInfo {
+    type Output = BundleInfo;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut ret = HashSet::default();
+
+        for x in self.component_ids().difference(rhs.component_ids()) {
+            ret.insert(*x);
+        }
+
+        BundleInfo::new(ret)
+    }
+}
+
