@@ -2,7 +2,7 @@ use cgmath::{perspective, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use tar_res::CameraParams;
-use tar_types::prims::{Mat4, Vec3};
+use scr_types::prims::{Mat4, Vec3};
 use winit::dpi::PhysicalPosition;
 use winit::event::{ElementState, MouseScrollDelta, VirtualKeyCode};
 

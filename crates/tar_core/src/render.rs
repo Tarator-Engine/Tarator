@@ -2,7 +2,7 @@ use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
 use parking_lot::Mutex;
-use tar_types::{
+use scr_types::{
     components::{Camera, Rendering, Transform},
     prims::{Mat4, Quat},
 };
@@ -71,7 +71,6 @@ pub fn render_fn(
     surface: Arc<wgpu::Surface>,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-    world: Arc<Mutex<tar_ecs::prelude::World>>,
 ) {
     // let int_camera = tar_render::camera::IntCamera::new(
     //     (0.0, 5.0, 10.0),
@@ -107,28 +106,28 @@ pub fn render_fn(
         if state.halt {
             return;
         }
-        let objects_state = world.lock().component_collect::<(Transform, Rendering)>();
-        let cameras_state = world.lock().component_collect::<(Transform, Camera)>();
+        // let objects_state = world.lock().component_collect::<(Transform, Rendering)>();
+        // let cameras_state = world.lock().component_collect::<(Transform, Camera)>();
 
         // do rendering here
         for obj in &loaded_objects {
             game_renderer.check_done(*obj).unwrap();
         }
 
-        for (t, r) in &objects_state {
-            if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
-                //TODO!: implementation for multiple nodes
-                for node in &mut obj.nodes {
-                    node.translation = t.pos;
-                    node.rotation = Quat::from(t.rot);
-                    node.scale = t.scale;
-                    match node.update_transform(&Mat4::from_translation(t.pos)) {
-                        Ok(()) => (),
-                        Err(e) => eprintln!("failed to update model 0 with error {e:?}"),
-                    }
-                }
-            }
-        }
+        // for (t, r) in &objects_state {
+        //     if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
+        //         //TODO!: implementation for multiple nodes
+        //         for node in &mut obj.nodes {
+        //             node.translation = t.pos;
+        //             node.rotation = Quat::from(t.rot);
+        //             node.scale = t.scale;
+        //             match node.update_transform(&Mat4::from_translation(t.pos)) {
+        //                 Ok(()) => (),
+        //                 Err(e) => eprintln!("failed to update model 0 with error {e:?}"),
+        //             }
+        //         }
+        //     }
+        // }
 
         if let Some((id, path)) = state.add_object {
             match path.split('.').last().unwrap() {
@@ -200,12 +199,12 @@ pub fn render_fn(
             });
 
             // Game rendering
-            if let Some(cam) = cameras_state.into_iter().find(|cam| cam.1.active) {
-                match game_renderer.render(&mut encoder, &view, objects_state, cam, state.size) {
-                    Ok(()) => (),
-                    Err(e) => eprintln!("Rendering failed with error: {e:?}"),
-                }
-            }
+            // if let Some(cam) = cameras_state.into_iter().find(|cam| cam.1.active) {
+            //     match game_renderer.render(&mut encoder, &view, objects_state, cam, state.size) {
+            //         Ok(()) => (),
+            //         Err(e) => eprintln!("Rendering failed with error: {e:?}"),
+            //     }
+            // }
 
             // Egui rendering now
             let screen_descriptor = ScreenDescriptor {

@@ -13,6 +13,6 @@ egui-wgpu = "0.21.0"
 wgpu = "0.15.1"
 cgmath = { version = "0.18.0", features = ["serde"] }
 uuid = { version = "1.3.0", features = ["v4"] }
-tar_ecs = { path = "../tar_ecs" }
 serde = "1"
 ron = "0.8"
+scr_types = {path = "../scr_types"}
