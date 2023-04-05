@@ -1,10 +1,8 @@
-use std::{alloc::Layout, mem::needs_drop};
+use std::{alloc::Layout, mem::needs_drop, any::TypeId};
 
 use tar_ecs_macros::{identifier, Component};
 
 use crate::callback::{CallbackFunc, CallbackId, Callbacks};
-
-pub type ComponentName = &'static str;
 
 /// A [`Component`] is nothing more but data, which can be stored in a given
 /// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can
@@ -15,7 +13,9 @@ pub type ComponentName = &'static str;
 /// SAFETY:
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
-    const NAME: ComponentName;
+    fn type_id() -> TypeId {
+        TypeId::of::<Self>()
+    }
 }
 
 #[derive(Component)]

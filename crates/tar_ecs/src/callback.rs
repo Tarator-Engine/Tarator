@@ -1,11 +1,13 @@
+use std::any::TypeId;
+
 use tar_ecs_macros::identifier;
 
 use crate::{component::Component, store::sparse::MutSparseSet};
 
-pub type CallbackName = &'static str;
-
 pub unsafe trait InnerCallback: Sized + Send + Sync + 'static {
-    const NAME: CallbackName;
+    fn type_id() -> TypeId {
+        TypeId::of::<Self>()
+    }
 }
 
 /// Callbacks provide a way to run functions anonymously on components without the need having the concrete type of the component.

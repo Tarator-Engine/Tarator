@@ -84,14 +84,10 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
         .push(parse_quote! { Self: Sized + Send + Sync + 'static });
 
     let name = &ast.ident;
-    let name_str = format!("\"{name}\"").to_lowercase();
-    let info_fn = format!("\"{name}_get_info\"").to_lowercase();
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     quote! {
-        unsafe impl #impl_generics Component for #name #type_generics #where_clause {
-            const NAME: ComponentName = #name_str;
-        }
+        unsafe impl #impl_generics Component for #name #type_generics #where_clause {}
     }
     .into()
 }
@@ -101,13 +97,10 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let name = &ast.ident;
-    let name_str = format!("\"{}\"", name);
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     quote! {
-        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {
-            const NAME: CallbackName = #name_str;
-        }
+        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {}
 
         impl #impl_generics Callback<Empty> for #name #type_generics #where_clause {
             fn callback(&mut self, _: &mut Empty) {}

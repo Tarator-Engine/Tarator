@@ -52,8 +52,6 @@ fn component_query() {
     let mut world = World::new();
 
     fn init_entity<T: CloneBundle>(world: &mut World, data: T) {
-        println!("{:?}", T::NAMES);
-
         for _ in 0..1 {
             let entity = world.entity_create();
             world.entity_set(entity, data.clone());
@@ -83,18 +81,16 @@ fn component_query() {
     );
 
     fn check_component<T: Bundle>(world: &mut World, rec: usize) {
-        println!("{:?}", T::NAMES);
-
         let mut count = 0;
         world.component_query::<T>(|_| {
             count += 1;
         });
-        assert!(count == rec, "{} : {:?}", count, T::NAMES);
+        assert!(count == rec, "{}", count);
 
         world.component_query_mut::<T>(|_| {
             count += 1;
         });
-        assert!(count == rec * 2, "{} : {:?}", count, T::NAMES);
+        assert!(count == rec * 2, "{}", count);
     }
 
     check_component::<Position>(&mut world, 7);

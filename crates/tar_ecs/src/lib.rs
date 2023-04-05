@@ -14,8 +14,8 @@ pub mod prelude {
     pub type World = super::world::World<super::type_info::Local>;
 
     pub use super::bundle::{Bundle, CloneBundle};
-    pub use super::callback::{Callback, CallbackName, InnerCallback};
-    pub use super::component::{Component, ComponentInfo, ComponentName, Empty};
+    pub use super::callback::{Callback, InnerCallback};
+    pub use super::component::{Component, ComponentInfo, Empty};
     pub use super::entity::Entity;
     pub use super::store::table::Indexer;
     pub use tar_ecs_macros::{Callback, Component};
