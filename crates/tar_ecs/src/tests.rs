@@ -245,3 +245,19 @@ fn component_query() {
         assert!(label.0.as_str() == "Entity");
     });
 }
+
+#[test]
+fn entity_unset() {
+    let mut world = World::new();
+    let entity = world.entity_create();
+    world.entity_set(
+        entity,
+        (Position([0, 0]), Rotation(0), Player, Label("".into()))
+    );
+    assert!(world.entity_get::<(Position, Rotation, Player, Label), _>(entity, |_, _| {}).is_some());
+    world.entity_unset::<(Position, Rotation, Label)>(entity);
+    assert!(world.entity_get::<Position, _>(entity, |_, _| {}).is_none());
+    assert!(world.entity_get::<Rotation, _>(entity, |_, _| {}).is_none());
+    assert!(world.entity_get::<Player, _>(entity, |_, _| {}).is_some());
+    assert!(world.entity_get::<Label, _>(entity, |_, _| {}).is_none());
+}

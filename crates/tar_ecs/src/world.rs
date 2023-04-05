@@ -152,7 +152,6 @@ impl<TI: TypeInfo> World<TI, Outer> {
         let to_set_bundle_id = self.type_info.init_bundle(names);
 
         let Some(info) = self.type_info.get_bundle_info(meta.bundle_id, |meta_info| {
-
             self.type_info.get_bundle_info(to_set_bundle_id, |info| {
 
                 // No moving required    
@@ -216,7 +215,6 @@ impl<TI: TypeInfo> World<TI, Outer> {
         let to_set_bundle_id = self.type_info.init_bundle_from::<T>();
 
         let Some(info) = self.type_info.get_bundle_info(meta.bundle_id, |meta_info| {
-
             self.type_info.get_bundle_info(to_set_bundle_id, |info| {
   
                 // No moving required    
@@ -268,8 +266,44 @@ impl<TI: TypeInfo> World<TI, Outer> {
         todo!()
     }
 
-    pub fn entity_unset<T: Bundle>(&mut self, _entity: Entity) {
-        todo!()
+    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
+        let Some(meta) = self.entities.get_mut(entity) else {
+            return;
+        };
+
+        let to_unset_bundle_id = self.type_info.init_bundle_from::<T>();
+        
+        let Some(info) = self.type_info.get_bundle_info(meta.bundle_id, |meta_info| {
+            self.type_info.get_bundle_info(to_unset_bundle_id, |info| {
+                let info = meta_info - info;
+                
+                if info.len() == 0 {
+                    None
+                } else {
+                    Some(info)
+                }
+            }).unwrap() 
+        }).unwrap() else {
+            return;
+        };
+
+        let bundle_id = self.type_info.insert_bundle(info);
+        self.archetypes.try_init(bundle_id, &self.type_info);
+
+        let (old_a, new_a) = self.archetypes.get_2_mut(meta.bundle_id, bundle_id).unwrap();
+        let (old_t, new_t) = (old_a.table_mut(), new_a.table_mut());
+        let (old_index, new_index) = (meta.index, new_t.len());
+
+        let replaced_entity = unsafe { old_t.move_into(new_t, old_index) };
+
+        meta.bundle_id = bundle_id;
+        meta.index = new_index;
+
+        if let Some(r_entity) = replaced_entity {
+            let r_meta = unsafe { self.entities.get_unchecked_mut(r_entity) };
+            r_meta.index = old_index
+        }
+
     }
 }
 
