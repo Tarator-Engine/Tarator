@@ -159,7 +159,6 @@ pub fn identifier(input: TokenStream) -> TokenStream {
                 self.0 as usize
             }
         }
-
     }
     .into()
 }

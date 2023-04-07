@@ -197,8 +197,14 @@ impl Table {
         }
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.store.len()
+    }
+
+    #[inline]
+    pub unsafe fn free_unused(&mut self) {
+        self.store.free_unused()
     }
 }
 

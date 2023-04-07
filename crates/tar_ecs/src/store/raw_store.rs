@@ -1,4 +1,11 @@
-use std::alloc::{ Layout, handle_alloc_error };
+use std::{
+    ptr,
+    alloc::{
+        self,
+        Layout,
+        handle_alloc_error
+    }
+};
 
 /// Type erased vector
 pub struct RawStore {
@@ -27,7 +34,7 @@ impl RawStore {
             item_layout,
             capacity: (item_layout.size() == 0).then(|| usize::MAX).unwrap_or_else(|| 0),
             len: 0,
-            data: (item_layout.size() == 0).then(|| std::ptr::NonNull::<u8>::dangling().as_ptr()).unwrap_or_else(|| std::ptr::null_mut())
+            data: (item_layout.size() == 0).then(|| ptr::NonNull::<u8>::dangling().as_ptr()).unwrap_or_else(|| ptr::null_mut())
         }
     }
 
@@ -96,9 +103,9 @@ impl RawStore {
         let old_array_layout = Self::array_layout(&self.item_layout, self.capacity).unwrap();
 
         let data = if self.data.is_null() {
-            std::alloc::alloc(array_layout)
+            alloc::alloc(array_layout)
         } else {
-            std::alloc::realloc(self.get_ptr(), old_array_layout, array_layout.size())
+            alloc::realloc(self.data, old_array_layout, array_layout.size())
         };
 
         if data.is_null() {
@@ -110,13 +117,39 @@ impl RawStore {
 
     }
 
+    pub unsafe fn free_unused(&mut self) {
+        if self.item_layout.size() == 0 {
+            return;
+        }
+
+        if self.len == 0 {
+            self.dealloc();
+            return;
+        }
+
+
+        let array_layout = Self::array_layout(&self.item_layout, self.len).unwrap();
+        let old_array_layout = Self::array_layout(&self.item_layout, self.capacity).unwrap();
+
+        let data = alloc::realloc(self.data, old_array_layout, array_layout.size());
+
+        if data.is_null() {
+            handle_alloc_error(array_layout);
+        }
+
+        self.data = data;
+        self.capacity = self.len;
+    }
+
     pub unsafe fn dealloc(&mut self) {
         self.len = 0;
         
         let layout = Self::array_layout(&self.item_layout, self.capacity()).unwrap();
         if layout.size() > 0 {
-            std::alloc::dealloc(self.data, layout)
+            alloc::dealloc(self.data, layout);
+            self.data = ptr::null_mut();
         }
+
     }
 
     #[inline]

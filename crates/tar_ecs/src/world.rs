@@ -7,7 +7,7 @@ use crate::{
         sparse::SparseSetIndex,
         table::{ RowIndexer, ConstRowIndexer, Table, Indexer },
     },
-    archetype::{ Archetypes },
+    archetype::Archetypes,
     type_info::{ Local, TypeInfo }
 };
 
@@ -439,4 +439,19 @@ impl<TI: TypeInfo> World<TI> {
 
         bundles
     }
+
+    /// SAFETY:
+    /// Not recommended to call if:
+    /// - A: You're creating a lot of new Entities
+    /// - B: You'll be changing a lot of component sets
+    ///
+    /// May result in rather fragmented heap
+    #[inline]
+    pub fn free_unused_memory(&mut self) {
+        for (_, archetype) in self.archetypes.iter_mut() {
+            let table = archetype.table_mut();
+            unsafe { table.free_unused(); }
+        }
+    }
 }
+

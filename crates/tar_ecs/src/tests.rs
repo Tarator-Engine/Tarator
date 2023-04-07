@@ -80,6 +80,8 @@ fn component_query() {
         ),
     );
 
+    world.free_unused_memory();
+
     fn check_component<T: Bundle>(world: &mut World, rec: usize) {
         let mut count = 0;
         world.component_query::<T>(|_| {

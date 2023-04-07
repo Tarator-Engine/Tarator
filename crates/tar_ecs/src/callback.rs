@@ -51,3 +51,4 @@ impl Callbacks {
         self.callbacks.get(id).map(|func| *func)
     }
 }
+
