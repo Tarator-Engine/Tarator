@@ -1,10 +1,7 @@
 use cgmath::InnerSpace;
 use winit::dpi::PhysicalSize;
 
-use crate::{
-    components::{Camera, Transform},
-    prims::{Mat4, Point3, Vec3},
-};
+use scr_types::{components::*, prims::*};
 
 #[derive(Debug)]
 pub struct CameraParams {

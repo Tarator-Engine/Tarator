@@ -2,13 +2,11 @@ mod entity_viewer;
 
 use egui::Color32;
 use egui_file::FileDialog;
-use tar_ecs::prelude::World;
 
 pub fn gui(
     context: &egui::Context,
     state: &mut tar_types::EngineState,
     file_dialogue: &mut Option<FileDialog>,
-    world: &mut World,
 ) {
     egui::Window::new("Timings")
         .resizable(false)
@@ -22,7 +20,7 @@ pub fn gui(
         .default_width(300.0)
         .show(context, |ui| {
             ui.vertical_centered(|ui| ui.heading("right panel"));
-            entity_viewer::complete(ui, world, state);
+            entity_viewer::complete(ui, state);
         });
     egui::SidePanel::left("left panel")
         .resizable(true)

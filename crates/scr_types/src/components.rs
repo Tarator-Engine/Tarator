@@ -1,10 +1,9 @@
 use cgmath::Zero;
-use tar_ecs::prelude::*;
 
 use crate::prims::{Euler, Rad, Vec3};
 
 /// This component stored transform attributes
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone)]
 pub struct Transform {
     pub pos: Vec3,
     pub rot: Euler,
@@ -25,7 +24,7 @@ impl Default for Transform {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to render
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone)]
 pub struct Rendering {
     pub model_id: uuid::Uuid,
 }
@@ -34,7 +33,7 @@ pub struct Rendering {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to act like a camera
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone)]
 pub struct Camera {
     pub fovy: Rad,
     pub znear: f32,
@@ -77,7 +76,7 @@ impl Default for Camera {
 
 /// This component stores basic entity info e.g. name
 /// it is required for it to be shown in the editor
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone)]
 pub struct Info {
     pub name: String,
     pub id: uuid::Uuid,

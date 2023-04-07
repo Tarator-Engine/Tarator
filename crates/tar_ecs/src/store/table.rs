@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    bundle::{BundleId, Bundle, BundleNames},
+    bundle::{BundleId, Bundle},
     component::ComponentId,
     entity::Entity,
     store::{
@@ -99,19 +99,6 @@ impl Table {
         });
     }
 
-    pub unsafe fn push(&mut self, entity: Entity, names: BundleNames, data: &[*mut u8], type_info: &impl TypeInfo) {
-        self.entities.push(entity);
-        let alloc = self.store.alloc();
-
-        for (i, name) in names.iter().enumerate() {
-            let id = type_info.get_component_id(*name).expect("Component not initialized!");
-            let item = self.indexer.get(id).expect("Component not part of table!");
-            let src = data.get_unchecked(i);
-
-            ptr::copy(*src, alloc.add(item.index), item.size);
-        }
-    }
-
     pub unsafe fn set_from<T: Bundle>(&mut self, index: usize, data: T, type_info: &impl TypeInfo) {
         debug_assert!(index < self.len());
 
@@ -132,27 +119,6 @@ impl Table {
         })
     }
 
-    pub unsafe fn set(&mut self, index: usize, names: BundleNames, data: &[*mut u8], type_info: &impl TypeInfo) {
-        debug_assert!(index < self.len());
-
-        let store_data = self.store.get_unchecked_mut(index);
-
-        for (i, name) in names.iter().enumerate() {
-            let id = type_info.get_component_id(*name).expect("Component not initialized!");
-            let item = self.indexer.get(id).expect("Component not part of table!");
-
-            let dst = store_data.add(item.index);
-
-            if let Some(drop) = item.drop {
-                drop(dst)
-            }
-
-            if item.size != 0 {
-                ptr::copy_nonoverlapping(data[i], dst, item.size)
-            }
-        }
-    }
-
     pub unsafe fn init_from<T: Bundle>(&mut self, index: usize, data: T, type_info: &impl TypeInfo) {
         debug_assert!(index < self.len());
 
@@ -166,23 +132,7 @@ impl Table {
             }
         })
     }
-
-    pub unsafe fn init(&mut self, index: usize, names: BundleNames, data: &[*mut u8], type_info: &impl TypeInfo) {
-        debug_assert!(index < self.len());
-
-        let store_data = self.store.get_unchecked_mut(index);
-
-        for (i, name) in names.iter().enumerate() {
-            let id = type_info.get_component_id(*name).expect("Component not initialized!");
-            let item = self.indexer.get(id).expect("Component not part of table!");
-            let dst = store_data.add(item.index);
-
-            if item.size != 0 {
-                ptr::copy_nonoverlapping(data[i], dst, item.size)
-            }
-        }
-    }
-
+    
     pub unsafe fn move_into(&mut self, other: &mut Self, index: usize) -> Option<Entity> {
         let src_data = self.store.swap_remove_and_forget_unchecked(index);
         let dst_data = other.store.alloc();
@@ -247,8 +197,14 @@ impl Table {
         }
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.store.len()
+    }
+
+    #[inline]
+    pub unsafe fn free_unused(&mut self) {
+        self.store.free_unused()
     }
 }
 

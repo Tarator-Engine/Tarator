@@ -1,13 +1,12 @@
-use std::{collections::HashSet, mem, ops::Add};
+use std::{collections::HashSet, mem, ops::{Add, Sub}, any::TypeId};
 
 use crate::{
-    component::{Component, ComponentId, ComponentName},
+    component::{ Component, ComponentId },
     type_info::TypeInfo,
 };
 use fxhash::FxBuildHasher;
-use tar_ecs_macros::{foreach_tuple, identifier};
+use tar_ecs_macros::{ foreach_tuple, identifier };
 
-pub type BundleNames = &'static [ComponentName];
 
 /// Bundle is implemented for every type implementing[`Component`], as well as for every tuple
 /// consisting [`Bundle`]s. This means that a tuple of multiple [`Component`]s is also a
@@ -19,12 +18,14 @@ pub type BundleNames = &'static [ComponentName];
 /// SAFETY:
 /// - Manual implementations are discouraged
 pub unsafe trait Bundle: Sized + Send + Sync + 'static {
-    const NAMES: &'static [&'static str];
-
     /// Implemented as a tuple of mutable [`Component`] raw pointer
     type Ptr: Copy;
     type Ref<'a>: Copy;
     type Mut<'a>;
+
+    fn b_type_id() -> TypeId {
+        TypeId::of::<Self>()
+    }
 
     /// Initializes and gets the [`ComponentId`]s via `func`
     fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId));
@@ -73,8 +74,6 @@ unsafe impl<T: Component> Bundle for T {
     type Ptr = *mut Self;
     type Ref<'a> = &'a Self;
     type Mut<'a> = &'a mut Self;
-
-    const NAMES: &'static [&'static str] = &[T::NAME];
 
     #[inline]
     fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId)) {
@@ -135,8 +134,6 @@ macro_rules! component_tuple_impl {
             type Ptr = ($($c::Ptr,)*);
             type Ref<'a> = ($($c::Ref<'a>,)*);
             type Mut<'a> = ($($c::Mut<'a>,)*);
-
-            const NAMES: &'static [&'static str] = &[$($c::NAME,)*];
 
             #[inline]
             #[allow(unused_variables)]
@@ -227,3 +224,18 @@ impl Add for &BundleInfo {
         BundleInfo::new(set)
     }
 }
+
+impl Sub for &BundleInfo {
+    type Output = BundleInfo;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut ret = HashSet::default();
+
+        for x in self.component_ids().difference(rhs.component_ids()) {
+            ret.insert(*x);
+        }
+
+        BundleInfo::new(ret)
+    }
+}
+

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use cgmath::SquareMatrix;
 use serde::{Deserialize, Serialize};
-use tar_types::prims::{Mat4, Quat, Vec3};
+use scr_types::prims::{Mat4, Quat, Vec3};
 
 use crate::{scene::ImportData, Result};
 

@@ -1,7 +1,7 @@
 use crate::{
     bundle::BundleId,
     store::{sparse::MutSparseSet, table::Table},
-    type_info::TypeInfo,
+    type_info::TypeInfo
 };
 
 #[derive(Debug)]
@@ -95,4 +95,15 @@ impl Archetypes {
     ) -> Option<(&mut Archetype, &mut Archetype)> {
         self.archetypes.get_2_mut(i1, i2)
     }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (&BundleId, &Archetype)> {
+        self.archetypes.iter()
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&BundleId, &mut Archetype)> {
+        self.archetypes.iter_mut()
+    }
+
 }

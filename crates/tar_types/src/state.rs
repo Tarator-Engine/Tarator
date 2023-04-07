@@ -2,12 +2,7 @@ use std::time::Duration;
 
 use egui::ClippedPrimitive;
 
-#[allow(unused)]
-use tar_ecs::world::World;
-
 /// This struct stores all the important state of the engine.
-///
-/// it and a [`World`] is stored as state
 #[derive(Clone)]
 pub struct EngineState {
     pub dt: Duration,

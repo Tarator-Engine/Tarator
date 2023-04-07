@@ -7,6 +7,8 @@ use tar_res::{
 use crossbeam_channel::{bounded, Receiver};
 use tar_types::{
     camera::get_cam_params,
+};
+use scr_types::{
     components::{Camera, Rendering, Transform},
 };
 use uuid::Uuid;

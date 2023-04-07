@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use tar_types::prims::{Vec3, Vec4};
+use scr_types::prims::{Vec3, Vec4};
 
 use crate::{scene::ImportData, shader::ShaderFlags, Result};
 
