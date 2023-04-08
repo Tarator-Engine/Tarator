@@ -17,6 +17,7 @@ members = [
   "crates/tar_types",
   "crates/tar_abi",
   "crates/scr_types",
+  "crates/scr_types/macros",
 ]
 exclude = ["scripts/"]
 
