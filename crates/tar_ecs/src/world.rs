@@ -1,7 +1,7 @@
 use crate::{
     bundle::{ Bundle, CloneBundle, BundleId },
     callback::{ Callback, CallbackId },
-    component::{ Empty, ComponentId, Component },
+    component::{ ComponentId, Component },
     entity::{ Entities, Entity },
     store::{
         sparse::SparseSetIndex,
@@ -78,8 +78,8 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn callback_init<T: Callback<Empty>>(&mut self) -> CallbackId {
-        self.type_info.init_callback_from::<T, Empty>()
+    pub fn callback_init<T: Callback<()>>(&mut self) -> CallbackId {
+        self.type_info.init_callback_from::<T, ()>()
     }
 
     #[inline]
@@ -100,7 +100,7 @@ impl World<Local> {
     pub fn new() -> Self {
         let mut type_info = Local::new();
         let mut archetypes = unsafe { Archetypes::new() };
-        let bundle_id = type_info.init_bundle_from::<Empty>();
+        let bundle_id = type_info.init_bundle_from::<()>();
         archetypes.try_init(bundle_id, &mut type_info);
         
         Self {
@@ -129,7 +129,7 @@ impl<TI: TypeInfo> World<TI> {
         let table = archetype.table_mut();
         meta.index = table.len();
         meta.bundle_id = BundleId::EMPTY;
-        unsafe { table.push_from(entity, Empty, &self.type_info); }
+        unsafe { table.push_from(entity, (), &self.type_info); }
 
         entity
     }
@@ -342,12 +342,12 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn entity_callback<T: Callback<Empty>>(&mut self, entity: Entity, callback: &mut T) {
+    pub fn entity_callback<T: Callback<()>>(&mut self, entity: Entity, callback: &mut T) {
         let Some(meta) = self.entities.get(entity) else {
             return;
         };
 
-        let callback_id = self.type_info.init_callback_from::<T, Empty>();
+        let callback_id = self.type_info.init_callback_from::<T, ()>();
 
         let archetype = self.archetypes.get_mut(meta.bundle_id).unwrap();
         let table = archetype.table_mut();

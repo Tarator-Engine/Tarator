@@ -1,6 +1,6 @@
 use std::{alloc::Layout, mem::needs_drop, any::TypeId};
 
-use tar_ecs_macros::{identifier, Component};
+use tar_ecs_macros::identifier;
 
 use crate::callback::{CallbackFunc, CallbackId, Callbacks};
 
@@ -18,10 +18,11 @@ pub unsafe trait Component: Sized + Send + Sync + 'static {
     }
 }
 
-#[derive(Component)]
-pub struct Empty;
+unsafe impl Component for () {}
+
 
 identifier!(ComponentId, u32);
+
 
 #[derive(Debug)]
 pub struct ComponentInfo {
