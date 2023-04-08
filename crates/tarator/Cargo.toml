@@ -7,7 +7,7 @@ description = "A rust game engine wie an ECS and a UI."
 homepage = "https://github.com/Tarator-Engine/Tarator"
 documentation = "https://docs.rs/tarator"
 repository = "https://github.com/Tarator-Engine/Tarator"
-readme = "README.md"
+readme = "../../README.md"
 
 [[bin]]
 name = "tarator"
