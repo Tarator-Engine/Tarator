@@ -21,6 +21,7 @@ unsafe impl Send for Tracer {}
 
 
 pub struct Session {
+    start: time::Instant,
     result: SessionResult,
     path: &'static str
 }
@@ -30,6 +31,7 @@ impl Session {
     pub fn new(path: &'static str) -> Box<Self> {
         let mut tracer = TRACER.lock();
         let mut ret = Box::new(Self {
+            start: time::Instant::now(),
             result: SessionResult::new(),
             path
         });
@@ -99,7 +101,7 @@ impl Drop for Trace {
 
         session.result.trace_events.push(TraceEvent {
             name: self.name,
-            ts: self.ts.duration_since(self.ts).as_micros(),
+            ts: self.ts.duration_since(session.start).as_micros(),
             dur: self.ts.elapsed().as_micros(),
             pid: process::id(),
             tid: thread_id::get(),
