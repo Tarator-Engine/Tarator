@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 cgmath = "0.18"
 uuid = "1"
+macros = {path = "macros/"}
