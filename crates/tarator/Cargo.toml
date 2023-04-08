@@ -2,7 +2,7 @@
 name = "tarator"
 version="0.1.0"
 edition="2021"
-license-file = "LICENSE"
+license-file = "../../LICENSE"
 description = "A rust game engine wie an ECS and a UI."
 homepage = "https://github.com/Tarator-Engine/Tarator"
 documentation = "https://docs.rs/tarator"
