@@ -1,23 +1,38 @@
-use crate::bundle::BundleId;
+use tar_ecs_macros::identifier;
+
+use crate::{
+    bundle::BundleId,
+    store::sparse::SparseSetIndex
+};
+
+identifier!(EntityId, u32);
+identifier!(Version, u32);
+
+impl Version {
+    #[inline]
+    pub fn inc(&mut self) {
+        self.0 += 1
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct Entity(u32, u32);
+pub struct Entity(EntityId, Version);
 
 impl Entity {
-    pub const INVALID: Self = Self(u32::MAX, u32::MAX);
+    pub const INVALID: Self = Self(EntityId::INVALID, Version::INVALID);
 
     #[inline]
     pub fn new(id: u32, version: u32) -> Self {
-        Self(id, version)
+        Self(EntityId::new(id), Version(version))
     }
 
     #[inline]
-    pub fn id(self) -> u32 {
+    pub fn id(self) -> EntityId {
         self.0
     }
 
     #[inline]
-    pub fn version(self) -> u32 {
+    pub fn version(self) -> Version {
         self.1
     }
 }
@@ -30,7 +45,7 @@ impl Entity {
 pub struct EntityMeta {
     pub bundle_id: BundleId,
     pub index: usize,
-    pub version: u32
+    pub version: Version
 }
 
 impl EntityMeta {
@@ -38,7 +53,7 @@ impl EntityMeta {
     pub const fn new() -> Self {
         Self {
             bundle_id: BundleId::INVALID,
-            version: 0,
+            version: Version::new(0),
             index: 0
         }
     }
@@ -112,14 +127,14 @@ impl Entities {
 
         // SAFETY:
         // Index was saved by free_next
-        (Entity::new(index as u32, free.version), unsafe { self.meta.get_unchecked_mut(index) })
+        (Entity::new(index as u32, free.version.id()), unsafe { self.meta.get_unchecked_mut(index) })
     }
 
     /// Returns the destroyed [`EntityMeta`] which can be used to drop all
     /// [`Component`](crate::component::Component)s of given [`Entity`]. Will return [`None`] if
     /// the [`Entity`] was already destroyed or revived.
     pub fn destroy(&mut self, entity: Entity) -> Option<EntityMeta> {
-        let index = entity.id() as usize;
+        let index = entity.id().as_usize();
         let meta = &mut self.meta[index];
 
         // Ignore if:
@@ -139,7 +154,7 @@ impl Entities {
         // and set `free_next` to our index, as well as increment `free_count`. Also increment the
         // current version of our [`EntityMeta`].
         meta.index = self.free_next;
-        meta.version += 1;
+        meta.version.inc();
         self.free_next = index;
         self.free_count += 1;
 
@@ -151,7 +166,7 @@ impl Entities {
     /// Returns [`None`] if the [`Entity`] was already destroyed or revived.
     #[inline]
     pub fn get(&self, entity: Entity) -> Option<&EntityMeta> {
-        let meta = &self.meta[entity.id() as usize];
+        let meta = &self.meta[entity.id().as_usize()];
 
         if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
@@ -163,7 +178,7 @@ impl Entities {
     /// Returns [`None`] if the [`Entity`] was already destroyed or revived.
     #[inline]
     pub fn get_mut(&mut self, entity: Entity) -> Option<&mut EntityMeta> {
-        let meta = self.meta.get_mut(entity.id() as usize)?;
+        let meta = self.meta.get_mut(entity.id().as_usize())?;
 
         if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
@@ -174,12 +189,12 @@ impl Entities {
 
     #[inline]
     pub unsafe fn get_unchecked(&self, entity: Entity) -> &EntityMeta {
-        self.meta.get_unchecked(entity.id() as usize) 
+        self.meta.get_unchecked(entity.id().as_usize())
     }
 
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, entity: Entity) -> &mut EntityMeta {
-        self.meta.get_unchecked_mut(entity.id() as usize) 
+        self.meta.get_unchecked_mut(entity.id().as_usize()) 
     }
 
     /// Returns how many [`Entity`]s are currently dead
