@@ -1,7 +1,5 @@
-use log::debug;
 
 fn main() {
     env_logger::init();
-    debug!("Hello, World!");
-    println!("Hello, World!");
+     pollster::block_on(tar_render::dev::run());
 }

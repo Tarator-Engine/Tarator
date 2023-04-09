@@ -1,5 +1,5 @@
 [package]
-name = "tar_res"
+name = "tar_shader"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 easy-gltf = "1"
-cgmath = "0.18.0"
-bytemuck = { version = "1.13", features = ["derive"] }
-tar_shader = { path = "../tar_shader" }
+wgpu = "0.15"
+bytemuck = "1.13.1"
+
+[build-dependencies]
+wgsl_to_wgpu = "0.3.1"

@@ -1,5 +1,6 @@
-use std::error::Error;
+pub mod model;
 
+use std::error::Error;
 
 type SomeResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -11,8 +12,6 @@ pub fn load_model(file_path: &str) -> SomeResult<()> {
         if !scene.cameras.is_empty() || !scene.cameras.is_empty() {
             println!("camera and light importing are not yet supported");
         }
-
-        
     }
 
     Ok(())
