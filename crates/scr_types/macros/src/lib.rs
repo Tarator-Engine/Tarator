@@ -65,7 +65,7 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     func.sig.ident = syn::Ident::new("init_system", proc_macro2::Span::call_site());
-    func.sig.output.
+    // func.sig.output.
 
     // add no_mangle attribute to preserve function name after compilation
     func.attrs.push(parse_quote!(#[no_mangle]));
