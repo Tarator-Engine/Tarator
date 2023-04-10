@@ -1,11 +1,11 @@
 use image::{GenericImageView, ImageResult};
 
-pub struct RgbTexture {
+pub struct RgbaTexture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
 }
-impl Texture for RgbTexture {
+impl Texture for RgbaTexture {
     fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -13,14 +13,14 @@ impl Texture for RgbTexture {
         label: &str,
     ) -> ImageResult<Self> {
         let img = image::load_from_memory(bytes)?;
-        Ok(Self::from_image(device, queue, &img, Some(label)))
+        Ok(Self::from_image(device, queue, &img, label))
     }
 
     fn from_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
-        label: Option<&str>,
+        label: &str,
     ) -> Self {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
@@ -31,7 +31,7 @@ impl Texture for RgbTexture {
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label,
+            label: Some(label),
             size,
             mip_level_count: 1,
             sample_count: 1,
@@ -89,14 +89,14 @@ impl Texture for GrayTexture {
         label: &str,
     ) -> ImageResult<Self> {
         let img = image::load_from_memory(bytes)?;
-        Ok(Self::from_image(device, queue, &img, Some(label)))
+        Ok(Self::from_image(device, queue, &img, label))
     }
 
     fn from_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
-        label: Option<&str>,
+        label: &str,
     ) -> Self {
         let gray = img.to_luma_alpha8();
         let dimensions = img.dimensions();
@@ -107,7 +107,7 @@ impl Texture for GrayTexture {
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label,
+            label: Some(label),
             size,
             mip_level_count: 1,
             sample_count: 1,
@@ -166,6 +166,6 @@ pub trait Texture {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
-        label: Option<&str>,
+        label: &str,
     ) -> Self;
 }

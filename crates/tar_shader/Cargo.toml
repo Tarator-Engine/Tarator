@@ -9,6 +9,10 @@ edition = "2021"
 easy-gltf = "1"
 wgpu = "0.15"
 bytemuck = "1.13.1"
+serde = { version = "1", features = ["derive"] }
+memoffset = "0.8.0"
+encase = "0.5.0"
+
 
 [build-dependencies]
-wgsl_to_wgpu = "0.3.1"
+wgsl_to_wgpu = { git = "https://github.com/ScanMountGoat/wgsl_to_wgpu" }

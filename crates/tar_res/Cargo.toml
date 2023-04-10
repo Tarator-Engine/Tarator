@@ -7,6 +7,13 @@ edition = "2021"
 
 [dependencies]
 easy-gltf = "1"
-cgmath = "0.18.0"
+cgmath = { version = "0.18.0", features = ["serde"] }
 bytemuck = { version = "1.13", features = ["derive"] }
+image = { version = "0.24.6", features = [] }
+log = "0.4.17"
+env_logger = "0.10.0"
+serde = { version = "1", features = ["derive"] }
+rmp-serde = "1"
+
 tar_shader = { path = "../tar_shader" }
+tar_types = { path = "../tar_types" }

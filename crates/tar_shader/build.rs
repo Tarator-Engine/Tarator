@@ -17,14 +17,14 @@ fn load_shader(name: &str) {
         &wgsl_source,
         &format!("../{wgsl_path}"),
         WriteOptions {
-            derive_bytemuck: true,
+            derive_encase: true,
+            derive_serde: true,
             ..Default::default()
         },
     )
     .unwrap();
 
     std::fs::write(rust_path, text.as_bytes()).unwrap();
-
 }
 
 fn main() {

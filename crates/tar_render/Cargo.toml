@@ -19,7 +19,6 @@ image = { version = "0.24", default-features = false, features = [
     "jpeg",
 ] }
 
-
 tar_res = { path = "../tar_res" }
 tar_shader = { path = "../tar_shader" }
 tar_types = { path = "../tar_types" }
