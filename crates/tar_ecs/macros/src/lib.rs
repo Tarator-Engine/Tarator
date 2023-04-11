@@ -102,8 +102,8 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
     quote! {
         unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {}
 
-        impl #impl_generics Callback<Empty> for #name #type_generics #where_clause {
-            fn callback(&mut self, _: &mut Empty) {}
+        impl #impl_generics Callback<()> for #name #type_generics #where_clause {
+            fn callback(&mut self, _: &mut ()) {}
         }
     }
     .into()

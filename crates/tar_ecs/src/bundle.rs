@@ -178,7 +178,7 @@ macro_rules! component_tuple_impl {
     };
 }
 
-foreach_tuple!(component_tuple_impl, 0, 15, T);
+foreach_tuple!(component_tuple_impl, 1, 15, T);
 
 identifier!(BundleId, u32);
 
