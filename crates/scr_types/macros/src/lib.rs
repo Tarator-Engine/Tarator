@@ -64,11 +64,13 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
         panic!("InitSystem macro can only be applied to functions")
     };
 
+    // set the name of the function to the constant "init_system" and make shure it always returns
+    // "Systems"
     func.sig.ident = syn::Ident::new("init_system", proc_macro2::Span::call_site());
-    // func.sig.output.
+    func.sig.output = parse_quote!(::scr_types::Systems);
 
     // add no_mangle attribute to preserve function name after compilation
     func.attrs.push(parse_quote!(#[no_mangle]));
 
-    todo!()
+    quote!(#func).into()
 }

@@ -1,5 +1,4 @@
-use tar_abi::System;
-use tar_types::components::Transform;
+use scr_types::{components::Transform, InitSystems, System, Systems};
 
 #[System(Update)]
 fn test(entities: &mut Vec<(&mut Transform)>) {
@@ -9,4 +8,9 @@ fn test(entities: &mut Vec<(&mut Transform)>) {
         entity.pos.y = a;
         entity.pos.z = a;
     }
+}
+
+#[InitSystems]
+fn init() -> Systems {
+    Systems::new().add(test)
 }
