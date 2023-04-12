@@ -2,11 +2,16 @@ pub mod components;
 pub mod prims;
 pub use macros::{InitSystems, System};
 
+pub type System = fn(&mut tar_ecs::prelude::World);
+
 #[repr(C)]
 pub struct Systems {
     /// list of systems with a function pointer and a bool indicating wether it depends on the
     /// previous system
-    systems: Vec<(&'static dyn Fn(tar_ecs::prelude::World), bool)>,
+    ///
+    /// ## Note:
+    /// this is for internal use only!
+    pub systems: Vec<(System, bool)>,
 }
 
 impl Systems {
@@ -23,7 +28,7 @@ impl Systems {
     /// ## Note:
     /// the systems added using this function may be executed in **any order** for systems that
     /// have to be executed in serial use [`add_serial`]
-    pub fn add(mut self, func: &'static dyn Fn(tar_ecs::prelude::World)) -> Self {
+    pub fn add(mut self, func: System) -> Self {
         self.addr(func);
         self
     }
@@ -34,12 +39,12 @@ impl Systems {
     /// ## Note:
     /// the systems added using this function may be executed in **any order** for systems that
     /// have to be executed in serial use [`addr_serial`]
-    pub fn addr(&mut self, func: &'static dyn Fn(tar_ecs::prelude::World)) {
+    pub fn addr(&mut self, func: System) {
         self.systems.push((func, false));
     }
 
     /// add a system you want to use but it will be executed after the one you specified before
-    pub fn add_serial(mut self, func: &'static dyn Fn(tar_ecs::prelude::World)) -> Self {
+    pub fn add_serial(mut self, func: System) -> Self {
         self.addr_serial(func);
         self
     }
@@ -47,7 +52,7 @@ impl Systems {
     /// add a system you want to use but it will be executed after the one you specified before
     ///
     /// this is intended for internal use but you can use it instead of the builder pattern
-    pub fn addr_serial(&mut self, func: &'static dyn Fn(tar_ecs::prelude::World)) {
+    pub fn addr_serial(&mut self, func: System) {
         self.systems.push((func, true));
     }
 }

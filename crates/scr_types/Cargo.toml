@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 cgmath = "0.18"
-uuid = "1"
-macros = {path = "macros/"}
+uuid = { version = "1", features = ["v4"] }
+macros = { path = "macros/" }
 
-tar_ecs = {path = "../tar_ecs"}
+tar_ecs = { path = "../tar_ecs" }
