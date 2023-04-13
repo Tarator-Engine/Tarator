@@ -1,9 +1,10 @@
 use cgmath::Zero;
+use tar_ecs::prelude::Component;
 
 use crate::prims::{Euler, Rad, Vec3};
 
 /// This component stored transform attributes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component)]
 pub struct Transform {
     pub pos: Vec3,
     pub rot: Euler,

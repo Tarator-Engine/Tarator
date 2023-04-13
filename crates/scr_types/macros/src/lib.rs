@@ -66,7 +66,33 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
         //     unreachable!()
         // };
 
-        let new_stmt: syn::Stmt = parse_quote!(let #pat = {let res = vec![]; world.component_query_mut(|i| {res.push(i);}); res});
+        // let bundle_type = match *pat.ty {
+        //     syn::Type::
+        // };
+        // let is_vec = true;
+
+        let name = match *pat.pat {
+            syn::Pat::Ident(i) => i.ident,
+            _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
+        };
+
+        let bundle_type = match *pat.ty {
+            syn::Type::Path(p) => {
+                let v: syn::Ident = parse_quote!(Vec);
+                let last = p.path.segments.into_iter().last().unwrap();
+                if last.ident != v {
+                    panic!("queries should be of type: 'Vec<(Component1, Component2)>'")
+                };
+
+                match last.arguments {
+                    syn::PathArguments::AngleBracketed(a) => a.args,
+                    _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
+                }
+            }
+            _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
+        };
+
+        let new_stmt: syn::Stmt = parse_quote!(let #name = {let res = vec![]; world.component_query_mut::<#bundle_type>(|i| {res.push(i);}); res};);
         new_stmts.push(new_stmt);
     }
 
@@ -116,11 +142,12 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     // set the name of the function to the constant "init_system" and make shure it always returns
     // "Systems"
-    func.sig.ident = syn::Ident::new("init_systems", proc_macro2::Span::call_site());
+    func.sig.ident = parse_quote!(init_systems);
     func.sig.output = parse_quote!(::scr_types::Systems);
 
     // add no_mangle attribute to preserve function name after compilation
     func.attrs.push(parse_quote!(#[no_mangle]));
 
+    panic!("tetest1233");
     quote!(#func).into()
 }
