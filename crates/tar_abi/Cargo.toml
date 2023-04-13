@@ -3,11 +3,6 @@ name = "tar_abi"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-proc-macro = true
-
 [dependencies]
-serde = "1"
-ron = "0.8.0"
-tar_types = { path = "../tar_types" }
-syn = { version = "1", features = ["full"] }
+scr_types = { path = "../scr_types" }
+libloading = "0.8.0"

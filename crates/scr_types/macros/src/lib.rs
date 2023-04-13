@@ -4,6 +4,32 @@ use syn::{parse_quote, punctuated::Punctuated};
 
 extern crate proc_macro;
 
+/// This macro specifies a system use it to create a sytem with either built in components or define your
+/// own coponents using the Component derive Macro. You also need to tell tarator you want to actually use
+/// the System using the InitSystems macro.
+///
+/// ## Example:
+/// ```rust
+/// #[derive(Component)]
+/// pub struct Item(String);
+///
+/// #[System(Update)]
+/// pub fn move_items(items: Vec<(Transform, Item)>) {
+///     for (transform, item) in items {
+///         let before = transform.pos;
+///         transform.pos.x += 1;
+///         let after = transform.pos;
+///         println!("moved {item} from {before} to {after}");
+///     }
+/// }
+///
+/// #[InitSystems]
+/// pub fn init() -> Systems {
+///     Systems::new()
+///         .add(move_items)
+/// }
+///
+/// ```
 #[proc_macro_attribute]
 #[allow(non_snake_case)]
 pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -19,7 +45,7 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let inputs = func.sig.inputs;
 
-    let arg: syn::FnArg = parse_quote!(world: ::tar_ecs::world::World);
+    let arg: syn::FnArg = parse_quote!(world: ::tar_ecs::prelude::World);
 
     func.sig.inputs = Punctuated::new();
     func.sig.inputs.push(arg);
@@ -53,6 +79,30 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
     quote!(#func).into()
 }
 
+/// This macro allows you to specify what systems you want to use and when you want them.
+///
+/// ## Example:
+/// ```rust
+/// #[derive(Component)]
+/// pub struct Item(String);
+///
+/// #[System(Update)]
+/// pub fn move_items(items: Vec<(Transform, Item)>) {
+///     for (transform, item) in items {
+///         let before = transform.pos;
+///         transform.pos.x += 1;
+///         let after = transform.pos;
+///         println!("moved {item} from {before} to {after}");
+///     }
+/// }
+///
+/// #[InitSystems]
+/// pub fn init() -> Systems {
+///     Systems::new()
+///         .add(move_items)
+/// }
+///
+/// ```
 #[proc_macro_attribute]
 #[allow(non_snake_case)]
 pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
@@ -66,7 +116,7 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     // set the name of the function to the constant "init_system" and make shure it always returns
     // "Systems"
-    func.sig.ident = syn::Ident::new("init_system", proc_macro2::Span::call_site());
+    func.sig.ident = syn::Ident::new("init_systems", proc_macro2::Span::call_site());
     func.sig.output = parse_quote!(::scr_types::Systems);
 
     // add no_mangle attribute to preserve function name after compilation
