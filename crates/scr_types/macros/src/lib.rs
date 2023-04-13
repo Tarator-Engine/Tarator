@@ -40,7 +40,7 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
         //     unreachable!()
         // };
 
-        let new_stmt: syn::Stmt = parse_quote!(let #pat = world.component_query_mut(););
+        let new_stmt: syn::Stmt = parse_quote!(let #pat = {let res = vec![]; world.component_query_mut(|i| {res.push(i);}); res});
         new_stmts.push(new_stmt);
     }
 
