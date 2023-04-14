@@ -13,7 +13,7 @@ pub struct GrayImg {
         serialize_with = "serialize_gray_image",
         deserialize_with = "deserialize_gray_image"
     )]
-    inner: GrayImage,
+    pub inner: GrayImage,
 }
 
 impl GrayImg {
@@ -28,7 +28,7 @@ pub struct RgbImg {
         serialize_with = "serialize_rgb_image",
         deserialize_with = "deserialize_rgb_image"
     )]
-    inner: RgbImage,
+    pub inner: RgbImage,
 }
 impl RgbImg {
     pub fn new(inner: RgbImage) -> Self {
@@ -42,7 +42,7 @@ pub struct RgbaImg {
         serialize_with = "serialize_rgba_image",
         deserialize_with = "deserialize_rgba_image"
     )]
-    inner: RgbaImage,
+    pub inner: RgbaImage,
 }
 impl RgbaImg {
     pub fn new(inner: RgbaImage) -> Self {

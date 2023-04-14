@@ -49,7 +49,7 @@ impl PbrMaterial {
                 RgbaTexture::from_image(
                     device,
                     queue,
-                    &DynamicImage::ImageRgba8(img),
+                    &DynamicImage::ImageRgba8(img.inner),
                     "base_color_texture",
                 )
             }),
@@ -57,7 +57,7 @@ impl PbrMaterial {
                 GrayTexture::from_image(
                     device,
                     queue,
-                    &DynamicImage::ImageLuma8(img),
+                    &DynamicImage::ImageLuma8(img.inner),
                     "metallic_texture",
                 )
             }),
@@ -66,7 +66,7 @@ impl PbrMaterial {
                 GrayTexture::from_image(
                     device,
                     queue,
-                    &DynamicImage::ImageLuma8(img),
+                    &DynamicImage::ImageLuma8(img.inner),
                     "roughness_texture",
                 )
             }),
@@ -90,7 +90,7 @@ impl NormalMap {
             texture: RgbaTexture::from_image(
                 device,
                 queue,
-                &DynamicImage::ImageRgb8(stored.texture),
+                &DynamicImage::ImageRgb8(stored.texture.inner),
                 "normal_texture",
             ),
             factor: stored.factor,
@@ -113,7 +113,7 @@ impl Occlusion {
             texture: GrayTexture::from_image(
                 device,
                 queue,
-                &DynamicImage::ImageLuma8(stored.texture),
+                &DynamicImage::ImageLuma8(stored.texture.inner),
                 "occlusion_texture",
             ),
             factor: stored.factor,
@@ -137,7 +137,7 @@ impl Emissive {
                 RgbaTexture::from_image(
                     device,
                     queue,
-                    &DynamicImage::ImageRgb8(img),
+                    &DynamicImage::ImageRgb8(img.inner),
                     "emissive_texture",
                 )
             }),
