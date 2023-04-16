@@ -45,7 +45,7 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let inputs = func.sig.inputs;
 
-    let arg: syn::FnArg = parse_quote!(world: ::tar_ecs::prelude::World);
+    let arg: syn::FnArg = parse_quote!(world: &mut ::tar_ecs::prelude::World);
 
     func.sig.inputs = Punctuated::new();
     func.sig.inputs.push(arg);
@@ -92,7 +92,7 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
             _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
         };
 
-        let new_stmt: syn::Stmt = parse_quote!(let #name = {let res = vec![]; world.component_query_mut::<#bundle_type>(|i| {res.push(i);}); res};);
+        let new_stmt: syn::Stmt = parse_quote!(let #name = {let mut res = vec![]; world.component_query_mut::<#bundle_type>(|i| {res.push(i.clone());}); res};);
         new_stmts.push(new_stmt);
     }
 
@@ -143,11 +143,11 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     // set the name of the function to the constant "init_system" and make shure it always returns
     // "Systems"
     func.sig.ident = parse_quote!(init_systems);
-    func.sig.output = parse_quote!(::scr_types::Systems);
+    func.sig.output = parse_quote!(-> ::scr_types::Systems);
 
     // add no_mangle attribute to preserve function name after compilation
-    func.attrs.push(parse_quote!(#[no_mangle]));
+    func.attrs =
+        syn::parse::Parser::parse_str(syn::Attribute::parse_outer, "#[no_mangle]").unwrap();
 
-    panic!("tetest1233");
     quote!(#func).into()
 }
