@@ -80,8 +80,6 @@ fn component_query() {
         ),
     );
 
-    world.free_unused_memory();
-
     fn check_component<T: Bundle>(world: &mut World, rec: usize) {
         let mut count = 0;
         world.component_query::<T>(|_| {
@@ -89,10 +87,39 @@ fn component_query() {
         });
         assert!(count == rec, "{}", count);
 
+        count = 0;
         world.component_query_mut::<T>(|_| {
             count += 1;
         });
-        assert!(count == rec * 2, "{}", count);
+        assert!(count == rec, "{}", count);
+
+        count = 0;
+        world.get_component_query::<T>().for_each(|_| count += 1);
+        assert!(count == rec, "{}", count);
+
+        count = 0;
+        world.get_component_query_mut::<T>().for_each(|_| count += 1);
+        assert!(count == rec, "{}", count);
+
+        count = 0;
+        let query = world.get_component_query::<T>();
+        let query_mut = world.get_component_query_mut::<T>();
+        world.component_query::<T>(|_| {
+            query.clone().for_each(|_| count += 1);
+            query_mut.clone().for_each(|_| count += 1);
+            count += 1;
+        });
+        assert!(count == 2*rec*rec+rec, "{}", count);
+
+        count = 0;
+        let query = world.get_component_query::<T>();
+        let query_mut = world.get_component_query_mut::<T>();
+        world.component_query_mut::<T>(|_| {
+            query.clone().for_each(|_| count += 1);
+            query_mut.clone().for_each(|_| count += 1);
+            count += 1;
+        });
+        assert!(count == 2*rec*rec+rec, "{}", count);
     }
 
     check_component::<Position>(&mut world, 7);
@@ -135,3 +162,4 @@ fn entity_unset() {
     assert!(world.entity_get::<Player, _>(entity, |_| {}).is_some());
     assert!(world.entity_get::<Label, _>(entity, |_| {}).is_none());
 }
+

@@ -8,7 +8,7 @@ use crate::{
         table::{ RowIndexer, ConstRowIndexer, Table, Indexer },
     },
     archetype::Archetypes,
-    type_info::{ Local, TypeInfo }
+    type_info::{ Local, TypeInfo }, query::{Query, QueryMut}
 };
 
 use std::sync::atomic::{ AtomicUsize, Ordering };
@@ -59,10 +59,10 @@ impl SparseSetIndex for WorldId {
 /// different threads, each with an unique [`WorldId`].
 #[derive(Debug)]
 pub struct World<TI: TypeInfo> {
-    id: WorldId,
-    archetypes: Archetypes,
-    entities: Entities,
-    type_info: TI
+    pub(crate) id: WorldId,
+    pub(crate) archetypes: Archetypes,
+    pub(crate) entities: Entities,
+    pub(crate) type_info: TI
 }
 
 impl<TI: TypeInfo> World<TI> {
@@ -403,7 +403,7 @@ impl<TI: TypeInfo> World<TI> {
         &mut self,
         mut func: impl for<'a> FnMut(T::Mut<'a>)
     ) {
-        let bundle_id = self.type_info.get_bundle_id_from::<T>().unwrap();
+        let bundle_id = self.type_info.init_bundle_from::<T>();
 
         self.archetypes.try_init(bundle_id, &self.type_info);
         let world: *mut Self = &mut *self;
@@ -440,7 +440,24 @@ impl<TI: TypeInfo> World<TI> {
         bundles
     }
 
-    /// SAFETY:
+    #[inline]
+    pub fn get_component_query<'a, T: Bundle>(&mut self) -> Query<'a, T, TI> {
+        let bundle_id = self.type_info.init_bundle_from::<T>();
+        self.archetypes.try_init(bundle_id, &self.type_info);
+
+        Query::new(bundle_id, self)
+    }
+
+    #[inline]
+    pub fn get_component_query_mut<'a, T: Bundle>(&mut self) -> QueryMut<'a, T, TI> {
+        let bundle_id = self.type_info.init_bundle_from::<T>();
+        self.archetypes.try_init(bundle_id, &self.type_info);
+
+        QueryMut::new(bundle_id, self)
+    }
+}
+
+impl<TI: TypeInfo> World<TI> {
     /// Not recommended to call if:
     /// - A: You're creating a lot of new Entities
     /// - B: You'll be changing a lot of component sets

@@ -232,7 +232,6 @@ unsafe impl Sync for Table {}
 pub trait Indexer: Sized {
     type Output;
 
-    unsafe fn new(row: usize, table: *mut Table) -> Self;
     fn get(&self, id: ComponentId) -> Option<Self::Output>;
     unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output;
     fn get_size(&self, id: ComponentId) -> Option<usize>;
@@ -244,15 +243,17 @@ pub struct RowIndexer {
     row: usize
 }
 
-impl Indexer for RowIndexer {
-    type Output = *mut u8;
-
+impl RowIndexer {
     #[inline]
-    unsafe fn new(row: usize, table: *mut Table) -> Self {
+    pub unsafe fn new(row: usize, table: *mut Table) -> Self {
         debug_assert!(row < (*table).store.len());
 
         Self { table, row }
     }
+}
+
+impl Indexer for RowIndexer {
+    type Output = *mut u8;
 
     #[inline]
     fn get(&self, id: ComponentId) -> Option<Self::Output> {
@@ -287,15 +288,17 @@ pub struct ConstRowIndexer {
     row: usize
 }
 
-impl Indexer for ConstRowIndexer {
-    type Output = *const u8;
-
+impl ConstRowIndexer {
     #[inline]
-    unsafe fn new(row: usize, table: *mut Table) -> Self {
+    pub unsafe fn new(row: usize, table: *const Table) -> Self {
         debug_assert!(row < (*table).store.len());
 
         Self { table, row }
     }
+}
+
+impl Indexer for ConstRowIndexer {
+    type Output = *const u8;
 
     #[inline]
     fn get(&self, id: ComponentId) -> Option<Self::Output> {
