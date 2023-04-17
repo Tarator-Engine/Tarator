@@ -20,7 +20,7 @@ pub use tar_types::EngineState;
 const SAFE_FRAC_PI_2: f32 = FRAC_2_PI - 0.0001;
 
 
-/// Takes a window event and a renderer and an event
+ /// Takes a window event and a renderer and an event
 fn input(
     event: &WindowEvent,
 ) {
