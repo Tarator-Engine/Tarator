@@ -4,6 +4,13 @@ pub use macros::{InitSystems, System};
 
 pub type System = fn(&mut tar_ecs::prelude::World);
 
+pub mod prelude {
+    pub use crate::components::*;
+    pub use crate::InitSystems;
+    pub use crate::System;
+    pub use crate::Systems;
+}
+
 #[repr(C)]
 pub struct Systems {
     /// list of systems with a function pointer and a bool indicating wether it depends on the

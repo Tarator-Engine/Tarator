@@ -78,21 +78,22 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         let bundle_type = match *pat.ty {
             syn::Type::Path(p) => {
-                let v: syn::Ident = parse_quote!(Vec);
+                let v: syn::Ident = parse_quote!(Query);
                 let last = p.path.segments.into_iter().last().unwrap();
                 if last.ident != v {
-                    panic!("queries should be of type: 'Vec<(Component1, Component2)>'")
+                    panic!("queries should be of type: 'Query<(Component1, Component2)>'")
                 };
 
                 match last.arguments {
                     syn::PathArguments::AngleBracketed(a) => a.args,
-                    _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
+                    _ => panic!("queries should be of type: 'Query<(Component1, Component2)>'"),
                 }
             }
-            _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
+            _ => panic!("queries should be of type: 'Query<(Component1, Component2)>'"),
         };
 
-        let new_stmt: syn::Stmt = parse_quote!(let #name = {let mut res = vec![]; world.component_query_mut::<#bundle_type>(|i| {res.push(i.clone());}); res};);
+        let new_stmt: syn::Stmt =
+            parse_quote!(let #name = world.get_component_query_mut::<#bundle_type>(););
         new_stmts.push(new_stmt);
     }
 
