@@ -146,8 +146,7 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     func.sig.output = parse_quote!(-> ::scr_types::Systems);
 
     // add no_mangle attribute to preserve function name after compilation
-    func.attrs =
-        syn::parse::Parser::parse_str(syn::Attribute::parse_outer, "#[no_mangle]").unwrap();
+    func.attrs.push(parse_quote!(#[no_mangle]));
 
     quote!(#func).into()
 }
