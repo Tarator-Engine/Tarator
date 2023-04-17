@@ -18,6 +18,7 @@ image = { version = "0.24", default-features = false, features = [
     "png",
     "jpeg",
 ] }
+encase = "0.5"
 
 tar_res = { path = "../tar_res" }
 tar_shader = { path = "../tar_shader" }

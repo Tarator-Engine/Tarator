@@ -1,6 +1,6 @@
 use winit::window::Window;
 
-use tar_shader::shader::{self, Vertex};
+use tar_shader::shader;
 
 pub struct RenderState {
     pub surface: wgpu::Surface,

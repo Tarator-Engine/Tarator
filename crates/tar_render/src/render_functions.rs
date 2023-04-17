@@ -87,7 +87,7 @@ pub async fn new_state(window: Window) -> RenderState {
         // All textures are stored as 3D, we represent our 2D texture
         // by setting depth to 1.
         size: texture_size,
-        mip_level_count: 1, // We'll talk about this a little later
+        mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         // Most images are stored using sRGB so we need to reflect that here.
@@ -186,18 +186,6 @@ pub async fn new_state(window: Window) -> RenderState {
         multiview: None,
     });
 
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(VERTICES),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-
-    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(INDICES),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-
     RenderState {
         window,
         surface,
@@ -205,11 +193,6 @@ pub async fn new_state(window: Window) -> RenderState {
         queue,
         config,
         size,
-        render_pipeline: pipeline,
-        vertex_buffer,
-        index_buffer,
-        num_vertices: VERTICES.len() as u32,
-        num_indices: INDICES.len() as u32,
         diffuse_bind_group,
     }
 }

@@ -6,6 +6,8 @@
     Copy,
     Clone,
     PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
     encase::ShaderType,
     serde::Serialize,
     serde::Deserialize
@@ -16,26 +18,72 @@ pub struct UniformData {
     pub view_proj: [[f32; 4]; 4],
     pub object_transform: [[f32; 4]; 4],
 }
+const _: () = assert!(
+    std::mem::size_of:: < UniformData > () == 208,
+    "size of UniformData does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(UniformData, ambient) == 0,
+    "offset of UniformData.ambient does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(UniformData, view) == 16,
+    "offset of UniformData.view does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(UniformData, view_proj) == 80,
+    "offset of UniformData.view_proj does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(UniformData, object_transform) == 144,
+    "offset of UniformData.object_transform does not match WGSL"
+);
 #[repr(C)]
 #[derive(
     Debug,
     Copy,
     Clone,
     PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
     encase::ShaderType,
     serde::Serialize,
     serde::Deserialize
 )]
 pub struct DirectionalLight {
     pub color: [f32; 3],
+    pub padding: f32,
     pub direction: [f32; 3],
+    pub padding2: f32,
 }
+const _: () = assert!(
+    std::mem::size_of:: < DirectionalLight > () == 32,
+    "size of DirectionalLight does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(DirectionalLight, color) == 0,
+    "offset of DirectionalLight.color does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(DirectionalLight, padding) == 12,
+    "offset of DirectionalLight.padding does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(DirectionalLight, direction) == 16,
+    "offset of DirectionalLight.direction does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(DirectionalLight, padding2) == 28,
+    "offset of DirectionalLight.padding2 does not match WGSL"
+);
 #[repr(C)]
 #[derive(
     Debug,
     Copy,
     Clone,
     PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
     encase::ShaderType,
     serde::Serialize,
     serde::Deserialize
@@ -50,6 +98,8 @@ pub struct PointLight {
     Copy,
     Clone,
     PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
     encase::ShaderType,
     serde::Serialize,
     serde::Deserialize
@@ -71,6 +121,8 @@ pub struct PixelData {
     Copy,
     Clone,
     PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
     encase::ShaderType,
     serde::Serialize,
     serde::Deserialize
@@ -84,12 +136,46 @@ pub struct MaterialData {
     pub flags: u32,
     pub texture_enable: u32,
 }
+const _: () = assert!(
+    std::mem::size_of:: < MaterialData > () == 48,
+    "size of MaterialData does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, albedo) == 0,
+    "offset of MaterialData.albedo does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, emissive) == 16,
+    "offset of MaterialData.emissive does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, roughness) == 28,
+    "offset of MaterialData.roughness does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, metallic) == 32,
+    "offset of MaterialData.metallic does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, reflectance) == 36,
+    "offset of MaterialData.reflectance does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, flags) == 40,
+    "offset of MaterialData.flags does not match WGSL"
+);
+const _: () = assert!(
+    memoffset::offset_of!(MaterialData, texture_enable) == 44,
+    "offset of MaterialData.texture_enable does not match WGSL"
+);
 #[repr(C)]
 #[derive(
     Debug,
     Copy,
     Clone,
     PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
     encase::ShaderType,
     serde::Serialize,
     serde::Deserialize
@@ -180,10 +266,10 @@ pub mod bind_groups {
     pub struct BindGroup1(wgpu::BindGroup);
     pub struct BindGroupLayout1<'a> {
         pub roughness_tex: &'a wgpu::TextureView,
-        pub normal_tex: &'a wgpu::TextureView,
         pub albedo_tex: &'a wgpu::TextureView,
+        pub normal_tex: &'a wgpu::TextureView,
         pub metallic_tex: &'a wgpu::TextureView,
-        pub reflectance_tex: &'a wgpu::TextureView,
+        pub emissive_tex: &'a wgpu::TextureView,
         pub material_uniform: wgpu::BufferBinding<'a>,
     }
     const LAYOUT_DESCRIPTOR1: wgpu::BindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
@@ -202,7 +288,7 @@ pub mod bind_groups {
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 2,
+                binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float {
@@ -214,7 +300,7 @@ pub mod bind_groups {
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 1,
+                binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float {
@@ -279,15 +365,15 @@ pub mod bind_groups {
                                 ),
                             },
                             wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: wgpu::BindingResource::TextureView(
-                                    bindings.normal_tex,
-                                ),
-                            },
-                            wgpu::BindGroupEntry {
                                 binding: 1,
                                 resource: wgpu::BindingResource::TextureView(
                                     bindings.albedo_tex,
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: wgpu::BindingResource::TextureView(
+                                    bindings.normal_tex,
                                 ),
                             },
                             wgpu::BindGroupEntry {
@@ -299,7 +385,7 @@ pub mod bind_groups {
                             wgpu::BindGroupEntry {
                                 binding: 5,
                                 resource: wgpu::BindingResource::TextureView(
-                                    bindings.reflectance_tex,
+                                    bindings.emissive_tex,
                                 ),
                             },
                             wgpu::BindGroupEntry {
@@ -318,58 +404,9 @@ pub mod bind_groups {
             render_pass.set_bind_group(1, &self.0, &[]);
         }
     }
-    pub struct BindGroup2(wgpu::BindGroup);
-    pub struct BindGroupLayout2<'a> {
-        pub emissive_tex: &'a wgpu::TextureView,
-    }
-    const LAYOUT_DESCRIPTOR2: wgpu::BindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 6,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float {
-                        filterable: true,
-                    },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-        ],
-    };
-    impl BindGroup2 {
-        pub fn get_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-            device.create_bind_group_layout(&LAYOUT_DESCRIPTOR2)
-        }
-        pub fn from_bindings(device: &wgpu::Device, bindings: BindGroupLayout2) -> Self {
-            let bind_group_layout = device.create_bind_group_layout(&LAYOUT_DESCRIPTOR2);
-            let bind_group = device
-                .create_bind_group(
-                    &wgpu::BindGroupDescriptor {
-                        layout: &bind_group_layout,
-                        entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 6,
-                                resource: wgpu::BindingResource::TextureView(
-                                    bindings.emissive_tex,
-                                ),
-                            },
-                        ],
-                        label: None,
-                    },
-                );
-            Self(bind_group)
-        }
-        pub fn set<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {
-            render_pass.set_bind_group(2, &self.0, &[]);
-        }
-    }
     pub struct BindGroups<'a> {
         pub bind_group0: &'a BindGroup0,
         pub bind_group1: &'a BindGroup1,
-        pub bind_group2: &'a BindGroup2,
     }
     pub fn set_bind_groups<'a>(
         pass: &mut wgpu::RenderPass<'a>,
@@ -377,7 +414,6 @@ pub mod bind_groups {
     ) {
         bind_groups.bind_group0.set(pass);
         bind_groups.bind_group1.set(pass);
-        bind_groups.bind_group2.set(pass);
     }
 }
 pub mod vertex {
@@ -404,7 +440,7 @@ pub mod vertex {
                 shader_location: 3,
             },
         ];
-        pub fn vertex_buffer_layout(
+        pub const fn vertex_buffer_layout(
             step_mode: wgpu::VertexStepMode,
         ) -> wgpu::VertexBufferLayout<'static> {
             wgpu::VertexBufferLayout {
@@ -413,6 +449,28 @@ pub mod vertex {
                 attributes: &super::Vertex::VERTEX_ATTRIBUTES,
             }
         }
+    }
+}
+pub const ENTRY_VS_MAIN: &str = "vs_main";
+pub const ENTRY_FS_MAIN: &str = "fs_main";
+pub struct VertexEntry<const N: usize> {
+    entry_point: &'static str,
+    buffers: [wgpu::VertexBufferLayout<'static>; N],
+}
+pub fn vertex_state<'a, const N: usize>(
+    module: &'a wgpu::ShaderModule,
+    entry: &'a VertexEntry<N>,
+) -> wgpu::VertexState<'a> {
+    wgpu::VertexState {
+        module,
+        entry_point: entry.entry_point,
+        buffers: &entry.buffers,
+    }
+}
+pub fn vs_main_entry(vertex: wgpu::VertexStepMode) -> VertexEntry<1> {
+    VertexEntry {
+        entry_point: ENTRY_VS_MAIN,
+        buffers: [Vertex::vertex_buffer_layout(vertex)],
     }
 }
 pub fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
@@ -431,7 +489,6 @@ pub fn create_pipeline_layout(device: &wgpu::Device) -> wgpu::PipelineLayout {
                 bind_group_layouts: &[
                     &bind_groups::BindGroup0::get_bind_group_layout(device),
                     &bind_groups::BindGroup1::get_bind_group_layout(device),
-                    &bind_groups::BindGroup2::get_bind_group_layout(device),
                 ],
                 push_constant_ranges: &[],
             },

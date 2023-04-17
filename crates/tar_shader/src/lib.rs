@@ -18,13 +18,3 @@ impl From<easy_gltf::model::Vertex> for Vertex {
         }
     }
 }
-
-impl Vertex {
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::VERTEX_ATTRIBUTES,
-        }
-    }
-}

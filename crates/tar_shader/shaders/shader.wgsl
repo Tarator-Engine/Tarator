@@ -14,7 +14,9 @@ struct UniformData {
 
 struct DirectionalLight {
     color: vec3<f32>,
+    padding: f32,
     direction: vec3<f32>,
+    padding2: f32,
 }
 
 struct PointLight {
@@ -77,7 +79,8 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
     // ----- Metallic -----
 
     if extract_texture_enable(material.texture_enable, TEXTURE_METALLIC) {
-        // TODO!: how is the data structured? get data
+        // TODO!: is the data structured like this? 
+        pixel.metallic = get_texture(TEXTURE_METALLIC, coords);
     } else {
         pixel.metallic = 1.0;
     }
@@ -89,7 +92,9 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
     var perceptual_roughness: f32;
 
     if extract_texture_enable(material.texture_enable, TEXTURE_ROUGHNESS) {
-        // TODO!: how is the data structured? get data
+        // TODO!: is the data structured like this? 
+        perceptual_roughness = get_texture(TEXTURE_ROUGHNESS, coords);
+
     } else {
         perceptual_roughness = 1.0;
     }
@@ -99,7 +104,8 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
     // ----- Reflectance -----
 
     if extract_texture_enable(material.texture_enable, TEXTURE_REFLECTANCE) {
-        // TODO!: how is the data structured? get data
+        // TODO!: is the data structured like this? 
+        pixel.reflectance = get_texture(TEXTURE_REFLECTANCE, coords);
     } else {
         pixel.reflectance = 1.0;
     }
@@ -109,7 +115,8 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
     // ----- Emissive -----
 
     if extract_texture_enable(material.texture_enable, TEXTURE_EMISSIVE) {
-        // TODO!: how is the data structured? get data
+        // TODO!: is the data structured like this? 
+        pixel.emissive = get_texture(TEXTURE_EMISSIVE, coords);
     } else {
         pixel.emissive = vec3<f32>(1.0);
     }
@@ -238,9 +245,9 @@ fn get_texture(texture: u32, coords: vec2<f32>) -> vec4<f32> {
         case 0x0000008u: {
             return textureSample(metallic_tex, primary_sampler, coords);
         }
-        case 0x0000010u: {
-            return textureSample(reflectance_tex, primary_sampler, coords);
-        }
+        // case 0x0000010u: {
+        //     return textureSample(reflectance_tex, primary_sampler, coords);
+        // }
         case 0x0000020u: {
             return textureSample(emissive_tex, primary_sampler, coords);
         }
@@ -322,9 +329,9 @@ var normal_tex: texture_2d<f32>;
 var roughness_tex: texture_2d<f32>;
 @group(1) @binding(4)
 var metallic_tex: texture_2d<f32>;
+// @group(1) @binding(5)
+// var reflectance_tex: texture_2d<f32>;
 @group(1) @binding(5)
-var reflectance_tex: texture_2d<f32>;
-@group(2) @binding(6)
 var emissive_tex: texture_2d<f32>;
 
 

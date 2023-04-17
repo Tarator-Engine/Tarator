@@ -16,6 +16,7 @@ impl Model {
         stored: tar_res::model::Model,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        target_format: wgpu::TextureFormat,
     ) -> Self {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -40,7 +41,8 @@ impl Model {
 
         let num_vertices = stored.vertices.len() as u32;
 
-        let material = material::Material::from_stored(stored.material, device, queue);
+        let material =
+            material::Material::from_stored(stored.material, device, queue, target_format);
 
         Self {
             vertex_buffer,

@@ -19,6 +19,7 @@ fn load_shader(name: &str) {
         WriteOptions {
             derive_encase: true,
             derive_serde: true,
+            derive_bytemuck: true,
             ..Default::default()
         },
     )
