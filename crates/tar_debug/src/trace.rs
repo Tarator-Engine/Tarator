@@ -53,33 +53,53 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        let Ok(s) = serde_json::to_string(&self.result) else {
-            TRACER.lock().current = ptr::null_mut();
-            return;
-        };
+        'work: {
+            let Ok(s) = serde_json::to_string(&self.result) else {
+                break 'work;
+            };
 
-        let Ok(mut f) = fs::File::create(self.path) else {
-            TRACER.lock().current = ptr::null_mut();
-            return;
-        };
+            let Ok(mut f) = fs::File::create(self.path) else {
+                break 'work;
+            };
 
-        f.write_all(s.as_bytes()).unwrap_or_else(|err| println!("{}", err));
+            f.write_all(s.as_bytes()).unwrap_or_else(|err| println!("{}", err));
+            break 'work;
+        }
 
         TRACER.lock().current = ptr::null_mut();
     }
 }
 
 
+#[derive(Copy, Clone)]
+pub enum TraceType {
+    Block,
+    Function,
+    Stmt
+}
+
+impl TraceType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Block => "Block",
+            Self::Function => "Function",
+            Self::Stmt => "Statement"
+        }
+    }
+}
+
+
 pub struct Trace {
     name: &'static str,
-    ts: time::Instant
+    ts: time::Instant,
+    ty: TraceType
 }
 
 impl Trace {
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: &'static str, ty: TraceType) -> Self {
         Self {
-            name,
-            ts: time::Instant::now()
+            name, ty,
+            ts: time::Instant::now(),
         }
     }
 
@@ -105,6 +125,7 @@ impl Drop for Trace {
             dur: self.ts.elapsed().as_micros(),
             pid: process::id(),
             tid: thread_id::get(),
+            ty: self.ty
         });
     }
 }
@@ -140,6 +161,7 @@ struct TraceEvent {
     dur: u128,
     pid: u32,
     tid: usize,
+    ty: TraceType
 }
 
 impl Serialize for TraceEvent {
@@ -149,7 +171,7 @@ impl Serialize for TraceEvent {
     {
         let mut s = serializer.serialize_struct("TraceEvent", 7)?;
         s.serialize_field("name", &self.name)?;
-        s.serialize_field("cat", &"function")?;
+        s.serialize_field("cat", self.ty.as_str())?;
         s.serialize_field("ph", &"X")?;
         s.serialize_field("ts", &self.ts)?;
         s.serialize_field("dur", &self.dur)?;

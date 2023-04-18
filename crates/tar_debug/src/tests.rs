@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 #[test]
 fn visualizer() {
-    let session = Session::new("./visualizer.json");
+    let session = Session::new("./target/visualizer.json");
     _500();
     _500_200_100();
     _50_and_600_240_90();
