@@ -1,27 +1,30 @@
-use std::marker::PhantomData;
+use std::{ ptr, marker::PhantomData };
 
 use crate::{
     world::World,
     type_info::TypeInfo,
     bundle::{ Bundle, BundleId },
-    store::table::{ Indexer, RowIndexer, ConstRowIndexer }
+    store::table::{ Indexer, RowIndexer, ConstRowIndexer, Table }
 };
 
 
 pub struct Query<'a, T: Bundle, TI: TypeInfo> {
-    world: *const World<TI>,
+    world: &'a World<TI>,
+    table: *const Table,
     bundle_ids: Vec<BundleId>,
-    bundle_id: BundleId,
     index: usize,
     _phantom: PhantomData<T::Ref<'a>>
 }
 
 impl<'a, T: Bundle, TI: TypeInfo> Query<'a, T, TI> {
-    pub fn new(bundle_id: BundleId, world: *const World<TI>) -> Self {
+    pub fn new(bundle_id: BundleId, world: &'a World<TI>) -> Self {
+        let mut bundle_ids = world.archetypes.get(bundle_id).unwrap().parents().clone();
+        bundle_ids.push(bundle_id);
+
         Self {
             world,
-            bundle_ids: unsafe { (*world).archetypes.get(bundle_id).unwrap().parents().clone() },
-            bundle_id,
+            bundle_ids,
+            table: ptr::null(),
             index: 0,
             _phantom: PhantomData
         }
@@ -32,50 +35,45 @@ impl<'a, T: Bundle, TI: TypeInfo> Iterator for Query<'a, T, TI> {
     type Item = T::Ref<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut table = unsafe { (*self.world).archetypes.get(self.bundle_id)?.table() };
-        
-        while self.index >= table.len() {
+        while self.table.is_null() || self.index >= unsafe { (*self.table).len() } {
             self.index = 0;
-            self.bundle_id = self.bundle_ids.pop()?; 
-            table = unsafe { (*self.world).archetypes.get(self.bundle_id)?.table() };
+            self.table = self.world.archetypes.get(self.bundle_ids.pop()?)?.table();
         }
 
-        let indexer = unsafe { ConstRowIndexer::new(self.index, table) };
+        let indexer = unsafe { ConstRowIndexer::new(self.index, self.table) };
         self.index += 1;
 
-        return unsafe { T::from_components_as_ref(&(*self.world).type_info, &mut |id| {
-            indexer.get(id)
-        }) };
+        return unsafe { T::from_components_as_ref(&(*self.world).type_info, &mut |id| indexer.get(id) ) };
     }
 }
 
 impl<'a, T: Bundle, TI: TypeInfo> Clone for Query<'a, T, TI> {
     fn clone(&self) -> Self {
         Self {
-            world: self.world,
             bundle_ids: self.bundle_ids.clone(),
-            bundle_id: self.bundle_id,
-            index: self.index,
-            _phantom: PhantomData
+            ..*self
         } 
     }
 }
 
 
 pub struct QueryMut<'a, T: Bundle, TI: TypeInfo> {
-    world: *mut World<TI>,
+    world: &'a mut World<TI>,
     bundle_ids: Vec<BundleId>,
-    bundle_id: BundleId,
+    table: *mut Table,
     index: usize,
     _phantom: PhantomData<T::Mut<'a>>
 }
 
 impl<'a, T: Bundle, TI: TypeInfo> QueryMut<'a, T, TI> {
-    pub fn new(bundle_id: BundleId, world: *mut World<TI>) -> Self {
+    pub fn new(bundle_id: BundleId, world: &'a mut World<TI>) -> Self {
+        let mut bundle_ids = world.archetypes.get_mut(bundle_id).unwrap().parents().clone();
+        bundle_ids.push(bundle_id);
+
         Self {
             world,
-            bundle_ids: unsafe { (*world).archetypes.get(bundle_id).unwrap().parents().clone() },
-            bundle_id,
+            bundle_ids,
+            table: ptr::null_mut(), 
             index: 0,
             _phantom: PhantomData
         }
@@ -86,32 +84,15 @@ impl<'a, T: Bundle, TI: TypeInfo> Iterator for QueryMut<'a, T, TI> {
     type Item = T::Mut<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut table = unsafe { (*self.world).archetypes.get_mut(self.bundle_id)?.table_mut() };
-        
-        while self.index >= table.len() {
+        while self.table.is_null() || self.index >= unsafe { (*self.table).len() } {
             self.index = 0;
-            self.bundle_id = self.bundle_ids.pop()?; 
-            table = unsafe { (*self.world).archetypes.get_mut(self.bundle_id)?.table_mut() };
+            self.table = self.world.archetypes.get_mut(self.bundle_ids.pop()?)?.table_mut();
         }
 
-        let indexer = unsafe { RowIndexer::new(self.index, table) };
+        let indexer = unsafe { RowIndexer::new(self.index, self.table) };
         self.index += 1;
 
-        return unsafe { T::from_components_as_mut(&(*self.world).type_info, &mut |id| {
-            indexer.get(id)
-        }) };
-    }
-}
-
-impl<'a, T: Bundle, TI: TypeInfo> Clone for QueryMut<'a, T, TI> {
-    fn clone(&self) -> Self {
-        Self {
-            world: self.world,
-            bundle_ids: self.bundle_ids.clone(),
-            bundle_id: self.bundle_id,
-            index: self.index,
-            _phantom: PhantomData
-        }
+        return unsafe { T::from_components_as_mut(&(*self.world).type_info, &mut |id| indexer.get(id) ) };
     }
 }
 

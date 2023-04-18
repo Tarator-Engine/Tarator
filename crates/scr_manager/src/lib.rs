@@ -7,7 +7,7 @@ use scr_types::{components::Transform, Systems};
 #[no_mangle]
 pub fn run_systems(systems: &Systems) {
     let mut world = tar_ecs::prelude::World::new();
-    let i = 100;
+    let i = 10000;
 
     for i in 0..i {
         let mut t = Transform::default();

@@ -441,7 +441,7 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn get_component_query<'a, T: Bundle>(&mut self) -> Query<'a, T, TI> {
+    pub fn get_component_query<T: Bundle>(&mut self) -> Query<T, TI> {
         let bundle_id = self.type_info.init_bundle_from::<T>();
         self.archetypes.try_init(bundle_id, &self.type_info);
 
@@ -449,7 +449,7 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn get_component_query_mut<'a, T: Bundle>(&mut self) -> QueryMut<'a, T, TI> {
+    pub fn get_component_query_mut<T: Bundle>(&mut self) -> QueryMut<T, TI> {
         let bundle_id = self.type_info.init_bundle_from::<T>();
         self.archetypes.try_init(bundle_id, &self.type_info);
 

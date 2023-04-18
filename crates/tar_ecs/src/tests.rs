@@ -100,26 +100,6 @@ fn component_query() {
         count = 0;
         world.get_component_query_mut::<T>().for_each(|_| count += 1);
         assert!(count == rec, "{}", count);
-
-        count = 0;
-        let query = world.get_component_query::<T>();
-        let query_mut = world.get_component_query_mut::<T>();
-        world.component_query::<T>(|_| {
-            query.clone().for_each(|_| count += 1);
-            query_mut.clone().for_each(|_| count += 1);
-            count += 1;
-        });
-        assert!(count == 2*rec*rec+rec, "{}", count);
-
-        count = 0;
-        let query = world.get_component_query::<T>();
-        let query_mut = world.get_component_query_mut::<T>();
-        world.component_query_mut::<T>(|_| {
-            query.clone().for_each(|_| count += 1);
-            query_mut.clone().for_each(|_| count += 1);
-            count += 1;
-        });
-        assert!(count == 2*rec*rec+rec, "{}", count);
     }
 
     check_component::<Position>(&mut world, 7);
