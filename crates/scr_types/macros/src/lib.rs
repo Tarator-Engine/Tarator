@@ -76,24 +76,33 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
             _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
         };
 
+        let is_mut: bool;
+
         let bundle_type = match *pat.ty {
             syn::Type::Path(p) => {
-                let v: syn::Ident = parse_quote!(Query);
                 let last = p.path.segments.into_iter().last().unwrap();
-                if last.ident != v {
-                    panic!("queries should be of type: 'Query<(Component1, Component2)>'")
-                };
+
+                match last.ident.to_string().as_str() {
+                    "Query" => is_mut = false,
+                    "QueryMut" => is_mut = true,
+                    _ => panic!("only Query and QueryMut are supported as function parameters"),
+                }
 
                 match last.arguments {
                     syn::PathArguments::AngleBracketed(a) => a.args,
-                    _ => panic!("queries should be of type: 'Query<(Component1, Component2)>'"),
+                    _ => panic!(
+                        "queries should have a structure like: 'Query<(Component1, Component2)>'"
+                    ),
                 }
             }
-            _ => panic!("queries should be of type: 'Query<(Component1, Component2)>'"),
+            _ => panic!("queries should have a structure like: 'Query<(Component1, Component2)>'"),
         };
 
-        let new_stmt: syn::Stmt =
-            parse_quote!(let #name = world.get_component_query_mut::<#bundle_type>(););
+        let new_stmt: syn::Stmt = if is_mut {
+            parse_quote!(let #name = world.get_component_query_mut::<#bundle_type>();)
+        } else {
+            parse_quote!(let #name = world.get_component_query::<#bundle_type>();)
+        };
         new_stmts.push(new_stmt);
     }
 
