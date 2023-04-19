@@ -23,7 +23,7 @@ impl syn::parse::Parse for TraceInput {
 
 
 #[proc_macro_attribute]
-pub fn trace(attrs: TokenStream, stream: TokenStream) -> TokenStream {
+pub fn trace(attr: TokenStream, stream: TokenStream) -> TokenStream {
     let let_ident = random_ident("trace");
 
     match syn::parse_macro_input!(stream as TraceInput) {
@@ -57,7 +57,7 @@ pub fn trace(attrs: TokenStream, stream: TokenStream) -> TokenStream {
             }
         }
         TraceInput::Block(syn::Block { stmts, .. }) => {
-            let name = syn::parse_macro_input!(attrs as syn::LitStr);
+            let name = syn::parse_macro_input!(attr as syn::LitStr);
             let len = stmts.len();
 
             assert!(len > 0, "Empty Block");
@@ -86,7 +86,7 @@ pub fn trace(attrs: TokenStream, stream: TokenStream) -> TokenStream {
             }
         }
         TraceInput::Stmt(stmt) => {
-            let name = syn::parse_macro_input!(attrs as syn::LitStr);
+            let name = syn::parse_macro_input!(attr as syn::LitStr);
             
             quote::quote! {
                 let #let_ident = Trace::new(#name, TraceType::Stmt);
@@ -98,11 +98,47 @@ pub fn trace(attrs: TokenStream, stream: TokenStream) -> TokenStream {
 }
 
 
+#[proc_macro_attribute]
+pub fn session(attr: TokenStream, stream: TokenStream) -> TokenStream {
+    let file_name = syn::parse_macro_input!(attr as syn::LitStr);
+    let syn::ItemFn { attrs, vis, sig, block } = syn::parse_macro_input!(stream as syn::ItemFn);
+
+    let len = block.stmts.len();
+
+    assert!(len > 0, "Empty Function");
+
+    let stmts = &block.stmts[..len-1];
+    let last = &block.stmts[len-1];
+    let let_ident = random_ident("session");
+
+    if should_be_last_stmt(last) {
+        quote::quote! {
+            #(#attrs)* #vis #sig {
+                let #let_ident = Session::new(#file_name);
+                #(#stmts)*
+                #let_ident.end();
+                #last
+            }
+        }
+    } else {
+        quote::quote! {
+            #(#attrs)* #vis #sig {
+                let #let_ident = Session::new(#file_name);
+                #(#stmts)*
+                #last
+                #let_ident.end();
+            }
+        }
+    }.into()
+}
+
+
 #[inline]
 fn should_be_last_stmt(last: &syn::Stmt) -> bool {
     match last {
         syn::Stmt::Local(_) => true,
-        syn::Stmt::Expr(expr) => match expr {
+        syn::Stmt::Expr(_) => true,
+        syn::Stmt::Semi(expr, _) => match expr {
             syn::Expr::Return(_) => true,
             _ => false
         }

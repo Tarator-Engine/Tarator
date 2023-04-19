@@ -3,6 +3,8 @@ use std::{ptr, fs, io::Write, time, process};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use parking_lot::Mutex;
 
+/// TODO: Dead-locks are occuring, even in `cargo test`. Run `cargo test -- --test-threads=1` to
+/// test without dead-lock
 static TRACER: Mutex<Tracer> = Mutex::new(Tracer::new());
 
 struct Tracer {
