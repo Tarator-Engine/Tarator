@@ -1,9 +1,10 @@
-use cgmath::*;
+use cgmath::{perspective, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3};
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
-use tar_res::{CameraParams, Mat4, Vec3};
+use tar_res::CameraParams;
+use scr_types::prims::{Mat4, Vec3};
 use winit::dpi::PhysicalPosition;
-use winit::event::*;
+use winit::event::{ElementState, MouseScrollDelta, VirtualKeyCode};
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -15,7 +16,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
-/// The WgpuCameraUniform is the uniform for the camera in Wgpu
+/// The `WgpuCameraUniform` is the uniform for the camera in Wgpu
 /// this means it is updated every frame (or when a change happened)
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -25,6 +26,7 @@ pub struct CameraUniform {
 }
 
 impl CameraUniform {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             view_position: [0.0; 4],
@@ -45,12 +47,14 @@ pub struct RawCamera {
 }
 
 impl RawCamera {
+    #[must_use]
     pub fn params(&self) -> CameraParams {
         let a: f32 = self.proj.aspect;
         let y: f32 = self.proj.fovy.0;
         let n: f32 = self.proj.znear;
         let pos = self.cam.position;
-        let cam_params = CameraParams {
+
+        CameraParams {
             position: Vec3 {
                 x: pos.x,
                 y: pos.y,
@@ -75,9 +79,7 @@ impl RawCamera {
                 -2.0 * n,
                 0.0,
             ),
-        };
-
-        cam_params
+        }
     }
 }
 
@@ -107,6 +109,7 @@ impl IntCamera {
         }
     }
 
+    #[must_use]
     pub fn calc_matrix(&self) -> Matrix4<f32> {
         let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
@@ -140,6 +143,7 @@ impl Projection {
         self.aspect = width as f32 / height as f32;
     }
 
+    #[must_use]
     pub fn calc_matrix(&self) -> Matrix4<f32> {
         OPENGL_TO_WGPU_MATRIX * perspective(self.fovy, self.aspect, self.znear, self.zfar)
     }
@@ -161,6 +165,7 @@ pub struct CameraController {
 }
 
 impl CameraController {
+    #[must_use]
     pub fn new(speed: f32, sensitivity: f32) -> Self {
         Self {
             amount_left: 0.0,
@@ -179,32 +184,40 @@ impl CameraController {
 
     pub fn process_keyboard(&mut self, key: VirtualKeyCode, state: ElementState) -> bool {
         let amount = if state == ElementState::Pressed {
+            println!("pressed");
             1.0
         } else {
+            println!("released");
             0.0
         };
         match key {
             VirtualKeyCode::W | VirtualKeyCode::Up => {
+                println!("w");
                 self.amount_forward = amount;
                 true
             }
             VirtualKeyCode::S | VirtualKeyCode::Down => {
+                println!("s");
                 self.amount_backward = amount;
                 true
             }
             VirtualKeyCode::A | VirtualKeyCode::Left => {
+                println!("a");
                 self.amount_left = amount;
                 true
             }
             VirtualKeyCode::D | VirtualKeyCode::Right => {
+                println!("d");
                 self.amount_right = amount;
                 true
             }
             VirtualKeyCode::Space => {
+                println!("up");
                 self.amount_up = amount;
                 true
             }
             VirtualKeyCode::LShift => {
+                println!("down");
                 self.amount_down = amount;
                 true
             }

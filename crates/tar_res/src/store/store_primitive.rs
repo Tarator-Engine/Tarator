@@ -61,9 +61,8 @@ impl StorePrimitive {
         while let Some(tex_coords) = reader.read_tex_coords(tex_coord_set) {
             if tex_coord_set > 1 {
                 println!(
-                    "Ignoring texture coordinate set {}, \
-                    only supporting 2 sets at the moment. (mesh: {}, primitive: {})",
-                    tex_coord_set, mesh_index, primitive_index
+                    "Ignoring texture coordinate set {tex_coord_set}, \
+                    only supporting 2 sets at the moment. (mesh: {mesh_index}, primitive: {primitive_index})"
                 );
                 tex_coord_set += 1;
                 continue;
@@ -82,39 +81,36 @@ impl StorePrimitive {
         if let Some(colors) = reader.read_colors(0) {
             let colors = colors.into_rgba_f32();
             for (i, c) in colors.enumerate() {
-                vertices[i].color_0 = c.into();
+                vertices[i].color_0 = c;
             }
             shader_flags |= ShaderFlags::HAS_COLORS;
         }
 
         if reader.read_colors(1).is_some() {
-            println!("Ignoring further color attributes, only supporting COLOR_0. (mesh: {}, primitive: {})",
-                mesh_index, primitive_index);
+            println!("Ignoring further color attributes, only supporting COLOR_0. (mesh: {mesh_index}, primitive: {primitive_index})");
         }
 
         if let Some(joints) = reader.read_joints(0) {
             for (i, joint) in joints.into_u16().enumerate() {
                 vertices[i].joints_0 = [
-                    joint[0] as u32,
-                    joint[1] as u32,
-                    joint[2] as u32,
-                    joint[3] as u32,
+                    u32::from(joint[0]),
+                    u32::from(joint[1]),
+                    u32::from(joint[2]),
+                    u32::from(joint[3]),
                 ];
             }
         }
         if reader.read_joints(1).is_some() {
-            println!("Ignoring further joint attributes, only supporting JOINTS_0. (mesh: {}, primitive: {})",
-                mesh_index, primitive_index);
+            println!("Ignoring further joint attributes, only supporting JOINTS_0. (mesh: {mesh_index}, primitive: {primitive_index})");
         }
 
         if let Some(weights) = reader.read_weights(0) {
             for (i, weights) in weights.into_f32().enumerate() {
-                vertices[i].weights_0 = weights.into();
+                vertices[i].weights_0 = weights;
             }
         }
         if reader.read_weights(1).is_some() {
-            println!("Ignoring further weight attributes, only supporting WEIGHTS_0. (mesh: {}, primitive: {})",
-                mesh_index, primitive_index);
+            println!("Ignoring further weight attributes, only supporting WEIGHTS_0. (mesh: {mesh_index}, primitive: {primitive_index})");
         }
 
         let indices = reader
@@ -127,8 +123,7 @@ impl StorePrimitive {
 
         let material_name = g_material
             .name()
-            .map(|s| s.into())
-            .unwrap_or(object_name.clone() + "-material");
+            .map_or(object_name.clone() + "-material", std::convert::Into::into);
         let mat = StoreMaterial::from_gltf(
             &g_material,
             textures,

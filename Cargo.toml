@@ -15,7 +15,13 @@ members = [
   "crates/tar_gui",
   "crates/tar_types",
   "crates/tar_debug"
+  "crates/tar_types",
+  "crates/tar_abi",
+  "crates/scr_types",
+  "crates/scr_types/macros",
+  "crates/scr_manager"
 ]
+exclude = ["scripts/"]
 
 
 [profile.dev.package.tar_res]

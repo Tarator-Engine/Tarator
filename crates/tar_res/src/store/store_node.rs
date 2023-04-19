@@ -2,8 +2,9 @@ use std::path::Path;
 
 use cgmath::SquareMatrix;
 use serde::{Deserialize, Serialize};
+use scr_types::prims::{Mat4, Quat, Vec3};
 
-use crate::{scene::ImportData, Mat4, Quat, Result, Vec3};
+use crate::{scene::ImportData, Result};
 
 use super::{store_material::StoreMaterial, store_mesh::StoreMesh, store_texture::StoreTexture};
 
@@ -43,13 +44,12 @@ impl StoreNode {
         let name: String = name.into();
 
         let mesh = if let Some(g_mesh) = g_node.mesh() {
-            let m = if let Some(m) = meshes.iter().find(|mesh| (**mesh).index == g_mesh.index()) {
+            let m = if let Some(m) = meshes.iter().find(|mesh| mesh.index == g_mesh.index()) {
                 Some(m.index)
             } else {
                 let mesh_name = g_mesh
                     .name()
-                    .map(|s| s.into())
-                    .unwrap_or(name.clone() + "mesh");
+                    .map_or(name.clone() + "mesh", std::convert::Into::into);
                 let index = g_mesh.index();
 
                 meshes.push(StoreMesh::from_gltf(

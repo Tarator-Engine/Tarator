@@ -8,10 +8,10 @@ pub struct Instance {
 }
 impl Instance {
     const ATTRIBS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![8 => Float32x4, 9 => Float32x4, 10 => Float32x4, 11 => Float32x4, 12 => Float32x3, 13 => Float32x3, 14 => Float32x3];
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+    #[must_use] pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Instance>() as wgpu::BufferAddress,
+            array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &Self::ATTRIBS,
         }
@@ -31,7 +31,7 @@ pub struct Primitive {
 }
 
 impl Primitive {
-    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
+    pub fn update_per_frame(&self, data: &PerFrameData, queue: &wgpu::Queue) {
         self.material.update_per_frame(data, queue)
     }
 

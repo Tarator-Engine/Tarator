@@ -1,0 +1,13 @@
+[package]
+name = "scr_types"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cgmath = "0.18"
+uuid = { version = "1", features = ["v4"] }
+macros = { path = "macros/" }
+
+tar_ecs = { path = "../tar_ecs" }

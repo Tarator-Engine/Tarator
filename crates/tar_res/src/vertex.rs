@@ -16,7 +16,7 @@ pub struct Vertex {
 
 impl Default for Vertex {
     fn default() -> Self {
-        Vertex {
+        Self {
             position: [0.0; 3],
             normal: [0.0; 3],
             tangent: [0.0; 4],
@@ -31,10 +31,10 @@ impl Default for Vertex {
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2, 4 => Float32x2, 5 => Float32x4, 6 => Float32x4, 7 => Float32x4];
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+    #[must_use] pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTRIBS,
         }

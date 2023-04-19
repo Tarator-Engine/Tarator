@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 tar_utils = { path = "../tar_utils" }
+tar_types = { path = "../tar_types" }
+scr_types = { path = "../scr_types" }
 thiserror = "1.0"
 cfg-if = "1"
 gltf = "1"

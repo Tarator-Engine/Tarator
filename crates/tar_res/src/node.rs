@@ -1,18 +1,23 @@
-use cgmath::{Matrix4, Quaternion, Vector3};
+use std::collections::HashMap;
 
-use crate::{material::PerFrameData, mesh::Mesh, CameraParams, Result};
+use cgmath::{Matrix4, Quaternion, Vector3};
+use tar_types::camera::CameraParams;
+
+use crate::{
+    material::PerFrameData,
+    mesh::{MeshId, StaticMesh},
+    Error, Result,
+};
 
 pub struct Node {
     pub index: usize,
     pub children: Vec<Node>,
-    pub mesh: Option<Mesh>,
+    pub mesh: Option<MeshId>,
     pub rotation: Quaternion<f32>,
     pub scale: Vector3<f32>,
-    // TODO: weights
+    // TODO!: weights
     // weights_id: usize,
     pub translation: Vector3<f32>,
-    // TODO: camera importing
-    // pub camera: Option<Camera>,
     pub name: String,
     pub final_transform: Matrix4<f32>, // includes parent transforms
 }
@@ -38,7 +43,8 @@ impl Node {
         cam_params: &CameraParams,
         data: &PerFrameData,
         queue: &wgpu::Queue,
-    ) {
+        meshes: &HashMap<MeshId, StaticMesh>,
+    ) -> Result<()> {
         if let Some(mesh) = &mut self.mesh {
             let mut data = (*data).clone();
             let mvp_matrix =
@@ -46,19 +52,29 @@ impl Node {
             data.u_model_matrix = self.final_transform.into();
             data.u_mpv_matrix = mvp_matrix.into();
             data.u_camera = cam_params.position.into();
+            let mesh = meshes.get(mesh).ok_or(Error::NonExistentID)?;
             mesh.update_per_frame(&data, queue);
         }
         for child in &mut self.children {
-            child.update_per_frame(cam_params, data, queue);
+            child.update_per_frame(cam_params, data, queue, meshes)?;
         }
+
+        Ok(())
     }
 
-    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+    pub fn draw<'a, 'b>(
+        &'a self,
+        render_pass: &'b mut wgpu::RenderPass<'a>,
+        meshes: &'a HashMap<MeshId, StaticMesh>,
+    ) -> Result<()> {
         if let Some(mesh) = &self.mesh {
+            let mesh = meshes.get(mesh).ok_or(Error::NonExistentID)?;
             mesh.draw(render_pass);
         }
         for child in &self.children {
-            child.draw(render_pass);
+            child.draw(render_pass, meshes)?;
         }
+
+        Ok(())
     }
 }

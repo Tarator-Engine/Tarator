@@ -9,7 +9,7 @@ pub struct RawDoubleBuffer<T: Clone> {
 
 impl<T: Clone> RawDoubleBuffer<T> {
     pub fn update_read(&mut self) -> T {
-        return self.state.clone();
+        self.state.clone()
     }
 }
 
@@ -33,7 +33,7 @@ pub struct DoubleBuffer<T: Clone> {
 impl<T: Clone> DoubleBuffer<T> {
     pub fn new(state: T) -> Self {
         Self {
-            raw: Mutex::new(RawDoubleBuffer { state: state }),
+            raw: Mutex::new(RawDoubleBuffer { state }),
         }
     }
 }

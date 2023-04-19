@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use scr_types::prims::{Vec3, Vec4};
 
-use crate::{scene::ImportData, shader::ShaderFlags, Result, Vec3, Vec4};
+use crate::{scene::ImportData, shader::ShaderFlags, Result};
 
 use super::store_texture::{StoreTexture, TextureType};
 /// The alpha rendering mode of a material.
@@ -20,23 +21,23 @@ pub enum AlphaMode {
     Blend,
 }
 
-impl Into<AlphaMode> for gltf::material::AlphaMode {
-    fn into(self) -> AlphaMode {
-        match self {
-            Self::Opaque => AlphaMode::Opaque,
-            Self::Mask => AlphaMode::Mask,
-            Self::Blend => AlphaMode::Blend,
+impl From<gltf::material::AlphaMode> for AlphaMode {
+    fn from(val: gltf::material::AlphaMode) -> Self {
+        match val {
+            gltf::material::AlphaMode::Opaque => Self::Opaque,
+            gltf::material::AlphaMode::Mask => Self::Mask,
+            gltf::material::AlphaMode::Blend => Self::Blend,
         }
     }
 }
 
-impl Into<gltf::material::AlphaMode> for AlphaMode {
-    fn into(self) -> gltf::material::AlphaMode {
-        use gltf::material::AlphaMode::*;
-        match self {
-            Self::Opaque => Opaque,
-            Self::Mask => Mask,
-            Self::Blend => Blend,
+impl From<AlphaMode> for gltf::material::AlphaMode {
+    fn from(val: AlphaMode) -> Self {
+        use gltf::material::AlphaMode::{Blend, Mask, Opaque};
+        match val {
+            AlphaMode::Opaque => Opaque,
+            AlphaMode::Mask => Mask,
+            AlphaMode::Blend => Blend,
         }
     }
 }
@@ -146,8 +147,8 @@ impl StoreMaterial {
 
         Ok(Self {
             index: g_material.index().unwrap_or(0),
-            name: g_material.name().map(|s| s.into()),
-            base_color_factor: pbr.base_color_factor().into(),
+            name: g_material.name().map(std::convert::Into::into),
+            base_color_factor: Vec4::from(pbr.base_color_factor()),
             base_color_texture,
             metallic_factor: pbr.metallic_factor(),
             roughness_factor: pbr.roughness_factor(),

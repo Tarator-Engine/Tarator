@@ -47,13 +47,16 @@ struct VertexOutput {
             @location(3) v_TBN_0: vec3<f32>,
             @location(4) v_TBN_1: vec3<f32>,
             @location(5) v_TBN_2: vec3<f32>,
-            @location(6) v_Position: vec3<f32>
+            @location(6) v_Position: vec3<f32>,
+            // @location(7) model_mat: mat4x4<f32>
         //!else
             @location(3) v_Normal: vec3<f32>,
-            @location(4) v_Position: vec3<f32>
+            @location(4) v_Position: vec3<f32>,
+            // @location(5) model_mat: mat4x4<f32>
         //!endif
     //!else
-        @location(3) v_Position: vec3<f32>
+        @location(3) v_Position: vec3<f32>,
+        // @location(4) model_mat: mat4x4<f32>
     //!endif
 }
 
@@ -63,6 +66,7 @@ fn vs_main(
     instance: InstanceInput,
 ) -> VertexOutput {
     var out: VertexOutput;
+    // out.model_mat = u_model_matrix;
 
     let pos = u_model_matrix * vec4<f32>(model.position, 1.0);
     out.v_Position = pos.xyz / pos.w;
@@ -346,7 +350,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // reinhard tone mapping
     color = color / (color + vec3<f32>(1.0));
 
-    // return base_color;
+    // return in.model_mat[0];
     return vec4<f32>(color, alpha);
     // return vec4<f32>(material_base_color_factor, material_base_color_factor, material_base_color_factor, 1.0);
     // return vec4<f32>(in.v_UV_0, 1.0, 1.0);

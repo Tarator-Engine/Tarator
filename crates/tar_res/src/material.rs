@@ -37,11 +37,11 @@ pub struct PbrMaterial {
 }
 
 impl PbrMaterial {
-    pub fn update_per_frame(&mut self, data: &PerFrameData, queue: &wgpu::Queue) {
+    pub fn update_per_frame(&self, data: &PerFrameData, queue: &wgpu::Queue) {
         self.per_frame_uniforms.update(data, queue);
     }
 
-    pub fn shader_flags(
+    #[must_use] pub fn shader_flags(
         base_color_texture: bool,
         normal_texture: bool,
         emissive_texture: bool,
@@ -75,7 +75,7 @@ impl PbrMaterial {
         render_pass.set_bind_group(0, &self.per_frame_uniforms.bind_group, &[]);
         render_pass.set_bind_group(
             1,
-            &self.per_material_uniforms.bind_group.as_ref().unwrap(),
+            self.per_material_uniforms.bind_group.as_ref().unwrap(),
             &[],
         );
     }
@@ -86,7 +86,7 @@ pub trait BindGroup {
     fn new(data: Self::Data, layout: &wgpu::BindGroupLayout, w_info: Arc<WgpuInfo>) -> Self;
     fn bind_group_layout() -> wgpu::BindGroupLayoutDescriptor<'static>;
     fn names() -> Vec<(String, String)>;
-    fn update(&mut self, dat: &Self::Data, queue: &wgpu::Queue);
+    fn update(&self, dat: &Self::Data, queue: &wgpu::Queue);
 }
 
 pub struct PerMaterialUniforms {
@@ -99,12 +99,12 @@ pub struct PerMaterialUniforms {
 }
 
 impl PerMaterialUniforms {
-    pub fn entries(&self) -> Vec<BindGroupLayoutEntry> {
+    #[must_use] pub fn entries(&self) -> Vec<BindGroupLayoutEntry> {
         let mut entries = vec![];
         let mut binding = 0;
         fn get_binding(binding: &mut u32) -> u32 {
             *binding += 1;
-            return *binding - 1;
+            *binding - 1
         }
         if self.base_color_texture.is_some() {
             entries.push(wgpu::BindGroupLayoutEntry {
@@ -200,7 +200,7 @@ impl PerMaterialUniforms {
         entries
     }
 
-    pub fn bind_group_layout<'a>(
+    #[must_use] pub fn bind_group_layout<'a>(
         entries: &'a Vec<BindGroupLayoutEntry>,
     ) -> wgpu::BindGroupLayoutDescriptor<'a> {
         wgpu::BindGroupLayoutDescriptor {
@@ -209,7 +209,7 @@ impl PerMaterialUniforms {
         }
     }
 
-    pub fn names(&self) -> Vec<(String, String)> {
+    #[must_use] pub fn names(&self) -> Vec<(String, String)> {
         let mut names = vec![];
         if self.base_color_texture.is_some() {
             names.push(("base_color_tex".into(), "texture_2d<f32>".into()));
@@ -240,7 +240,7 @@ impl PerMaterialUniforms {
         let mut binding = 0;
         fn get_binding(binding: &mut u32) -> u32 {
             *binding += 1;
-            return *binding - 1;
+            *binding - 1
         }
         if self.base_color_texture.is_some() {
             entries.push(wgpu::BindGroupEntry {
@@ -470,7 +470,7 @@ impl BindGroup for PerFrameUniforms {
         ]
     }
 
-    fn update(&mut self, data: &Self::Data, queue: &wgpu::Queue) {
+    fn update(&self, data: &Self::Data, queue: &wgpu::Queue) {
         self.u_mpv_matrix.update(data.u_mpv_matrix, queue);
         self.u_model_matrix.update(data.u_model_matrix, queue);
         self.u_camera.update(data.u_camera, queue);
