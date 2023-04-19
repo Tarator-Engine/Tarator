@@ -120,13 +120,19 @@ pub fn session(attr: TokenStream, stream: TokenStream) -> TokenStream {
     let stmts = &block.stmts[..len-1];
     let last = &block.stmts[len-1];
     let let_ident = random_ident("session");
+    let trace_ident = random_ident("trace");
+    let name = format!("\"{}\"", sig.ident);
 
     if should_be_last_stmt(last) {
         quote::quote! {
             #(#attrs)* #vis #sig {
                 #[cfg(debug_assertions)]
                 let #let_ident = Session::new(#file_name);
+                #[cfg(debug_assertions)]
+                let #trace_ident = Trace::new(#name, TraceType::Function);
                 #(#stmts)*
+                #[cfg(debug_assertions)]
+                #trace_ident.end();
                 #[cfg(debug_assertions)]
                 #let_ident.end();
                 #last
@@ -137,8 +143,11 @@ pub fn session(attr: TokenStream, stream: TokenStream) -> TokenStream {
             #(#attrs)* #vis #sig {
                 #[cfg(debug_assertions)]
                 let #let_ident = Session::new(#file_name);
+                let #trace_ident = Trace::new(#name, TraceType::Function);
                 #(#stmts)*
                 #last
+                #[cfg(debug_assertions)]
+                #trace_ident.end();
                 #[cfg(debug_assertions)]
                 #let_ident.end();
             }
