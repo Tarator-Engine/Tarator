@@ -39,8 +39,10 @@ pub fn trace(attr: TokenStream, stream: TokenStream) -> TokenStream {
             if should_be_last_stmt(last) {
                 quote::quote! {
                     #(#attrs)* #vis #sig {
+                        #[cfg(debug_assertions)]
                         let #let_ident = Trace::new(#name, TraceType::Function);
                         #(#stmts)*
+                        #[cfg(debug_assertions)]
                         #let_ident.end();
                         #last
                     }
@@ -48,9 +50,11 @@ pub fn trace(attr: TokenStream, stream: TokenStream) -> TokenStream {
             } else {
                 quote::quote! {
                     #(#attrs)* #vis #sig {
+                        #[cfg(debug_assertions)]
                         let #let_ident = Trace::new(#name, TraceType::Function);
                         #(#stmts)*
                         #last
+                        #[cfg(debug_assertions)]
                         #let_ident.end();
                     }
                 }
@@ -68,8 +72,10 @@ pub fn trace(attr: TokenStream, stream: TokenStream) -> TokenStream {
             if should_be_last_stmt(last) {
                 quote::quote! {
                     {
+                        #[cfg(debug_assertions)]
                         let #let_ident = Trace::new(#name, TraceType::Block);
                         #(#stmts)*
+                        #[cfg(debug_assertions)]
                         #let_ident.end();
                         #last
                     }
@@ -77,9 +83,11 @@ pub fn trace(attr: TokenStream, stream: TokenStream) -> TokenStream {
             } else {
                  quote::quote! {
                     {
+                        #[cfg(debug_assertions)]
                         let #let_ident = Trace::new(#name, TraceType::Block);
                         #(#stmts)*
                         #last
+                        #[cfg(debug_assertions)]
                         #let_ident.end();
                     }
                 }               
@@ -89,8 +97,10 @@ pub fn trace(attr: TokenStream, stream: TokenStream) -> TokenStream {
             let name = syn::parse_macro_input!(attr as syn::LitStr);
             
             quote::quote! {
+                #[cfg(debug_assertions)]
                 let #let_ident = Trace::new(#name, TraceType::Stmt);
                 #stmt
+                #[cfg(debug_assertions)]
                 #let_ident.end();
             }
         }
@@ -114,8 +124,10 @@ pub fn session(attr: TokenStream, stream: TokenStream) -> TokenStream {
     if should_be_last_stmt(last) {
         quote::quote! {
             #(#attrs)* #vis #sig {
+                #[cfg(debug_assertions)]
                 let #let_ident = Session::new(#file_name);
                 #(#stmts)*
+                #[cfg(debug_assertions)]
                 #let_ident.end();
                 #last
             }
@@ -123,9 +135,11 @@ pub fn session(attr: TokenStream, stream: TokenStream) -> TokenStream {
     } else {
         quote::quote! {
             #(#attrs)* #vis #sig {
+                #[cfg(debug_assertions)]
                 let #let_ident = Session::new(#file_name);
                 #(#stmts)*
                 #last
+                #[cfg(debug_assertions)]
                 #let_ident.end();
             }
         }

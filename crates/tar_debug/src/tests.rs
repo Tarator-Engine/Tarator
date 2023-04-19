@@ -13,18 +13,17 @@ fn visualizer() {
 #[test]
 #[session("target/no_segfault.json")]
 fn no_segfault() {
-
     let num = 1900;
     let _ = second_session(&num);
 }
 
-#[session("target/second")]
+#[session("target/second.json")]
 fn second_session<'a>(num: &'a u32) -> &'a u32 {
     assert!(_500() == "should compile");
     assert!(_500_200_100() == "should compile");
     _50_and_600_240_90();
     _600_240_90();
-    _500_and_50_and_600_240_90_and_600_240_90_and_420();   
+    _500_and_50_and_600_240_90_and_600_240_90_and_420();
     num
 }
 
@@ -67,4 +66,3 @@ fn _500_and_50_and_600_240_90_and_600_240_90_and_420() {
 fn pause_for(micros: u64) {
     std::thread::sleep(std::time::Duration::from_micros(micros));
 }
-

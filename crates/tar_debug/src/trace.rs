@@ -1,22 +1,16 @@
-use std::{ptr, fs, io::Write, time, process};
+use std::{collections::HashMap, fs, io::Write, process, ptr, time};
 
-use serde::ser::{Serialize, SerializeStruct, Serializer};
 use parking_lot::Mutex;
+use fxhash::FxBuildHasher;
+use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 /// TODO: Dead-locks are occuring, even in `cargo test`. Run `cargo test -- --test-threads=1` to
 /// test without dead-lock
-static TRACER: Mutex<Tracer> = Mutex::new(Tracer::new());
+static TRACER: Mutex<Option<Tracer>> = Mutex::new(None);
 
+#[derive(Default)]
 struct Tracer {
-    current: *mut Session
-}
-
-impl Tracer {
-    pub const fn new() -> Self {
-        Self {
-            current: ptr::null_mut()
-        }
-    }
+    sessions: HashMap<usize, ptr::NonNull<Session>, FxBuildHasher>
 }
 
 unsafe impl Send for Tracer {}
@@ -25,24 +19,30 @@ unsafe impl Send for Tracer {}
 pub struct Session {
     start: time::Instant,
     result: SessionResult,
-    path: &'static str
+    path: &'static str,
 }
 
 impl Session {
     #[inline]
     pub fn new(path: &'static str) -> Box<Self> {
-        let mut tracer = TRACER.lock();
         let mut ret = Box::new(Self {
             start: time::Instant::now(),
             result: SessionResult::new(),
-            path
+            path,
         });
-        
-        if !tracer.current.is_null() {
-            unsafe { tracer.current.drop_in_place(); }
-        }
 
-        tracer.current = ret.as_mut();
+        let mut tracer_ref = TRACER.lock();
+        let tracer = match tracer_ref.as_mut() {
+            Some(tracer) => tracer,
+            None => {
+                *tracer_ref = Some(Tracer::default());
+                unsafe { tracer_ref.as_mut().unwrap_unchecked() }
+            }
+        };
+
+        if let Some(_) = tracer.sessions.insert(thread_id::get(), ret.as_mut().into()) {
+            panic!("Child sessions are not supported!");
+        }
 
         ret
     }
@@ -64,20 +64,29 @@ impl Drop for Session {
                 break 'work;
             };
 
-            f.write_all(s.as_bytes()).unwrap_or_else(|err| println!("{}", err));
+            f.write_all(s.as_bytes())
+                .unwrap_or_else(|err| println!("{}", err));
             break 'work;
         }
 
-        TRACER.lock().current = ptr::null_mut();
+        let mut tracer_ref = TRACER.lock();
+        let tracer = match tracer_ref.as_mut() {
+            Some(tracer) => tracer,
+            None => {
+                *tracer_ref = Some(Tracer::default());
+                unsafe { tracer_ref.as_mut().unwrap_unchecked() }
+            }
+        };
+
+        tracer.sessions.remove(&thread_id::get());
     }
 }
-
 
 #[derive(Copy, Clone)]
 pub enum TraceType {
     Block,
     Function,
-    Stmt
+    Stmt,
 }
 
 impl TraceType {
@@ -85,22 +94,22 @@ impl TraceType {
         match self {
             Self::Block => "Block",
             Self::Function => "Function",
-            Self::Stmt => "Statement"
+            Self::Stmt => "Statement",
         }
     }
 }
 
-
 pub struct Trace {
     name: &'static str,
     ts: time::Instant,
-    ty: TraceType
+    ty: TraceType,
 }
 
 impl Trace {
     pub fn new(name: &'static str, ty: TraceType) -> Self {
         Self {
-            name, ty,
+            name,
+            ty,
             ts: time::Instant::now(),
         }
     }
@@ -113,35 +122,42 @@ impl Trace {
 
 impl Drop for Trace {
     fn drop(&mut self) {
-        let mut tracer = TRACER.lock();
-        
-        if tracer.current.is_null() {
-            return;
+        let mut tracer_ref = TRACER.lock();
+        let tracer = match tracer_ref.as_mut() {
+            Some(tracer) => tracer,
+            None => {
+                *tracer_ref = Some(Tracer::default());
+                unsafe { tracer_ref.as_mut().unwrap_unchecked() }
+            }
         };
 
-        let session = unsafe { &mut *tracer.current };
 
-        session.result.trace_events.push(TraceEvent {
-            name: self.name,
-            ts: self.ts.duration_since(session.start).as_micros(),
-            dur: self.ts.elapsed().as_micros(),
-            pid: process::id(),
-            tid: thread_id::get(),
-            ty: self.ty
-        });
+        if let Some(session) = tracer.sessions.get_mut(&thread_id::get()) {
+            let session = unsafe { session.as_mut() };
+
+            session.result.trace_events.push(TraceEvent {
+                name: self.name,
+                ts: self.ts.duration_since(session.start).as_micros(),
+                dur: self.ts.elapsed().as_micros(),
+                pid: process::id(),
+                tid: thread_id::get(),
+                ty: self.ty,
+            });
+        }
     }
 }
 
-
 struct SessionResult {
-    trace_events: Vec<TraceEvent>
+    trace_events: Vec<TraceEvent>,
 }
 
 impl SessionResult {
     #[inline]
     pub const fn new() -> Self {
-        Self { trace_events: Vec::new() }
-    } 
+        Self {
+            trace_events: Vec::new(),
+        }
+    }
 }
 
 impl Serialize for SessionResult {
@@ -153,9 +169,8 @@ impl Serialize for SessionResult {
         s.serialize_field("traceEvents", &self.trace_events)?;
         s.serialize_field("displayTimeUnit", &"ms")?;
         s.end()
-    } 
+    }
 }
-
 
 struct TraceEvent {
     name: &'static str,
@@ -163,7 +178,7 @@ struct TraceEvent {
     dur: u128,
     pid: u32,
     tid: usize,
-    ty: TraceType
+    ty: TraceType,
 }
 
 impl Serialize for TraceEvent {
@@ -182,4 +197,3 @@ impl Serialize for TraceEvent {
         s.end()
     }
 }
-
