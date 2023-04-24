@@ -73,7 +73,7 @@ impl Texture for GrayTexture {
         bytes: &[u8],
         label: &str,
     ) -> ImageResult<Self> {
-        let img = image::load_from_memory(bytes)?;
+        let img: image::DynamicImage = image::load_from_memory(bytes)?;
         Ok(Self::from_image(device, queue, &img, label))
     }
 
@@ -101,7 +101,6 @@ impl Texture for GrayTexture {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 aspect: wgpu::TextureAspect::All,
@@ -112,7 +111,7 @@ impl Texture for GrayTexture {
             &gray,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
+                bytes_per_row: std::num::NonZeroU32::new(dimensions.0),
                 rows_per_image: std::num::NonZeroU32::new(dimensions.1),
             },
             size,

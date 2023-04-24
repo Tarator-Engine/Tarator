@@ -6,12 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-easy-gltf = "1"
+easy-gltf = { git = "https://github.com/slackers123/easy-gltf" }
 wgpu = "0.15"
 bytemuck = "1.13.1"
 serde = { version = "1", features = ["derive"] }
 memoffset = "0.8.0"
-encase = "0.5.0"
+encase = { version = "0.5.0", features = ["glam"] }
+glam = { version = "0.23", features = ["serde", "bytemuck"] }
 
 
 [build-dependencies]

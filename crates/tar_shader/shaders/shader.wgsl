@@ -45,7 +45,7 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
 
     if extract_material_flag(material.flags, FLAGS_ALBEDO_ACTIVE) {
         if extract_texture_enable(material.texture_enable, TEXTURE_ALBEDO) {
-            pixel.albedo = get_texture(TEXTURE_ALBEDO, coords);
+            pixel.albedo = get_albedo_texture(coords);
         } else {
             pixel.albedo = vec4<f32>(1.0);
         }
@@ -60,7 +60,7 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
     // ----- NORMAL ----- 
 
     if extract_texture_enable(material.texture_enable, TEXTURE_NORMAL) {
-        let texture_read = get_texture(TEXTURE_NORMAL, coords);
+        let texture_read = get_normal_texture(coords);
 
         var normal = normalize(texture_read.rgb * 2.0 - 1.0);
 
@@ -80,7 +80,7 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
 
     if extract_texture_enable(material.texture_enable, TEXTURE_METALLIC) {
         // TODO!: is the data structured like this? 
-        pixel.metallic = get_texture(TEXTURE_METALLIC, coords);
+        pixel.metallic = get_metallic_texture(coords);
     } else {
         pixel.metallic = 1.0;
     }
@@ -93,8 +93,7 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
 
     if extract_texture_enable(material.texture_enable, TEXTURE_ROUGHNESS) {
         // TODO!: is the data structured like this? 
-        perceptual_roughness = get_texture(TEXTURE_ROUGHNESS, coords);
-
+        perceptual_roughness = get_roughness_texture(coords);
     } else {
         perceptual_roughness = 1.0;
     }
@@ -105,7 +104,7 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
 
     if extract_texture_enable(material.texture_enable, TEXTURE_REFLECTANCE) {
         // TODO!: is the data structured like this? 
-        pixel.reflectance = get_texture(TEXTURE_REFLECTANCE, coords);
+        // pixel.reflectance = get_texture(TEXTURE_REFLECTANCE, coords);
     } else {
         pixel.reflectance = 1.0;
     }
@@ -116,7 +115,7 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
 
     if extract_texture_enable(material.texture_enable, TEXTURE_EMISSIVE) {
         // TODO!: is the data structured like this? 
-        pixel.emissive = get_texture(TEXTURE_EMISSIVE, coords);
+        pixel.emissive = get_emissive_texture(coords);
     } else {
         pixel.emissive = vec3<f32>(1.0);
     }
@@ -230,28 +229,24 @@ const TEXTURE_METALLIC: u32 =       0x0000008u;
 const TEXTURE_REFLECTANCE: u32 =    0x0000010u;
 const TEXTURE_EMISSIVE: u32 =       0x0000020u;
 
-fn get_texture(texture: u32, coords: vec2<f32>) -> vec4<f32> {
-    // MAKE SURE these stay the same as above
-    switch texture {
-        case 0x0000001u: {
-            return textureSample(albedo_tex, primary_sampler, coords);
-        }
-        case 0x0000002u: {
-            return textureSample(normal_tex, primary_sampler, coords);
-        }
-        case 0x0000004u: {
-            return textureSample(roughness_tex, primary_sampler, coords);
-        }
-        case 0x0000008u: {
-            return textureSample(metallic_tex, primary_sampler, coords);
-        }
-        // case 0x0000010u: {
-        //     return textureSample(reflectance_tex, primary_sampler, coords);
-        // }
-        case 0x0000020u: {
-            return textureSample(emissive_tex, primary_sampler, coords);
-        }
-    }
+fn get_albedo_texture(coords: vec2<f32>) -> vec4<f32> {
+    return textureSample(albedo_tex, primary_sampler, coords);
+}
+
+fn get_normal_texture(coords: vec2<f32>) -> vec3<f32> {
+    return textureSample(normal_tex, primary_sampler, coords).rgb;
+}
+
+fn get_roughness_texture(coords: vec2<f32>) -> f32 {
+    return textureSample(roughness_tex, primary_sampler, coords).r;
+}
+
+fn get_metallic_texture(coords: vec2<f32>) -> f32 {
+    return textureSample(metallic_tex, primary_sampler, coords).r;
+}
+
+fn get_emissive_texture(coords: vec2<f32>) -> vec3<f32> {
+    return textureSample(emissive_tex, primary_sampler, coords).rgb;
 }
 
 
@@ -260,8 +255,8 @@ fn get_texture(texture: u32, coords: vec2<f32>) -> vec4<f32> {
 struct Vertex {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) tangent: vec4<f32>,
-    @location(3) tex_coords: vec2<f32>,
+    @location(2) tex_coords: vec2<f32>,
+    @location(3) tangent: vec4<f32>,
 }
 
 struct VertexOutput {
@@ -312,6 +307,7 @@ fn vs_main(
 
 // ----- Fragment Data ----- 
 
+// global frame data
 @group(0) @binding(0)
 var primary_sampler: sampler;
 @group(0) @binding(1)
@@ -319,6 +315,7 @@ var<uniform> uniforms: UniformData;
 @group(0) @binding(2)
 var<storage> directional_lights: array<DirectionalLight>;
 
+// material specific data
 @group(1) @binding(0)
 var<uniform> material_uniform: MaterialData;
 @group(1) @binding(1)

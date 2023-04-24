@@ -1,9 +1,11 @@
+use bitflags::bitflags;
 use image::DynamicImage;
 use tar_shader::shader::{
     self,
     bind_groups::{BindGroup1, BindGroupLayout1},
+    MaterialData,
 };
-use tar_types::{Vec3, Vec4};
+use wgpu::util::DeviceExt;
 
 use super::texture::{GrayTexture, RgbaTexture, Texture};
 
@@ -14,6 +16,7 @@ pub struct Material {
     pub emissive: Emissive,
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group: BindGroup1,
+    pub material_data_buffer: wgpu::Buffer,
 }
 impl Material {
     pub fn from_stored(
@@ -22,6 +25,58 @@ impl Material {
         queue: &wgpu::Queue,
         target_format: wgpu::TextureFormat,
     ) -> Self {
+        // TODO!: make this not a constant
+        let mat_flags = MaterialFlags::FLAGS_ALBEDO_ACTIVE;
+
+        let mut tex_flags = TextureFlags::empty();
+
+        tex_flags |= if stored.pbr.base_color_texture.is_some() {
+            TextureFlags::TEXTURE_ALBEDO
+        } else {
+            TextureFlags::empty()
+        };
+
+        tex_flags |= if stored.emissive.texture.is_some() {
+            TextureFlags::TEXTURE_EMISSIVE
+        } else {
+            TextureFlags::empty()
+        };
+
+        tex_flags |= if stored.pbr.metallic_texture.is_some() {
+            TextureFlags::TEXTURE_METALLIC
+        } else {
+            TextureFlags::empty()
+        };
+
+        tex_flags |= if stored.normal.is_some() {
+            TextureFlags::TEXTURE_NORMAL
+        } else {
+            TextureFlags::empty()
+        };
+
+        // TODO!: make this not a constant
+        tex_flags |= if false {
+            TextureFlags::TEXTURE_REFLECTANCE
+        } else {
+            TextureFlags::empty()
+        };
+
+        tex_flags |= if stored.pbr.roughness_texture.is_some() {
+            TextureFlags::TEXTURE_ROUGHNESS
+        } else {
+            TextureFlags::empty()
+        };
+
+        let mat_data = MaterialData {
+            albedo: stored.pbr.base_color_factor.into(),
+            emissive: stored.emissive.factor.into(),
+            roughness: stored.pbr.roughness_factor,
+            metallic: stored.pbr.metallic_factor,
+            reflectance: 0.5, // TODO!: figure out some sensible constant
+            flags: mat_flags.bits(),
+            texture_enable: tex_flags.bits(),
+        };
+
         let shader = shader::create_shader_module(device);
 
         let pipeline_layout = shader::create_pipeline_layout(device);
@@ -65,15 +120,6 @@ impl Material {
             },
             multiview: None,
         });
-        let mut material_uniform_data = shader::MaterialData {
-            albedo: [0.0; 4],
-            emissive: [0.0; 3],
-            roughness: 0.0,
-            metallic: 0.0,
-            reflectance: 0.0,
-            flags: 0,
-            texture_enable: 0,
-        };
 
         let pbr = PbrMaterial::from_stored(stored.pbr, device, queue);
         let normal = stored
@@ -92,13 +138,22 @@ impl Material {
             },
             mip_level_count: 1,
             sample_count: 1,
-            dimension: wgpu::TextureDimension::D1,
+            dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::empty(),
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("empty texture"),
             view_formats: &[],
         });
         let empty_view = empty_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut mat_uniform = encase::UniformBuffer::new(vec![]);
+        mat_uniform.write(&mat_data).unwrap();
+
+        let material_data_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("material uniform buffer"),
+            contents: &mat_uniform.into_inner(),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let bind_group = BindGroup1::from_bindings(
             device,
@@ -127,6 +182,7 @@ impl Material {
                     .as_ref()
                     .map(|t| &t.view)
                     .unwrap_or(&empty_view),
+                material_uniform: material_data_buffer.as_entire_buffer_binding(),
             },
         );
 
@@ -136,17 +192,19 @@ impl Material {
             occlusion,
             emissive,
             pipeline,
+            material_data_buffer,
+            bind_group: bind_group,
         }
     }
 }
 
 pub struct PbrMaterial {
-    pub base_color_factor: Vec4,
+    // pub base_color_factor: Vec4,
     pub base_color_texture: Option<RgbaTexture>,
     pub metallic_texture: Option<GrayTexture>,
-    pub metallic_factor: f32,
+    // pub metallic_factor: f32,
     pub roughness_texture: Option<GrayTexture>,
-    pub roughness_factor: f32,
+    // pub roughness_factor: f32,
 }
 
 impl PbrMaterial {
@@ -156,7 +214,7 @@ impl PbrMaterial {
         queue: &wgpu::Queue,
     ) -> Self {
         Self {
-            base_color_factor: stored.base_color_factor,
+            // base_color_factor: stored.base_color_factor,
             base_color_texture: stored.base_color_texture.map(|img| {
                 RgbaTexture::from_image(
                     device,
@@ -173,7 +231,7 @@ impl PbrMaterial {
                     "metallic_texture",
                 )
             }),
-            metallic_factor: stored.metallic_factor,
+            // metallic_factor: stored.metallic_factor,
             roughness_texture: stored.roughness_texture.map(|img| {
                 GrayTexture::from_image(
                     device,
@@ -182,14 +240,14 @@ impl PbrMaterial {
                     "roughness_texture",
                 )
             }),
-            roughness_factor: stored.roughness_factor,
+            // roughness_factor: stored.roughness_factor,
         }
     }
 }
 
 pub struct NormalMap {
     pub texture: RgbaTexture,
-    pub factor: f32,
+    // pub factor: f32,
 }
 
 impl NormalMap {
@@ -205,14 +263,14 @@ impl NormalMap {
                 &DynamicImage::ImageRgb8(stored.texture.inner),
                 "normal_texture",
             ),
-            factor: stored.factor,
+            // factor: stored.factor,
         }
     }
 }
 
 pub struct Occlusion {
     pub texture: GrayTexture,
-    pub factor: f32,
+    // pub factor: f32,
 }
 
 impl Occlusion {
@@ -228,14 +286,14 @@ impl Occlusion {
                 &DynamicImage::ImageLuma8(stored.texture.inner),
                 "occlusion_texture",
             ),
-            factor: stored.factor,
+            // factor: stored.factor,
         }
     }
 }
 
 pub struct Emissive {
     pub texture: Option<RgbaTexture>,
-    pub factor: Vec3,
+    // pub factor: Vec3,
 }
 
 impl Emissive {
@@ -253,7 +311,27 @@ impl Emissive {
                     "emissive_texture",
                 )
             }),
-            factor: stored.factor,
+            // factor: stored.factor,
         }
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct MaterialFlags: u32 {
+        const FLAGS_ALBEDO_ACTIVE = 0b00000001;
+        const FLAGS_UNLIT =         0b00000010;
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct TextureFlags: u32 {
+        const TEXTURE_ALBEDO =      0b00000001;
+        const TEXTURE_NORMAL =      0b00000010;
+        const TEXTURE_ROUGHNESS =   0b00000100;
+        const TEXTURE_METALLIC =    0b00001000;
+        const TEXTURE_REFLECTANCE = 0b00010000;
+        const TEXTURE_EMISSIVE =    0b00100000;
     }
 }

@@ -10,15 +10,16 @@ winit = "0.28.3"
 env_logger = "0.10"
 log = "0.4"
 wgpu = "0.15.1"
-cgmath = "0.18.0"
+glam = { version = "0.23", features = ["serde", "bytemuck"] }
 bytemuck = { version = "1.13", features = ["derive"] }
 memoffset = "0.8.0"
-easy-gltf = "1"
+easy-gltf = { git = "https://github.com/slackers123/easy-gltf" }
 image = { version = "0.24", default-features = false, features = [
     "png",
     "jpeg",
 ] }
 encase = "0.5"
+bitflags = "2.1"
 
 tar_res = { path = "../tar_res" }
 tar_shader = { path = "../tar_shader" }

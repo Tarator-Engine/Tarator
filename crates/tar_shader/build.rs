@@ -20,7 +20,7 @@ fn load_shader(name: &str) {
             derive_encase: true,
             derive_serde: true,
             derive_bytemuck: true,
-            ..Default::default()
+            matrix_vector_types: wgsl_to_wgpu::MatrixVectorTypes::Glam,
         },
     )
     .unwrap();

@@ -3,11 +3,12 @@ pub mod model;
 use std::error::Error;
 
 use log::warn;
+use model::Model;
 
 type SomeResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 /// imports models from a gltf file.
-pub fn import_models(file_path: &str) -> SomeResult<()> {
+pub fn import_models(file_path: &str) -> SomeResult<Vec<Model>> {
     let scenes = easy_gltf::load(file_path)?;
     let mut models = Vec::new();
     for scene in scenes {
@@ -19,5 +20,7 @@ pub fn import_models(file_path: &str) -> SomeResult<()> {
         }
     }
 
-    Ok(())
+    println!("loaded models");
+
+    Ok(models)
 }

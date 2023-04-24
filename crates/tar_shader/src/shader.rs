@@ -13,10 +13,10 @@
     serde::Deserialize
 )]
 pub struct UniformData {
-    pub ambient: [f32; 4],
-    pub view: [[f32; 4]; 4],
-    pub view_proj: [[f32; 4]; 4],
-    pub object_transform: [[f32; 4]; 4],
+    pub ambient: glam::Vec4,
+    pub view: glam::Mat4,
+    pub view_proj: glam::Mat4,
+    pub object_transform: glam::Mat4,
 }
 const _: () = assert!(
     std::mem::size_of:: < UniformData > () == 208,
@@ -51,9 +51,9 @@ const _: () = assert!(
     serde::Deserialize
 )]
 pub struct DirectionalLight {
-    pub color: [f32; 3],
+    pub color: glam::Vec3,
     pub padding: f32,
-    pub direction: [f32; 3],
+    pub direction: glam::Vec3,
     pub padding2: f32,
 }
 const _: () = assert!(
@@ -89,8 +89,8 @@ const _: () = assert!(
     serde::Deserialize
 )]
 pub struct PointLight {
-    pub color: [f32; 3],
-    pub position: [f32; 3],
+    pub color: glam::Vec3,
+    pub position: glam::Vec3,
 }
 #[repr(C)]
 #[derive(
@@ -105,14 +105,14 @@ pub struct PointLight {
     serde::Deserialize
 )]
 pub struct PixelData {
-    pub albedo: [f32; 4],
-    pub diffuse_color: [f32; 3],
+    pub albedo: glam::Vec4,
+    pub diffuse_color: glam::Vec3,
     pub roughness: f32,
-    pub normal: [f32; 3],
+    pub normal: glam::Vec3,
     pub metallic: f32,
-    pub emissive: [f32; 3],
+    pub emissive: glam::Vec3,
     pub reflectance: f32,
-    pub f0: [f32; 3],
+    pub f0: glam::Vec3,
     pub material_flags: u32,
 }
 #[repr(C)]
@@ -128,8 +128,8 @@ pub struct PixelData {
     serde::Deserialize
 )]
 pub struct MaterialData {
-    pub albedo: [f32; 4],
-    pub emissive: [f32; 3],
+    pub albedo: glam::Vec4,
+    pub emissive: glam::Vec3,
     pub roughness: f32,
     pub metallic: f32,
     pub reflectance: f32,
@@ -181,10 +181,10 @@ const _: () = assert!(
     serde::Deserialize
 )]
 pub struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    pub tangent: [f32; 4],
-    pub tex_coords: [f32; 2],
+    pub position: glam::Vec3,
+    pub normal: glam::Vec3,
+    pub tex_coords: glam::Vec2,
+    pub tangent: glam::Vec4,
 }
 pub mod bind_groups {
     pub struct BindGroup0(wgpu::BindGroup);
@@ -265,18 +265,18 @@ pub mod bind_groups {
     }
     pub struct BindGroup1(wgpu::BindGroup);
     pub struct BindGroupLayout1<'a> {
-        pub roughness_tex: &'a wgpu::TextureView,
-        pub albedo_tex: &'a wgpu::TextureView,
         pub normal_tex: &'a wgpu::TextureView,
-        pub metallic_tex: &'a wgpu::TextureView,
+        pub albedo_tex: &'a wgpu::TextureView,
+        pub roughness_tex: &'a wgpu::TextureView,
         pub emissive_tex: &'a wgpu::TextureView,
+        pub metallic_tex: &'a wgpu::TextureView,
         pub material_uniform: wgpu::BufferBinding<'a>,
     }
     const LAYOUT_DESCRIPTOR1: wgpu::BindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
         label: None,
         entries: &[
             wgpu::BindGroupLayoutEntry {
-                binding: 3,
+                binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float {
@@ -300,19 +300,7 @@ pub mod bind_groups {
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float {
-                        filterable: true,
-                    },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 4,
+                binding: 3,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float {
@@ -325,6 +313,18 @@ pub mod bind_groups {
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 5,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float {
+                        filterable: true,
+                    },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float {
@@ -359,9 +359,9 @@ pub mod bind_groups {
                         layout: &bind_group_layout,
                         entries: &[
                             wgpu::BindGroupEntry {
-                                binding: 3,
+                                binding: 2,
                                 resource: wgpu::BindingResource::TextureView(
-                                    bindings.roughness_tex,
+                                    bindings.normal_tex,
                                 ),
                             },
                             wgpu::BindGroupEntry {
@@ -371,21 +371,21 @@ pub mod bind_groups {
                                 ),
                             },
                             wgpu::BindGroupEntry {
-                                binding: 2,
+                                binding: 3,
                                 resource: wgpu::BindingResource::TextureView(
-                                    bindings.normal_tex,
-                                ),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 4,
-                                resource: wgpu::BindingResource::TextureView(
-                                    bindings.metallic_tex,
+                                    bindings.roughness_tex,
                                 ),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 5,
                                 resource: wgpu::BindingResource::TextureView(
                                     bindings.emissive_tex,
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 4,
+                                resource: wgpu::BindingResource::TextureView(
+                                    bindings.metallic_tex,
                                 ),
                             },
                             wgpu::BindGroupEntry {
@@ -430,13 +430,13 @@ pub mod vertex {
                 shader_location: 1,
             },
             wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x4,
-                offset: memoffset::offset_of!(super::Vertex, tangent) as u64,
+                format: wgpu::VertexFormat::Float32x2,
+                offset: memoffset::offset_of!(super::Vertex, tex_coords) as u64,
                 shader_location: 2,
             },
             wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x2,
-                offset: memoffset::offset_of!(super::Vertex, tex_coords) as u64,
+                format: wgpu::VertexFormat::Float32x4,
+                offset: memoffset::offset_of!(super::Vertex, tangent) as u64,
                 shader_location: 3,
             },
         ];

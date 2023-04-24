@@ -1,12 +1,22 @@
+use std::f32::consts::PI;
+
+use tar_types::{Mat4, Vec4};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::state::{RenderState, INDICES, VERTICES};
+use crate::{model::Model, state::RenderState};
 use tar_shader::shader::{
     self,
     bind_groups::{BindGroup0, BindGroupLayout0},
-    Vertex,
 };
+
+#[rustfmt::skip]
+pub const OPENGL_TO_WGPU_MATRIX: Mat4 = glam::Mat4::from_cols_array(&[
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+]);
 
 pub async fn new_state(window: Window) -> RenderState {
     let size = window.inner_size();
@@ -71,62 +81,38 @@ pub async fn new_state(window: Window) -> RenderState {
     };
     surface.configure(&device, &config);
 
-    let diffuse_bytes = include_bytes!("../../../wespe nicht vespe.png");
-    let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-    let diffuse_rgba = diffuse_image.to_rgba8();
-
-    use image::GenericImageView;
-    let dimensions = diffuse_image.dimensions();
-
-    let texture_size = wgpu::Extent3d {
-        width: dimensions.0,
-        height: dimensions.1,
-        depth_or_array_layers: 1,
-    };
-    let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-        // All textures are stored as 3D, we represent our 2D texture
-        // by setting depth to 1.
-        size: texture_size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        // Most images are stored using sRGB so we need to reflect that here.
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-        // COPY_DST means that we want to copy data to this texture
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        label: Some("diffuse_texture"),
-        // This is the same as with the SurfaceConfig. It
-        // specifies what texture formats can be used to
-        // create TextureViews for this texture. The base
-        // texture format (Rgba8UnormSrgb in this case) is
-        // always supported. Note that using a different
-        // texture format is not supported on the WebGL2
-        // backend.
-        view_formats: &[],
-    });
-
-    queue.write_texture(
-        // Tells wgpu where to copy the pixel data
-        wgpu::ImageCopyTexture {
-            texture: &diffuse_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        // The actual pixel data
-        &diffuse_rgba,
-        // The layout of the texture
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
-        },
-        texture_size,
+    let view = glam::Mat4::look_at_rh(
+        (0.0, 1.0, 2.0).into(),
+        (0.0, 0.0, 0.0).into(),
+        glam::Vec3::Y,
     );
 
-    let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    let proj = glam::Mat4::perspective_rh(
+        PI / 2.0,
+        config.width as f32 / config.height as f32,
+        0.1,
+        100.0,
+    );
+
+    // TODO!: move at least the object transform part to somewhere in the object
+    let uniform_data = shader::UniformData {
+        ambient: Vec4::new(0.2, 0.3, 0.5, 1.0),
+        view: view.into(),
+        view_proj: (OPENGL_TO_WGPU_MATRIX * proj * view).into(),
+        object_transform: glam::Mat4::from_cols_array_2d(&[[0.0; 4]; 4]),
+    };
+
+    let mut uni_buff = encase::UniformBuffer::new(vec![]);
+
+    uni_buff.write(&uniform_data).unwrap();
+
+    let uniform_data_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("object uniform buffer"),
+        contents: &uni_buff.into_inner(),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let primary_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -136,55 +122,39 @@ pub async fn new_state(window: Window) -> RenderState {
         ..Default::default()
     });
 
-    let diffuse_bind_group = BindGroup0::from_bindings(
+    let light_data = vec![shader::DirectionalLight {
+        color: [0.5, 0.5, 0.0].into(),
+        padding: 0.0,
+        direction: [0.5, 0.5, 0.5].into(),
+        padding2: 0.0,
+    }];
+
+    let mut light_buffer = encase::StorageBuffer::new(vec![]);
+    light_buffer.write(&light_data).unwrap();
+
+    let light_storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("light storage buffer"),
+        contents: &light_buffer.into_inner(),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let global_frame_bind_group = BindGroup0::from_bindings(
         &device,
         BindGroupLayout0 {
-            t_diffuse: &diffuse_texture_view,
-            s_diffuse: &diffuse_sampler,
+            primary_sampler: &primary_sampler,
+            uniforms: uniform_data_buffer.as_entire_buffer_binding(),
+            directional_lights: light_storage_buffer.as_entire_buffer_binding(),
         },
     );
 
-    let shader = shader::create_shader_module(&device);
+    let models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
-    let pipeline_layout = shader::create_pipeline_layout(&device);
+    let models = models
+        .into_iter()
+        .map(|model| Model::from_stored(model, &device, &queue, config.format))
+        .collect();
 
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("primary render pipeline"),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[Vertex::desc()],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[Some(wgpu::ColorTargetState {
-                format: config.format,
-                blend: Some(wgpu::BlendState::REPLACE),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
-            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-            polygon_mode: wgpu::PolygonMode::Fill,
-            // Requires Features::DEPTH_CLIP_CONTROL
-            unclipped_depth: false,
-            // Requires Features::CONSERVATIVE_RASTERIZATION
-            conservative: false,
-        },
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-        multiview: None,
-    });
+    println!("inited state");
 
     RenderState {
         window,
@@ -193,7 +163,8 @@ pub async fn new_state(window: Window) -> RenderState {
         queue,
         config,
         size,
-        diffuse_bind_group,
+        global_frame_bind_group,
+        models,
     }
 }
 
@@ -239,15 +210,13 @@ pub fn render(state: &mut RenderState) -> Result<(), wgpu::SurfaceError> {
             depth_stencil_attachment: None,
         });
 
-        render_pass.set_pipeline(&state.render_pipeline);
-        state.diffuse_bind_group.set(&mut render_pass);
-        render_pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        state.global_frame_bind_group.set(&mut render_pass);
 
-        render_pass.draw_indexed(0..state.num_indices, 0, 0..1);
+        for model in &state.models {
+            model.render(&mut render_pass);
+        }
     }
 
-    // submit will accept anything that implements IntoIter
     state.queue.submit(std::iter::once(encoder.finish()));
     output.present();
 
