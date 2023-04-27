@@ -2,8 +2,6 @@ use tar_shader::shader;
 use tar_types::Mat4;
 use wgpu::util::DeviceExt;
 
-use crate::vs_analouge;
-
 pub mod material;
 pub mod texture;
 
@@ -24,9 +22,6 @@ impl Model {
         queue: &wgpu::Queue,
         target_format: wgpu::TextureFormat,
     ) -> Self {
-        dbg!(stored.vertices[0].position);
-        vs_analouge(&stored.vertices[0]);
-
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(stored.vertices.as_slice()),

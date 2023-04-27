@@ -4,7 +4,11 @@ use tar_types::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::{camera, model::Model, state::RenderState};
+use crate::{
+    camera,
+    model::{texture, Model},
+    state::RenderState,
+};
 use tar_shader::shader::{
     self,
     bind_groups::{BindGroup0, BindGroupLayout0},
@@ -88,7 +92,7 @@ pub async fn new_state(window: Window) -> RenderState {
     );
 
     let proj = glam::Mat4::perspective_rh(
-        PI / 2.0,
+        0.7853982,
         config.width as f32 / config.height as f32,
         0.1,
         100.0,
@@ -146,19 +150,19 @@ pub async fn new_state(window: Window) -> RenderState {
         },
     );
 
-    let models = tar_res::import_models("assets/box/Box.gltf").unwrap();
+    let models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
     let models = models
         .into_iter()
         .map(|model| Model::from_stored(model, &device, &queue, config.format))
         .collect();
 
-    todo!();
-
-    let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), 0.0, 0.0);
+    let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), -PI / 4.0 * 3.0, -PI / 4.0);
     let editor_cam_controller = camera::CameraController::new(1.0, 1.0);
     let editor_projection =
         camera::Projection::new(config.width, config.height, 60.0, 0.01, 1000.0);
+
+    let depth_tex = texture::DepthTexture::create_depth_texture(&device, &config);
 
     RenderState {
         window,
@@ -176,6 +180,7 @@ pub async fn new_state(window: Window) -> RenderState {
         editor_projection,
         mouse_pressed: false,
         dt: std::time::Duration::new(0, 0),
+        depth_tex,
     }
 }
 
@@ -185,6 +190,7 @@ pub fn resize(new_size: winit::dpi::PhysicalSize<u32>, state: &mut RenderState) 
         state.config.width = new_size.width;
         state.config.height = new_size.height;
         state.surface.configure(&state.device, &state.config);
+        state.depth_tex = texture::DepthTexture::create_depth_texture(&state.device, &state.config);
     }
 }
 
@@ -193,11 +199,11 @@ pub fn render(state: &mut RenderState) -> Result<(), wgpu::SurfaceError> {
         .editor_cam_controller
         .update_camera(&mut state.editor_cam, state.dt);
 
-    // let view = calc_view_matrix(&state.editor_cam);
-    // let proj = calc_proj_matrix(&state.editor_projection);
+    let view = calc_view_matrix(&state.editor_cam);
+    let proj = calc_proj_matrix(&state.editor_projection);
 
-    // state.uniform_data.view = view;
-    // state.uniform_data.proj = proj;
+    state.uniform_data.view = view;
+    state.uniform_data.proj = proj;
 
     let mut uni_buff = encase::UniformBuffer::new(vec![]);
 
@@ -236,7 +242,14 @@ pub fn render(state: &mut RenderState) -> Result<(), wgpu::SurfaceError> {
                     },
                 }),
             ],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &state.depth_tex.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
         });
 
         state.global_frame_bind_group.set(&mut render_pass);
@@ -267,7 +280,7 @@ fn calc_view_matrix(cam: &camera::Camera) -> Mat4 {
 
 fn calc_proj_matrix(projection: &camera::Projection) -> Mat4 {
     Mat4::perspective_rh(
-        projection.fovy,
+        projection.fovy * PI / 180.0,
         projection.aspect,
         projection.znear,
         projection.zfar,

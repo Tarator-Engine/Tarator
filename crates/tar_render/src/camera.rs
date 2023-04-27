@@ -75,6 +75,7 @@ pub struct CameraController {
     scroll: f32,
     speed: f32,
     sensitivity: f32,
+    print_cam: bool,
 }
 
 impl CameraController {
@@ -91,6 +92,7 @@ impl CameraController {
             scroll: 0.0,
             speed,
             sensitivity,
+            print_cam: false,
         }
     }
 
@@ -125,6 +127,10 @@ impl CameraController {
                 self.amount_down = amount;
                 true
             }
+            VirtualKeyCode::P => {
+                self.print_cam = true;
+                true
+            }
             _ => false,
         }
     }
@@ -143,6 +149,10 @@ impl CameraController {
     }
 
     pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
+        if self.print_cam {
+            self.print_cam = false;
+            println!("{:?}", camera);
+        }
         let dt = dt.as_secs_f32();
 
         // Move forward/backward and left/right

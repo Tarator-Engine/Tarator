@@ -7,7 +7,7 @@ use tar_shader::shader::{
 };
 use wgpu::util::DeviceExt;
 
-use super::texture::{GrayTexture, RgbaTexture, Texture};
+use super::texture::{self, GrayTexture, RgbaTexture, Texture};
 
 pub struct Material {
     pub pbr: PbrMaterial,
@@ -113,7 +113,13 @@ impl Material {
                 // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::DepthTexture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less, // 1.
+                stencil: wgpu::StencilState::default(),     // 2.
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,

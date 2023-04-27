@@ -1,6 +1,6 @@
-use glam::Vec4Swizzles;
-use tar_shader::shader;
-use tar_types::{Mat3, Mat4, Vec3, Vec4};
+// use glam::Vec4Swizzles;
+// use tar_shader::shader;
+// use tar_types::{Mat3, Mat4, Vec3, Vec4};
 
 mod camera;
 pub mod model;
@@ -92,74 +92,74 @@ pub mod dev {
     }
 }
 
-pub fn vs_analouge(vertex: &shader::Vertex) {
-    let normal: Vec3 = vertex.normal.into();
-    let tangent: Vec3 = vertex.tangent.xyz().into();
-    let view = glam::Mat4::look_at_rh(
-        (2.0, 2.0, 2.0).into(),
-        (0.0, 0.0, 0.0).into(),
-        glam::Vec3::Y,
-    );
+// pub fn vs_analouge(vertex: &shader::Vertex) {
+//     let normal: Vec3 = vertex.normal.into();
+//     let tangent: Vec3 = vertex.tangent.xyz().into();
+//     let view = glam::Mat4::look_at_rh(
+//         (2.0, 2.0, 2.0).into(),
+//         (0.0, 0.0, 0.0).into(),
+//         glam::Vec3::Y,
+//     );
 
-    #[rustfmt::skip]
-    let proj =
-        glam::Mat4::perspective_rh(
-            std::f32::consts::PI / 2.0,
-            1920.0 / 1080.0,
-            0.1,
-            100.0);
+//     #[rustfmt::skip]
+//     let proj =
+//         glam::Mat4::perspective_rh(
+//             std::f32::consts::PI / 2.0,
+//             1920.0 / 1080.0,
+//             0.1,
+//             100.0);
 
-    let model_matrix = Mat4::IDENTITY;
-    let model_view = view * model_matrix;
-    let model_view_proj = proj * model_view;
+//     let model_matrix = Mat4::IDENTITY;
+//     let model_view = view * model_matrix;
+//     let model_view_proj = proj * model_view;
 
-    let position_vec4 = Vec4::from((vertex.position, 1.0));
+//     let position_vec4 = Vec4::from((vertex.position, 1.0));
 
-    // let view_pos = model_view * position_vec4;
-    // dbg!(model_matrix);
-    // dbg!(view);
-    // dbg!(model_view);
-    // dbg!(view_pos);
+//     // let view_pos = model_view * position_vec4;
+//     // dbg!(model_matrix);
+//     // dbg!(view);
+//     // dbg!(model_view);
+//     // dbg!(view_pos);
 
-    // let mvp = proj * view * model_matrix;
+//     // let mvp = proj * view * model_matrix;
 
-    // let homogeneous = mvp * position_vec4;
-    // dbg!(homogeneous);
+//     // let homogeneous = mvp * position_vec4;
+//     // dbg!(homogeneous);
 
-    // dbg!(view);
+//     // dbg!(view);
 
-    // let world_pos = model_matrix * position_vec4;
-    // dbg!(world_pos);
-    // let camera_pos = view * world_pos;
-    // dbg!(camera_pos);
-    // let homogeneous = proj * camera_pos;
-    // dbg!(homogeneous);
+//     // let world_pos = model_matrix * position_vec4;
+//     // dbg!(world_pos);
+//     // let camera_pos = view * world_pos;
+//     // dbg!(camera_pos);
+//     // let homogeneous = proj * camera_pos;
+//     // dbg!(homogeneous);
 
-    let mv_mat3 = Mat3::from_cols(
-        model_view.x_axis.truncate(),
-        model_view.y_axis.truncate(),
-        model_view.z_axis.truncate(),
-    );
+//     let mv_mat3 = Mat3::from_cols(
+//         model_view.x_axis.truncate(),
+//         model_view.y_axis.truncate(),
+//         model_view.z_axis.truncate(),
+//     );
 
-    let inv_scale_sq = mat3_inv_scale_squared(mv_mat3);
+//     let inv_scale_sq = mat3_inv_scale_squared(mv_mat3);
 
-    // dbg!(inv_scale_sq);
+//     // dbg!(inv_scale_sq);
 
-    let view_position = model_view * position_vec4;
-    // dbg!(view_position);
-    let normal = (mv_mat3 * (inv_scale_sq * normal)).normalize();
-    // dbg!(normal);
-    let tangent = (mv_mat3 * (inv_scale_sq * tangent)).normalize();
-    let tangent = Vec4::new(tangent.x, tangent.y, tangent.z, 1.0);
-    // dbg!(tangent);
-    let position = model_view_proj * position_vec4;
-    dbg!(position);
-}
+//     let view_position = model_view * position_vec4;
+//     // dbg!(view_position);
+//     let normal = (mv_mat3 * (inv_scale_sq * normal)).normalize();
+//     // dbg!(normal);
+//     let tangent = (mv_mat3 * (inv_scale_sq * tangent)).normalize();
+//     let tangent = Vec4::new(tangent.x, tangent.y, tangent.z, 1.0);
+//     // dbg!(tangent);
+//     let position = model_view_proj * position_vec4;
+//     dbg!(position);
+// }
 
-fn mat3_inv_scale_squared(matrix: Mat3) -> Vec3 {
-    Vec3::new(
-        1.0 / glam::Vec3::dot(matrix.x_axis, matrix.x_axis),
-        1.0 / glam::Vec3::dot(matrix.y_axis, matrix.y_axis),
-        1.0 / glam::Vec3::dot(matrix.z_axis, matrix.z_axis),
-    )
-}
+// fn mat3_inv_scale_squared(matrix: Mat3) -> Vec3 {
+//     Vec3::new(
+//         1.0 / glam::Vec3::dot(matrix.x_axis, matrix.x_axis),
+//         1.0 / glam::Vec3::dot(matrix.y_axis, matrix.y_axis),
+//         1.0 / glam::Vec3::dot(matrix.z_axis, matrix.z_axis),
+//     )
+// }

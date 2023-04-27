@@ -2,7 +2,10 @@ use winit::window::Window;
 
 use tar_shader::shader;
 
-use crate::{camera, model::Model};
+use crate::{
+    camera,
+    model::{texture::DepthTexture, Model},
+};
 
 pub struct RenderState {
     pub surface: wgpu::Surface,
@@ -22,4 +25,6 @@ pub struct RenderState {
 
     pub mouse_pressed: bool,
     pub dt: std::time::Duration,
+
+    pub depth_tex: DepthTexture,
 }
