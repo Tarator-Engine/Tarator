@@ -359,16 +359,29 @@ var emissive_tex: texture_2d<f32>;
 
 @fragment
 fn fs_main(vs_out: VertexOutput) -> @location(0) vec4<f32> {
-
     if vs_out.use_dbg != 0.0 {
         return vec4<f32>(abs(vs_out.debug.r), abs(vs_out.debug.g), abs(vs_out.debug.b), 1.0);
     }
 
     let material = material_uniform;
 
-    let pixel = get_pixel_data(material, vs_out);
+    // let pixel = get_pixel_data(material, vs_out);
+    var albedo: vec4<f32>;
 
-    return pixel.albedo;
+
+    if extract_material_flag(material.flags, FLAGS_ALBEDO_ACTIVE) {
+        if extract_texture_enable(material.texture_enable, TEXTURE_ALBEDO) {
+            albedo = get_albedo_texture(vs_out.tex_coords);
+        } else {
+            albedo = vec4<f32>(1.0);
+        }
+    } else {
+        albedo = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    }
+
+    albedo *= material.albedo;
+
+    return albedo;
 
     // if extract_material_flag(material.flags, FLAGS_UNLIT) {
     //     return pixel.albedo;
