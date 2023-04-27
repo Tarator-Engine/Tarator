@@ -8,8 +8,7 @@ struct UniformData {
     ambient: vec4<f32>,
     /// view matrix
     view: mat4x4<f32>,
-    view_proj: mat4x4<f32>,
-    object_transform: mat4x4<f32>,
+    proj: mat4x4<f32>,
 }
 
 struct DirectionalLight {
@@ -65,8 +64,8 @@ fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
         var normal = normalize(texture_read.rgb * 2.0 - 1.0);
 
         let normal_norm = normalize(vs_out.normal);
-        let tangent_norm = normalize(vs_out.tangent.xyz);
-        let bitangent = cross(normal_norm, tangent_norm) * vs_out.tangent.w;
+        let tangent_norm = normalize(vs_out.tangent);
+        let bitangent = cross(normal_norm, tangent_norm);
 
         let tbn = mat3x3(tangent_norm, bitangent, normal_norm);
 
@@ -259,12 +258,22 @@ struct Vertex {
     @location(3) tangent: vec4<f32>,
 }
 
+struct Instance {
+    @location(4) model_matrix_0: vec4<f32>,
+    @location(5) model_matrix_1: vec4<f32>,
+    @location(6) model_matrix_2: vec4<f32>,
+    @location(7) model_matrix_3: vec4<f32>,
+}
+
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
     @location(1) view_position: vec4<f32>,
     @location(2) normal: vec3<f32>,
-    @location(3) tangent: vec4<f32>,
+    @location(3) tangent: vec3<f32>,
+    @location(4) debug: vec3<f32>, 
+    @location(5) use_dbg: f32,
 };
 
 
@@ -282,28 +291,42 @@ fn mat3_inv_scale_squared(transform: mat3x3<f32>) -> vec3<f32> {
 @vertex
 fn vs_main(
     vertex: Vertex,
+    instance: Instance,
 ) -> VertexOutput {
 
-    let model_view = uniforms.view * uniforms.object_transform;
-    let model_view_proj = uniforms.view_proj * uniforms.object_transform;
+    // the steps to homogeneous coordinates (coordinates on screen) are:
+    // model -> world -> camera -> homogeneous
+    //     model     view      proj
 
+    // when combining matrices note the correct order
+    // model_view_proj = proj * view * model
+    
+    // in the case of this code the latter two are calculated seperately
+    // because we need the position in view coordinates
+
+    let model_matrix = mat4x4<f32>(
+        instance.model_matrix_0,
+        instance.model_matrix_1,
+        instance.model_matrix_2,
+        instance.model_matrix_3,
+    );
+
+    let model_view = uniforms.view * model_matrix;
+    let model_view_proj = uniforms.proj * model_matrix;
 
     let position_vec4 = vec4<f32>(vertex.position, 1.0);
     let mv_mat3 = mat3x3<f32>(model_view[0].xyz, model_view[1].xyz, model_view[2].xyz);
 
-
     let inv_scale_sq = mat3_inv_scale_squared(mv_mat3);
-
 
     var out: VertexOutput;
     out.view_position = model_view * position_vec4;
     out.normal = normalize(mv_mat3 * (inv_scale_sq * vertex.normal));
-    out.tangent = vec4<f32>(normalize(mv_mat3 * (inv_scale_sq * vertex.tangent.xyz)), vertex.tangent.w);
+    out.tangent = normalize(mv_mat3 * (inv_scale_sq * vertex.tangent.xyz));
     out.tex_coords = vertex.tex_coords;
-    out.position = vec4<f32>(vertex.position, 1.0);
+    out.position = model_view_proj * position_vec4;
     return out;
 }
-
 
 // ----- Fragment Data ----- 
 
@@ -336,6 +359,11 @@ var emissive_tex: texture_2d<f32>;
 
 @fragment
 fn fs_main(vs_out: VertexOutput) -> @location(0) vec4<f32> {
+
+    if vs_out.use_dbg != 0.0 {
+        return vec4<f32>(abs(vs_out.debug.r), abs(vs_out.debug.g), abs(vs_out.debug.b), 1.0);
+    }
+
     let material = material_uniform;
 
     let pixel = get_pixel_data(material, vs_out);
@@ -355,5 +383,6 @@ fn fs_main(vs_out: VertexOutput) -> @location(0) vec4<f32> {
 
     let ambient = uniforms.ambient * pixel.albedo;
     let both = vec4<f32>(color, pixel.albedo.a);
-    return max(ambient, both);
-} 
+    // return max(ambient, both);
+    return vec4<f32>(1.0);
+}

@@ -1,10 +1,10 @@
 use std::f32::consts::PI;
 
-use tar_types::{Mat4, Vec4};
+use tar_types::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::{model::Model, state::RenderState};
+use crate::{camera, model::Model, state::RenderState};
 use tar_shader::shader::{
     self,
     bind_groups::{BindGroup0, BindGroupLayout0},
@@ -82,7 +82,7 @@ pub async fn new_state(window: Window) -> RenderState {
     surface.configure(&device, &config);
 
     let view = glam::Mat4::look_at_rh(
-        (0.0, 1.0, 2.0).into(),
+        (2.0, 2.0, 2.0).into(),
         (0.0, 0.0, 0.0).into(),
         glam::Vec3::Y,
     );
@@ -98,8 +98,7 @@ pub async fn new_state(window: Window) -> RenderState {
     let uniform_data = shader::UniformData {
         ambient: Vec4::new(0.2, 0.3, 0.5, 1.0),
         view: view.into(),
-        view_proj: (OPENGL_TO_WGPU_MATRIX * proj * view).into(),
-        object_transform: glam::Mat4::from_cols_array_2d(&[[0.0; 4]; 4]),
+        proj: proj.into(),
     };
 
     let mut uni_buff = encase::UniformBuffer::new(vec![]);
@@ -147,14 +146,19 @@ pub async fn new_state(window: Window) -> RenderState {
         },
     );
 
-    let models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
+    let models = tar_res::import_models("assets/box/Box.gltf").unwrap();
 
     let models = models
         .into_iter()
         .map(|model| Model::from_stored(model, &device, &queue, config.format))
         .collect();
 
-    println!("inited state");
+    todo!();
+
+    let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), 0.0, 0.0);
+    let editor_cam_controller = camera::CameraController::new(1.0, 1.0);
+    let editor_projection =
+        camera::Projection::new(config.width, config.height, 60.0, 0.01, 1000.0);
 
     RenderState {
         window,
@@ -165,6 +169,13 @@ pub async fn new_state(window: Window) -> RenderState {
         size,
         global_frame_bind_group,
         models,
+        uniform_buffer: uniform_data_buffer,
+        uniform_data,
+        editor_cam,
+        editor_cam_controller,
+        editor_projection,
+        mouse_pressed: false,
+        dt: std::time::Duration::new(0, 0),
     }
 }
 
@@ -178,6 +189,24 @@ pub fn resize(new_size: winit::dpi::PhysicalSize<u32>, state: &mut RenderState) 
 }
 
 pub fn render(state: &mut RenderState) -> Result<(), wgpu::SurfaceError> {
+    state
+        .editor_cam_controller
+        .update_camera(&mut state.editor_cam, state.dt);
+
+    // let view = calc_view_matrix(&state.editor_cam);
+    // let proj = calc_proj_matrix(&state.editor_projection);
+
+    // state.uniform_data.view = view;
+    // state.uniform_data.proj = proj;
+
+    let mut uni_buff = encase::UniformBuffer::new(vec![]);
+
+    uni_buff.write(&state.uniform_data).unwrap();
+
+    state
+        .queue
+        .write_buffer(&state.uniform_buffer, 0, &uni_buff.into_inner());
+
     let output = state.surface.get_current_texture()?;
     let view = output
         .texture
@@ -221,4 +250,26 @@ pub fn render(state: &mut RenderState) -> Result<(), wgpu::SurfaceError> {
     output.present();
 
     Ok(())
+}
+
+fn calc_view_matrix(cam: &camera::Camera) -> Mat4 {
+    let (sin_pitch, cos_pitch) = cam.pitch.sin_cos();
+    let (sin_yaw, cos_yaw) = cam.yaw.sin_cos();
+
+    Mat4::look_to_rh(
+        cam.position.into(),
+        Vec3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw)
+            .normalize()
+            .into(),
+        Vec3::Y.into(),
+    )
+}
+
+fn calc_proj_matrix(projection: &camera::Projection) -> Mat4 {
+    Mat4::perspective_rh(
+        projection.fovy,
+        projection.aspect,
+        projection.znear,
+        projection.zfar,
+    )
 }

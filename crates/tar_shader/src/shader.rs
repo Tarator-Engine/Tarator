@@ -15,11 +15,10 @@
 pub struct UniformData {
     pub ambient: glam::Vec4,
     pub view: glam::Mat4,
-    pub view_proj: glam::Mat4,
-    pub object_transform: glam::Mat4,
+    pub proj: glam::Mat4,
 }
 const _: () = assert!(
-    std::mem::size_of:: < UniformData > () == 208,
+    std::mem::size_of:: < UniformData > () == 144,
     "size of UniformData does not match WGSL"
 );
 const _: () = assert!(
@@ -31,12 +30,8 @@ const _: () = assert!(
     "offset of UniformData.view does not match WGSL"
 );
 const _: () = assert!(
-    memoffset::offset_of!(UniformData, view_proj) == 80,
-    "offset of UniformData.view_proj does not match WGSL"
-);
-const _: () = assert!(
-    memoffset::offset_of!(UniformData, object_transform) == 144,
-    "offset of UniformData.object_transform does not match WGSL"
+    memoffset::offset_of!(UniformData, proj) == 80,
+    "offset of UniformData.proj does not match WGSL"
 );
 #[repr(C)]
 #[derive(
@@ -185,6 +180,24 @@ pub struct Vertex {
     pub normal: glam::Vec3,
     pub tex_coords: glam::Vec2,
     pub tangent: glam::Vec4,
+}
+#[repr(C)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+    encase::ShaderType,
+    serde::Serialize,
+    serde::Deserialize
+)]
+pub struct Instance {
+    pub model_matrix_0: glam::Vec4,
+    pub model_matrix_1: glam::Vec4,
+    pub model_matrix_2: glam::Vec4,
+    pub model_matrix_3: glam::Vec4,
 }
 pub mod bind_groups {
     pub struct BindGroup0(wgpu::BindGroup);
@@ -450,6 +463,39 @@ pub mod vertex {
             }
         }
     }
+    impl super::Instance {
+        pub const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 4] = [
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: memoffset::offset_of!(super::Instance, model_matrix_0) as u64,
+                shader_location: 4,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: memoffset::offset_of!(super::Instance, model_matrix_1) as u64,
+                shader_location: 5,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: memoffset::offset_of!(super::Instance, model_matrix_2) as u64,
+                shader_location: 6,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: memoffset::offset_of!(super::Instance, model_matrix_3) as u64,
+                shader_location: 7,
+            },
+        ];
+        pub const fn vertex_buffer_layout(
+            step_mode: wgpu::VertexStepMode,
+        ) -> wgpu::VertexBufferLayout<'static> {
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<super::Instance>() as u64,
+                step_mode,
+                attributes: &super::Instance::VERTEX_ATTRIBUTES,
+            }
+        }
+    }
 }
 pub const ENTRY_VS_MAIN: &str = "vs_main";
 pub const ENTRY_FS_MAIN: &str = "fs_main";
@@ -467,10 +513,16 @@ pub fn vertex_state<'a, const N: usize>(
         buffers: &entry.buffers,
     }
 }
-pub fn vs_main_entry(vertex: wgpu::VertexStepMode) -> VertexEntry<1> {
+pub fn vs_main_entry(
+    vertex: wgpu::VertexStepMode,
+    instance: wgpu::VertexStepMode,
+) -> VertexEntry<2> {
     VertexEntry {
         entry_point: ENTRY_VS_MAIN,
-        buffers: [Vertex::vertex_buffer_layout(vertex)],
+        buffers: [
+            Vertex::vertex_buffer_layout(vertex),
+            Instance::vertex_buffer_layout(instance),
+        ],
     }
 }
 pub fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {

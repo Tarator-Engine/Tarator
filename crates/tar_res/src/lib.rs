@@ -20,7 +20,5 @@ pub fn import_models(file_path: &str) -> SomeResult<Vec<Model>> {
         }
     }
 
-    println!("loaded models");
-
     Ok(models)
 }

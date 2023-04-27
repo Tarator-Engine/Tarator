@@ -87,9 +87,10 @@ impl Material {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[shader::Vertex::vertex_buffer_layout(
-                    wgpu::VertexStepMode::Vertex,
-                )],
+                buffers: &[
+                    shader::Vertex::vertex_buffer_layout(wgpu::VertexStepMode::Vertex),
+                    shader::Instance::vertex_buffer_layout(wgpu::VertexStepMode::Instance),
+                ],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,

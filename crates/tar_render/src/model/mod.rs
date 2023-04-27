@@ -1,4 +1,8 @@
+use tar_shader::shader;
+use tar_types::Mat4;
 use wgpu::util::DeviceExt;
+
+use crate::vs_analouge;
 
 pub mod material;
 pub mod texture;
@@ -9,6 +13,8 @@ pub struct Model {
     pub num_vertices: u32,
     pub num_indices: Option<u32>,
     pub material: material::Material,
+    pub instances: Vec<shader::Instance>,
+    pub instance_buffer: wgpu::Buffer,
 }
 
 impl Model {
@@ -18,6 +24,9 @@ impl Model {
         queue: &wgpu::Queue,
         target_format: wgpu::TextureFormat,
     ) -> Self {
+        dbg!(stored.vertices[0].position);
+        vs_analouge(&stored.vertices[0]);
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(stored.vertices.as_slice()),
@@ -44,12 +53,27 @@ impl Model {
         let material =
             material::Material::from_stored(stored.material, device, queue, target_format);
 
+        let instances = vec![shader::Instance {
+            model_matrix_0: Mat4::IDENTITY.x_axis,
+            model_matrix_1: Mat4::IDENTITY.y_axis,
+            model_matrix_2: Mat4::IDENTITY.z_axis,
+            model_matrix_3: Mat4::IDENTITY.w_axis,
+        }];
+
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("instance buffer"),
+            contents: &bytemuck::cast_slice(instances.as_slice()),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         Self {
             vertex_buffer,
             index_buffer,
             num_vertices,
             num_indices,
             material,
+            instances,
+            instance_buffer,
         }
     }
 
@@ -57,6 +81,7 @@ impl Model {
         render_pass.set_pipeline(&self.material.pipeline);
         self.material.bind_group.set(render_pass);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         if let Some(i_buff) = &self.index_buffer {
             render_pass.set_index_buffer(i_buff.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..self.num_indices.unwrap(), 0, 0..1);
