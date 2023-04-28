@@ -22,7 +22,7 @@ pub const OPENGL_TO_WGPU_MATRIX: Mat4 = glam::Mat4::from_cols_array(&[
     0.0, 0.0, 0.5, 1.0,
 ]);
 
-pub async fn new_state(window: Window) -> RenderState {
+pub async fn new_state(window: &Window) -> RenderState {
     let size = window.inner_size();
 
     // The instance is a handle to our GPU
@@ -165,12 +165,11 @@ pub async fn new_state(window: Window) -> RenderState {
     let depth_tex = texture::DepthTexture::create_depth_texture(&device, &config);
 
     RenderState {
-        window,
         surface,
-        device,
         queue,
+        device,
+        adapter,
         config,
-        size,
         global_frame_bind_group,
         models,
         uniform_buffer: uniform_data_buffer,
@@ -179,14 +178,12 @@ pub async fn new_state(window: Window) -> RenderState {
         editor_cam_controller,
         editor_projection,
         mouse_pressed: false,
-        dt: std::time::Duration::new(0, 0),
         depth_tex,
     }
 }
 
 pub fn resize(new_size: winit::dpi::PhysicalSize<u32>, state: &mut RenderState) {
     if new_size.width > 0 && new_size.height > 0 {
-        state.size = new_size;
         state.config.width = new_size.width;
         state.config.height = new_size.height;
         state.surface.configure(&state.device, &state.config);
@@ -194,10 +191,10 @@ pub fn resize(new_size: winit::dpi::PhysicalSize<u32>, state: &mut RenderState) 
     }
 }
 
-pub fn render(state: &mut RenderState) -> Result<(), wgpu::SurfaceError> {
+pub fn render(state: &mut RenderState, dt: std::time::Duration) -> Result<(), wgpu::SurfaceError> {
     state
         .editor_cam_controller
-        .update_camera(&mut state.editor_cam, state.dt);
+        .update_camera(&mut state.editor_cam, dt);
 
     let view = calc_view_matrix(&state.editor_cam);
     let proj = calc_proj_matrix(&state.editor_projection);
