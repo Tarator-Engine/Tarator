@@ -7,18 +7,18 @@ use tar_render::render_functions;
 use crate::{state::ShareState, DoubleBuffer};
 
 pub struct RenderData {
-    pre_render_finished_barrier: Arc<Barrier>,
-    shared_state: Arc<Mutex<DoubleBuffer<ShareState>>>,
-    game_render_state: tar_render::state::RenderState,
-    egui_renderer: egui_wgpu::Renderer,
+    pub pre_render_finished_barrier: Arc<Barrier>,
+    pub shared_state: Arc<Mutex<DoubleBuffer<ShareState>>>,
+    pub game_render_state: tar_render::state::RenderState,
+    pub egui_renderer: egui_wgpu::Renderer,
 }
 
-pub fn render_fn(mut data: RenderData) {
+pub fn render_fn(data: RenderData) {
     let RenderData {
         pre_render_finished_barrier,
         shared_state,
-        game_render_state,
-        egui_renderer,
+        mut game_render_state,
+        mut egui_renderer,
     } = data;
 
     loop {
@@ -34,7 +34,7 @@ pub fn render_fn(mut data: RenderData) {
         let output_frame = match game_render_state.surface.get_current_texture() {
             Ok(frame) => Some(frame),
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                render_functions::resize(game_render_state.size, &mut game_render_state);
+                render_functions::resize(shared_state.window_size, &mut game_render_state);
                 None
             }
             Err(wgpu::SurfaceError::Timeout) => {
@@ -51,42 +51,53 @@ pub fn render_fn(mut data: RenderData) {
 
             // rendering
 
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("encoder"),
-            });
+            let mut encoder =
+                game_render_state
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("encoder"),
+                    });
 
             // My rendering
-            {
-                let rendered_objects = components.iter().map(|(_, c)| c.model_id).collect();
-                game_renderer.render(&mut encoder, &view, rendered_objects);
-            }
+            render_functions::render(&mut game_render_state, &mut encoder, shared_state.dt)
+                .unwrap();
+
+            println!("my_render done");
 
             // Egui rendering now
             let screen_descriptor = ScreenDescriptor {
-                size_in_pixels: [config.width, config.height],
+                size_in_pixels: [
+                    shared_state.window_size.width,
+                    shared_state.window_size.height,
+                ],
                 // Forcing pixels per point 1.0 - the egui input handling seems to not scale the cursor coordinates automatically
                 pixels_per_point: 1.0,
             };
 
             let user_cmd_bufs = {
-                for (id, image_delta) in &state.egui_textures_delta.set {
-                    egui_renderer.update_texture(&device, &queue, *id, image_delta);
+                for (id, image_delta) in &shared_state.egui_textures_delta.set {
+                    egui_renderer.update_texture(
+                        &game_render_state.device,
+                        &game_render_state.queue,
+                        *id,
+                        image_delta,
+                    );
                 }
 
                 egui_renderer.update_buffers(
-                    &device,
-                    &queue,
+                    &game_render_state.device,
+                    &game_render_state.queue,
                     &mut encoder,
-                    &state.paint_jobs.as_ref(),
+                    &shared_state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 )
             };
 
             egui_renderer.update_buffers(
-                &device,
-                &queue,
+                &game_render_state.device,
+                &game_render_state.queue,
                 &mut encoder,
-                &state.paint_jobs.as_ref(),
+                &shared_state.paint_jobs.as_ref(),
                 &screen_descriptor,
             );
             {
@@ -105,17 +116,20 @@ pub fn render_fn(mut data: RenderData) {
 
                 egui_renderer.render(
                     &mut render_pass,
-                    &state.paint_jobs.as_ref(),
+                    &shared_state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 );
             }
+            println!("egui_render done");
 
-            for id in &state.egui_textures_delta.free {
+            for id in &shared_state.egui_textures_delta.free {
                 egui_renderer.free_texture(id);
             }
 
-            queue.submit(user_cmd_bufs.into_iter());
-            queue.submit(std::iter::once(encoder.finish()));
+            game_render_state.queue.submit(user_cmd_bufs.into_iter());
+            game_render_state
+                .queue
+                .submit(std::iter::once(encoder.finish()));
             output_frame.present();
         }
     }

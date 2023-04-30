@@ -32,7 +32,7 @@ pub fn deref_event<'a>(reference: &WindowEvent) -> WindowEvent<'a> {
         WindowEvent::Focused(b) => WindowEvent::Focused(*b),
         WindowEvent::HoveredFile(f) => WindowEvent::HoveredFile(f.clone()),
         WindowEvent::HoveredFileCancelled => WindowEvent::HoveredFileCancelled,
-        WindowEvent::Ime(i) => WindowEvent::Ime(*i),
+        WindowEvent::Ime(i) => WindowEvent::Ime(i.clone()),
         WindowEvent::KeyboardInput {
             device_id,
             input,
@@ -58,6 +58,7 @@ pub fn deref_event<'a>(reference: &WindowEvent) -> WindowEvent<'a> {
             device_id,
             delta,
             phase,
+            #[allow(deprecated)]
             modifiers,
         } => WindowEvent::MouseWheel {
             device_id: *device_id,

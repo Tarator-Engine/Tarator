@@ -67,16 +67,16 @@ pub async fn new_state(window: &Window) -> RenderState {
     // Shader code in this tutorial assumes an sRGB surface texture. Using a different
     // one will result all the colors coming out darker. If you want to support non
     // sRGB surfaces, you'll need to account for that when drawing to the frame.
-    let surface_format = surface_caps
-        .formats
-        .iter()
-        .copied()
-        .filter(|f| f.describe().srgb)
-        .next()
-        .unwrap_or(surface_caps.formats[0]);
+    // let surface_format = surface_caps
+    //     .formats
+    //     .iter()
+    //     .copied()
+    //     .filter(|f| f.describe().srgb)
+    //     .next()
+    //     .unwrap_or(surface_caps.formats[0]);
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface_format,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::AutoNoVsync, // TODO!: is there some easy way to make this user configurable
@@ -150,7 +150,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         },
     );
 
-    let models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
+    let models = tar_res::import_models("assets/box/Box.gltf").unwrap();
 
     let models = models
         .into_iter()
@@ -163,6 +163,25 @@ pub async fn new_state(window: &Window) -> RenderState {
         camera::Projection::new(config.width, config.height, 60.0, 0.01, 1000.0);
 
     let depth_tex = texture::DepthTexture::create_depth_texture(&device, &config);
+
+    let size = wgpu::Extent3d {
+        width: config.width,
+        height: config.height,
+        depth_or_array_layers: 1,
+    };
+
+    let render_target_tex = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("render target texture"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let render_target_tex_view =
+        render_target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
     RenderState {
         surface,
@@ -179,6 +198,9 @@ pub async fn new_state(window: &Window) -> RenderState {
         editor_projection,
         mouse_pressed: false,
         depth_tex,
+
+        render_target_tex,
+        render_target_tex_view,
     }
 }
 
@@ -191,7 +213,11 @@ pub fn resize(new_size: winit::dpi::PhysicalSize<u32>, state: &mut RenderState) 
     }
 }
 
-pub fn render(state: &mut RenderState, dt: std::time::Duration) -> Result<(), wgpu::SurfaceError> {
+pub fn render(
+    state: &mut RenderState,
+    encoder: &mut wgpu::CommandEncoder,
+    dt: std::time::Duration,
+) -> Result<(), wgpu::SurfaceError> {
     state
         .editor_cam_controller
         .update_camera(&mut state.editor_cam, dt);
@@ -210,23 +236,13 @@ pub fn render(state: &mut RenderState, dt: std::time::Duration) -> Result<(), wg
         .queue
         .write_buffer(&state.uniform_buffer, 0, &uni_buff.into_inner());
 
-    let output = state.surface.get_current_texture()?;
-    let view = output
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = state
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
-
     {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[
                 // This is what @location(0) in the fragment shader targets
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: &state.render_target_tex_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -255,10 +271,6 @@ pub fn render(state: &mut RenderState, dt: std::time::Duration) -> Result<(), wg
             model.render(&mut render_pass);
         }
     }
-
-    state.queue.submit(std::iter::once(encoder.finish()));
-    output.present();
-
     Ok(())
 }
 

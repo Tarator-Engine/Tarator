@@ -1,7 +1,7 @@
 [package]
 name = "tarator"
-version="0.1.0"
-edition="2021"
+version = "0.1.0"
+edition = "2021"
 license-file = "../../LICENSE"
 description = "A rust game engine with an ECS and a UI."
 homepage = "https://github.com/Tarator-Engine/Tarator"
@@ -15,5 +15,5 @@ name = "tarator"
 [dependencies]
 env_logger = "0.10"
 log = "0.4"
-tar_render = { path = "../tar_render"}
 pollster = "0.3.0"
+tar_core = { path = "../tar_core" }

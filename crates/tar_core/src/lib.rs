@@ -63,11 +63,6 @@ pub async fn run() {
 
     let mut egui_state = egui_winit::State::new(&event_loop);
 
-    let world = Arc::new(Mutex::new(tar_ecs::world::World::new()));
-
-    let engine_state = share_state.clone();
-    let w_clone = world.clone();
-
     let render_data = render::RenderData {
         pre_render_finished_barrier: pre_render_finished.clone(),
         shared_state: share_state.clone(),
@@ -108,7 +103,7 @@ pub async fn run() {
                     frames = 0;
                 }
                 for event in &winit_window_events {
-                    let res = egui_state.on_event(&context, &event);
+                    let _res = egui_state.on_event(&context, &event);
 
                     // if state.mouse_in_view || !res.consumed {
                     //     state.events.push(event.clone().to_static().unwrap());
@@ -169,25 +164,15 @@ pub async fn run() {
                 main_thread_state.window.request_redraw();
             }
             e => match e {
-                Event::WindowEvent { window_id, event } => match event {
-                    WindowEvent::ScaleFactorChanged {
-                        scale_factor,
-                        new_inner_size,
-                    } => (),
-                    WindowEvent::AxisMotion {
-                        device_id,
-                        axis,
-                        value,
-                    } => {
-                        winit_window_events.push(WindowEvent::AxisMotion {
-                            device_id,
-                            axis,
-                            value,
-                        });
-                    }
-                    _ => winit_window_events.push(deref_event(&event)),
-                },
-                Event::DeviceEvent { device_id, event } => winit_device_events.push(event),
+                Event::WindowEvent {
+                    window_id: _,
+                    event,
+                } => winit_window_events.push(deref_event(&event)),
+
+                Event::DeviceEvent {
+                    device_id: _,
+                    event,
+                } => winit_device_events.push(event),
                 _ => (),
             },
         }

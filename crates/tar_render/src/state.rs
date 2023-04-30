@@ -27,4 +27,8 @@ pub struct RenderState {
     pub editor_cam_controller: camera::CameraController,
     pub editor_projection: camera::Projection,
     pub mouse_pressed: bool,
+
+    // texture which will be renderd to, this will then be presented in egui
+    pub render_target_tex: wgpu::Texture,
+    pub render_target_tex_view: wgpu::TextureView,
 }
