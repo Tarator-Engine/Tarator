@@ -3,6 +3,7 @@ use std::sync::{Arc, Barrier};
 use egui_wgpu::renderer::ScreenDescriptor;
 use parking_lot::Mutex;
 use tar_render::render_functions;
+use winit::event::{DeviceEvent, KeyboardInput};
 
 use crate::{state::ShareState, DoubleBuffer};
 
@@ -27,8 +28,25 @@ pub fn render_fn(data: RenderData) {
 
         // do rendering here
 
+        for event in shared_state.device_events {
+            match event {
+                DeviceEvent::Key(KeyboardInput {
+                    state,
+                    virtual_keycode: Some(key),
+                    ..
+                }) => game_render_state
+                    .editor_cam_controller
+                    .process_keyboard(key, state),
+
+                _ => (),
+            }
+        }
+
         if shared_state.halt {
             return;
+        }
+        if shared_state.resize {
+            render_functions::resize(shared_state.window_size, &mut game_render_state)
         }
 
         let output_frame = match game_render_state.surface.get_current_texture() {
@@ -59,12 +77,11 @@ pub fn render_fn(data: RenderData) {
                     });
 
             // My rendering
-            render_functions::render(&mut game_render_state, &mut encoder, shared_state.dt)
+            render_functions::render(&mut game_render_state, &mut encoder, &view, shared_state.dt)
                 .unwrap();
 
-            println!("my_render done");
-
             // Egui rendering now
+
             let screen_descriptor = ScreenDescriptor {
                 size_in_pixels: [
                     shared_state.window_size.width,
@@ -93,13 +110,6 @@ pub fn render_fn(data: RenderData) {
                 )
             };
 
-            egui_renderer.update_buffers(
-                &game_render_state.device,
-                &game_render_state.queue,
-                &mut encoder,
-                &shared_state.paint_jobs.as_ref(),
-                &screen_descriptor,
-            );
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("UI Render Pass"),
@@ -120,7 +130,6 @@ pub fn render_fn(data: RenderData) {
                     &screen_descriptor,
                 );
             }
-            println!("egui_render done");
 
             for id in &shared_state.egui_textures_delta.free {
                 egui_renderer.free_texture(id);

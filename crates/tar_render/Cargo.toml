@@ -11,7 +11,7 @@ winit = "0.28.3"
 env_logger = "0.10"
 log = "0.4"
 wgpu = "0.15.1"
-glam = { version = "0.23", features = ["serde", "bytemuck"] }
+glam = { version = "0.23.0", features = ["serde", "bytemuck"] }
 bytemuck = { version = "1.13", features = ["derive"] }
 memoffset = "0.8.0"
 easy-gltf = { git = "https://github.com/slackers123/easy-gltf" }

@@ -42,7 +42,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
             compatible_surface: Some(&surface),
-            force_fallback_adapter: true,
+            force_fallback_adapter: false, // whatever you do, do not set this to true it tanks performance instantly
         })
         .await
         .unwrap();
@@ -67,16 +67,19 @@ pub async fn new_state(window: &Window) -> RenderState {
     // Shader code in this tutorial assumes an sRGB surface texture. Using a different
     // one will result all the colors coming out darker. If you want to support non
     // sRGB surfaces, you'll need to account for that when drawing to the frame.
-    // let surface_format = surface_caps
-    //     .formats
-    //     .iter()
-    //     .copied()
-    //     .filter(|f| f.describe().srgb)
-    //     .next()
-    //     .unwrap_or(surface_caps.formats[0]);
+    let surface_format = surface_caps
+        .formats
+        .iter()
+        .copied()
+        .filter(|f| f.describe().srgb)
+        .next()
+        .unwrap_or(surface_caps.formats[0]);
+
+    dbg!(surface_caps.formats);
+    dbg!(surface_format);
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format: surface_format,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::AutoNoVsync, // TODO!: is there some easy way to make this user configurable
@@ -150,7 +153,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         },
     );
 
-    let models = tar_res::import_models("assets/box/Box.gltf").unwrap();
+    let models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
     let models = models
         .into_iter()
@@ -216,6 +219,7 @@ pub fn resize(new_size: winit::dpi::PhysicalSize<u32>, state: &mut RenderState) 
 pub fn render(
     state: &mut RenderState,
     encoder: &mut wgpu::CommandEncoder,
+    surface_view: &wgpu::TextureView,
     dt: std::time::Duration,
 ) -> Result<(), wgpu::SurfaceError> {
     state
@@ -242,7 +246,7 @@ pub fn render(
             color_attachments: &[
                 // This is what @location(0) in the fragment shader targets
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &state.render_target_tex_view,
+                    view: &surface_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {

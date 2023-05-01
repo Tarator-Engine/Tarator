@@ -1,4 +1,5 @@
 use egui::{ClippedPrimitive, TexturesDelta};
+use winit::dpi::PhysicalPosition;
 
 #[derive(Debug, Clone, Default)]
 pub struct ShareState {
@@ -12,9 +13,10 @@ pub struct ShareState {
 
     pub paint_jobs: Vec<ClippedPrimitive>,
     pub egui_textures_delta: TexturesDelta,
+    pub resize: bool,
+    pub mouse_pos: PhysicalPosition<f64>,
 }
 #[derive(Debug)]
 pub struct MainThreadState {
     pub window: winit::window::Window,
-    pub fps: u32,
 }

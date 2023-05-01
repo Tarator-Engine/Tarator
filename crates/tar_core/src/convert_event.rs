@@ -71,8 +71,8 @@ pub fn deref_event<'a>(reference: &WindowEvent) -> WindowEvent<'a> {
         WindowEvent::ReceivedCharacter(c) => WindowEvent::ReceivedCharacter(*c),
         WindowEvent::Resized(s) => WindowEvent::Resized(*s),
         WindowEvent::ScaleFactorChanged {
-            scale_factor,
-            new_inner_size,
+            scale_factor: _,
+            new_inner_size: _,
         } => {
             println!("TODO!: find an alternative to the atrocities commited in tar_core/src/convert_event.rs");
             return WindowEvent::Focused(true);

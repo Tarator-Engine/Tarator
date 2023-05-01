@@ -53,10 +53,7 @@ pub async fn run() {
 
     let egui_renderer = egui_wgpu::Renderer::new(
         &game_render_state.device,
-        game_render_state
-            .surface
-            .get_capabilities(&game_render_state.adapter)
-            .formats[0],
+        game_render_state.config.format,
         None,
         1,
     );
@@ -70,7 +67,7 @@ pub async fn run() {
         egui_renderer,
     };
 
-    let render_thread = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         render::render_fn(render_data);
     });
 
@@ -84,7 +81,7 @@ pub async fn run() {
     let mut since_start = 0;
     let mut frames: u32 = 0;
 
-    let mut main_thread_state = state::MainThreadState { window, fps: 0 };
+    let main_thread_state = state::MainThreadState { window };
 
     let mut gui_data = GuiData::default();
 
@@ -92,6 +89,7 @@ pub async fn run() {
         match event {
             Event::RedrawRequested(..) => {
                 let mut share_state = share_state.lock();
+                share_state.resize = false;
                 let now = instant::Instant::now();
                 share_state.dt = now - last_render_time;
                 last_render_time = now;
@@ -99,9 +97,10 @@ pub async fn run() {
                 frames += 1;
                 if secs > since_start {
                     since_start = secs;
-                    main_thread_state.fps = frames;
+                    gui_data.fps = frames;
                     frames = 0;
                 }
+
                 for event in &winit_window_events {
                     let _res = egui_state.on_event(&context, &event);
 
@@ -126,16 +125,18 @@ pub async fn run() {
                             // This solves an issue where the app would panic when minimizing on Windows.
                             if size.width > 0 && size.height > 0 {
                                 share_state.window_size = *size;
+                                share_state.resize = true;
                             }
+                        }
+                        winit::event::WindowEvent::CursorMoved { position, .. } => {
+                            share_state.mouse_pos = *position
                         }
 
                         _ => (),
                     }
                 }
                 winit_window_events = vec![];
-                for event in &winit_device_events {
-                    share_state.device_events.push(event.clone());
-                }
+                share_state.device_events = winit_device_events.clone();
                 winit_device_events = vec![];
 
                 let input = egui_state.take_egui_input(&main_thread_state.window);
@@ -150,13 +151,12 @@ pub async fn run() {
 
                 if share_state.halt {
                     *control_flow = ControlFlow::Exit;
-                    return;
                 }
                 MutexGuard::unlock_fair(share_state);
 
-                if *(&render_thread.is_finished()) {
-                    print!("error: render thread has crashed");
-                }
+                // if *(&render_thread.is_finished()) {
+                //     eprintln!("error: render thread has crashed");
+                // }
 
                 pre_render_finished.wait();
             }

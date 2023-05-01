@@ -399,5 +399,5 @@ fn fs_main(vs_out: VertexOutput) -> @location(0) vec4<f32> {
     // let ambient = uniforms.ambient * pixel.albedo;
     // let both = vec4<f32>(color, pixel.albedo.a);
     // return max(ambient, both);
-    // // return pixel.albedo;
+    // return pixel.albedo;
 }

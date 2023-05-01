@@ -1,7 +1,8 @@
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct GuiData {
-    dt: std::time::Duration,
-    fps: u16,
+    pub dt: std::time::Duration,
+    pub fps: u32,
+    pub game_view_texture: Option<egui::TextureHandle>,
 }
 
 pub fn gui(context: &egui::Context, state: &mut GuiData) {
