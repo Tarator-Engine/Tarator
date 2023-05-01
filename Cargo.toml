@@ -1,34 +1,3 @@
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-
 [workspace]
 resolver = "2"
-members = [
-  "crates/tar_core",
-  "crates/tar_render",
-  "crates/tar_res",
-  "crates/tar_entry",
-  "crates/tar_utils",
-  "crates/tar_ecs",
-  "crates/tar_ecs/macros",
-  "crates/tar_gui",
-  "crates/tar_types",
-]
-
-
-[profile.dev.package.tar_res]
-opt-level = 3
-debug = false
-debug-assertions = false
-overflow-checks = false
-incremental = false
-codegen-units = 16
-
-# [profile.dev.package.gltf]
-# opt-level = 3
-# debug = false
-# debug-assertions = false
-# overflow-checks = false
-# incremental = false
-# codegen-units = 16
+members = ["crates/*"]

@@ -3,5 +3,6 @@ target/
 crates/*/target/
 crates/*/Cargo.lock/
 .github/
+.scr/
 assets/
-res_int/
+.vscode/
