@@ -27,8 +27,15 @@ pub async fn new_state(window: &Window) -> RenderState {
 
     // The instance is a handle to our GPU
     // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
+    let backends = if cfg!(windows) {
+        wgpu::Backends::DX12
+    } else {
+        wgpu::Backends::all()
+    };
+
+    dbg!(backends);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
+        backends,
         dx12_shader_compiler: Default::default(),
     });
 
