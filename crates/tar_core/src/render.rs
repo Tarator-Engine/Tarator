@@ -38,6 +38,14 @@ pub fn render_fn(data: RenderData) {
                     .editor_cam_controller
                     .process_keyboard(key, state),
 
+                DeviceEvent::MouseMotion { delta } => {
+                    if shared_state.mouse_in_view && shared_state.mouse_pressed {
+                        game_render_state
+                            .editor_cam_controller
+                            .process_mouse(delta.0, delta.1)
+                    }
+                }
+
                 _ => (),
             }
         }

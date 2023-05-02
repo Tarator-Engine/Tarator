@@ -15,7 +15,7 @@ use winit::{
 
 use crate::double_buffer::DoubleBuffer;
 
-use tar_gui::GuiData;
+use tar_gui::GuiInData;
 
 pub async fn run() {
     let db = DoubleBuffer::new(state::ShareState::default());
@@ -83,7 +83,7 @@ pub async fn run() {
 
     let main_thread_state = state::MainThreadState { window };
 
-    let mut gui_data = GuiData::default();
+    let mut gui_data = GuiInData::default();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -128,8 +128,16 @@ pub async fn run() {
                                 share_state.resize = true;
                             }
                         }
-                        winit::event::WindowEvent::CursorMoved { position, .. } => {
-                            share_state.mouse_pos = *position
+                        WindowEvent::MouseInput {
+                            state,
+                            button: MouseButton::Left,
+                            ..
+                        } => {
+                            if *state == ElementState::Pressed {
+                                share_state.mouse_pressed = true;
+                            } else {
+                                share_state.mouse_pressed = false;
+                            }
                         }
 
                         _ => (),
@@ -142,7 +150,9 @@ pub async fn run() {
                 let input = egui_state.take_egui_input(&main_thread_state.window);
                 context.begin_frame(input);
 
-                tar_gui::gui(&context, &mut gui_data);
+                let gui_out = tar_gui::gui(&context, &mut gui_data);
+
+                share_state.mouse_in_view = gui_out.mouse_in_game_view;
 
                 let output = context.end_frame();
 
