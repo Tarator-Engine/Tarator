@@ -9,6 +9,7 @@ struct UniformData {
     /// view matrix
     view: mat4x4<f32>,
     proj: mat4x4<f32>,
+    camera_pos: vec4<f32>,
 }
 
 struct DirectionalLight {
@@ -23,195 +24,25 @@ struct PointLight {
     position: vec3<f32>,
 }
 
-struct PixelData {
-    albedo: vec4<f32>,
-    diffuse_color: vec3<f32>,
-    roughness: f32,
-    normal: vec3<f32>,
-    metallic: f32,
-    emissive: vec3<f32>,
-    reflectance: f32,
-    f0: vec3<f32>,
-    material_flags: u32,
-}
-
-fn get_pixel_data(material: MaterialData, vs_out: VertexOutput) -> PixelData {
-    var pixel: PixelData;
-
-    let coords = vs_out.tex_coords;
-
-    // ----- ALBEDO ----- 
-
-    if extract_material_flag(material.flags, FLAGS_ALBEDO_ACTIVE) {
-        if extract_texture_enable(material.texture_enable, TEXTURE_ALBEDO) {
-            pixel.albedo = get_albedo_texture(coords);
-        } else {
-            pixel.albedo = vec4<f32>(1.0);
-        }
-    } else {
-        pixel.albedo = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    }
-
-    pixel.albedo *= material.albedo;
-
-    // TODO!: several potential stops
-
-    // ----- NORMAL ----- 
-
-    if extract_texture_enable(material.texture_enable, TEXTURE_NORMAL) {
-        let texture_read = get_normal_texture(coords);
-
-        var normal = normalize(texture_read.rgb * 2.0 - 1.0);
-
-        let normal_norm = normalize(vs_out.normal);
-        let tangent_norm = normalize(vs_out.tangent);
-        let bitangent = cross(normal_norm, tangent_norm);
-
-        let tbn = mat3x3(tangent_norm, bitangent, normal_norm);
-
-        pixel.normal = tbn * normal;
-    } else {
-        pixel.normal = vs_out.normal;
-    }
-
-
-    // ----- Metallic -----
-
-    if extract_texture_enable(material.texture_enable, TEXTURE_METALLIC) {
-        // TODO!: is the data structured like this? 
-        pixel.metallic = get_metallic_texture(coords);
-    } else {
-        pixel.metallic = 1.0;
-    }
-    pixel.metallic *= material.metallic;
-
-
-    // ----- Roughness -----
-
-    var perceptual_roughness: f32;
-
-    if extract_texture_enable(material.texture_enable, TEXTURE_ROUGHNESS) {
-        // TODO!: is the data structured like this? 
-        perceptual_roughness = get_roughness_texture(coords);
-    } else {
-        perceptual_roughness = 1.0;
-    }
-    perceptual_roughness *= material.roughness;
-
-    
-    // ----- Reflectance -----
-
-    if extract_texture_enable(material.texture_enable, TEXTURE_REFLECTANCE) {
-        // TODO!: is the data structured like this? 
-        // pixel.reflectance = get_texture(TEXTURE_REFLECTANCE, coords);
-    } else {
-        pixel.reflectance = 1.0;
-    }
-    pixel.reflectance *= material.reflectance;
-
-    
-    // ----- Emissive -----
-
-    if extract_texture_enable(material.texture_enable, TEXTURE_EMISSIVE) {
-        // TODO!: is the data structured like this? 
-        pixel.emissive = get_emissive_texture(coords);
-    } else {
-        pixel.emissive = vec3<f32>(1.0);
-    }
-    pixel.emissive *= material.emissive;
-
-
-    // ----- Computations -----
-
-    // compute the diffuse color based on the metallicness of the material
-    pixel.diffuse_color = pixel.albedo.rgb * (1.0 - pixel.metallic);
-
-    // Assumes an interface from air to an IOR of 1.5 for dielectrics
-    // compute dielectic f0
-    let reflectance = 0.16 * pixel.reflectance * pixel.reflectance;
-    // compute f0
-    pixel.f0 = pixel.albedo.rgb * pixel.metallic + (reflectance * (1.0 - pixel.metallic));
-
-
-    // compute roughness from perceptual roughness by squaring it
-    pixel.roughness = perceptual_roughness * perceptual_roughness;
-
-    return pixel;
-}
-
 struct MaterialData {
     albedo: vec4<f32>,
     emissive: vec3<f32>,
     roughness: f32,
     metallic: f32,
     reflectance: f32,
+    // occlusion: f32,
     flags: u32,
     texture_enable: u32,
 }
 
-fn brdf_d_ggx(noh: f32, a: f32) -> f32 {
-    let a2 = a * a;
-    let f = (noh * a2 - noh) * noh + 1.0;
-    return a2 / (PI * f * f);
-}
-
-fn brdf_f_schlick_vec3(u: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
-    return f0 + (f90 - f0) * pow(1.0 - u, 5.0);
-}
-
-fn brdf_v_smith_ggx_correlated(nov: f32, nol: f32, a: f32) -> f32 {
-    let a2 = a * a;
-    let ggxl = nov * sqrt((-nol * a2 + nol) * nol + a2);
-    let ggxv = nol * sqrt((-nov * a2 + nov) * nov + a2);
-    return 0.5 / (ggxl + ggxv);
-}
-
-fn brdf_fd_lambert() -> f32 {
-    return 1.0 / PI;
-}
-
-fn surface_shading(light: DirectionalLight, pixel: PixelData, view_pos: vec3<f32>) -> vec3<f32> {
-    let view_mat3 = mat3x3<f32>(uniforms.view[0].xyz, uniforms.view[1].xyz, uniforms.view[2].xyz);
-    let l = normalize(view_mat3 * -light.direction);
-
-    let n = pixel.normal;
-    let h = normalize(view_pos + l);
-
-    let nov = abs(dot(n, view_pos)) + 0.00001;
-    let nol = clamp(dot(n, l), 0.0, 1.0);
-    let noh = clamp(dot(n, h), 0.0, 1.0);
-    let loh = clamp(dot(l, h), 0.0, 1.0);
-
-    let f90 = clamp(dot(pixel.f0, vec3<f32>(50.0 * 0.33)), 0.0, 1.0);
-
-    let d = brdf_d_ggx(noh, pixel.roughness);
-    let f = brdf_f_schlick_vec3(loh, pixel.f0, f90);
-    let v = brdf_v_smith_ggx_correlated(nov, nol, pixel.roughness);
-
-    // TODO!: figure out how they generate their lut
-    let energy_comp = 1.0;
-
-    // specular
-    let fr = (d * v) * f;
-    // diffuse
-    let fd = pixel.diffuse_color * brdf_fd_lambert();
-
-    let color = fd + fr * energy_comp;
-
-    let light_attenuation = 1.0;
-
-    // TODO!: figure out if it is ok to leave out occlusion
-    return (color * light.color) * (light_attenuation * nol);
-}
-
 /// get specified flag from data
-fn extract_material_flag(data: u32, flag: u32) -> bool {
-    return bool(data & flag);
+fn extract_material_flag(flag: u32) -> bool {
+    return bool(material_uniform.flags & flag);
 }
 
 /// checks if a texture is enabled
-fn extract_texture_enable(data: u32, texture: u32) -> bool {
-    return bool(data & texture);
+fn extract_texture_enable(texture: u32) -> bool {
+    return bool(material_uniform.texture_enable & texture);
 }
 
 // TODO!: FLAGS (material and textures)
@@ -227,6 +58,7 @@ const TEXTURE_ROUGHNESS: u32 =      0x0000004u;
 const TEXTURE_METALLIC: u32 =       0x0000008u;
 const TEXTURE_REFLECTANCE: u32 =    0x0000010u;
 const TEXTURE_EMISSIVE: u32 =       0x0000020u;
+const TEXTURE_OCCLUSION: u32 =      0x0000040u;
 
 fn get_albedo_texture(coords: vec2<f32>) -> vec4<f32> {
     return textureSample(albedo_tex, primary_sampler, coords);
@@ -246,6 +78,10 @@ fn get_metallic_texture(coords: vec2<f32>) -> f32 {
 
 fn get_emissive_texture(coords: vec2<f32>) -> vec3<f32> {
     return textureSample(emissive_tex, primary_sampler, coords).rgb;
+}
+
+fn get_occlusion_texture(coords: vec2<f32>) -> f32 {
+    return textureSample(occlusion_tex, primary_sampler, coords).r;
 }
 
 
@@ -269,24 +105,15 @@ struct Instance {
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    @location(1) view_position: vec4<f32>,
+    @location(1) world_position: vec4<f32>,
     @location(2) normal: vec3<f32>,
-    @location(3) tangent: vec3<f32>,
+    @location(3) tangent: vec4<f32>,
     @location(4) debug: vec3<f32>, 
     @location(5) use_dbg: f32,
 };
 
 
 // ----- Vertex shader ----- 
-
-fn mat3_inv_scale_squared(transform: mat3x3<f32>) -> vec3<f32> {
-    return vec3<f32>(
-        1.0 / dot(transform[0].xyz, transform[0].xyz),
-        1.0 / dot(transform[1].xyz, transform[1].xyz),
-        1.0 / dot(transform[2].xyz, transform[2].xyz)
-    );
-}
-
 
 @vertex
 fn vs_main(
@@ -315,14 +142,11 @@ fn vs_main(
     let model_view_proj = uniforms.proj * model_view;
 
     let position_vec4 = vec4<f32>(vertex.position, 1.0);
-    let mv_mat3 = mat3x3<f32>(model_view[0].xyz, model_view[1].xyz, model_view[2].xyz);
-
-    let inv_scale_sq = mat3_inv_scale_squared(mv_mat3);
 
     var out: VertexOutput;
-    out.view_position = model_view * position_vec4;
-    out.normal = normalize(mv_mat3 * (inv_scale_sq * vertex.normal));
-    out.tangent = normalize(mv_mat3 * (inv_scale_sq * vertex.tangent.xyz));
+    out.world_position = model_view * position_vec4;
+    out.normal = vertex.normal;
+    out.tangent = vertex.tangent;
     out.tex_coords = vertex.tex_coords;
     out.position = model_view_proj * position_vec4;
     return out;
@@ -353,24 +177,28 @@ var metallic_tex: texture_2d<f32>;
 // var reflectance_tex: texture_2d<f32>;
 @group(1) @binding(5)
 var emissive_tex: texture_2d<f32>;
+@group(1) @binding(6)
+var occlusion_tex: texture_2d<f32>;  
 
 
 // ----- Fragment shader ----- 
 
 @fragment
 fn fs_main(vs_out: VertexOutput) -> @location(0) vec4<f32> {
+    if extract_material_flag(FLAGS_UNLIT) {
+        discard;
+    }
     if vs_out.use_dbg != 0.0 {
         return vec4<f32>(abs(vs_out.debug.r), abs(vs_out.debug.g), abs(vs_out.debug.b), 1.0);
     }
 
-    let material = material_uniform;
+    var n = vs_out.normal;
+    let v = normalize(uniforms.camera_pos - vs_out.position).xyz;
 
-    // let pixel = get_pixel_data(material, vs_out);
     var albedo: vec4<f32>;
 
-
-    if extract_material_flag(material.flags, FLAGS_ALBEDO_ACTIVE) {
-        if extract_texture_enable(material.texture_enable, TEXTURE_ALBEDO) {
+    if extract_material_flag(FLAGS_ALBEDO_ACTIVE) {
+        if extract_texture_enable(TEXTURE_ALBEDO) {
             albedo = get_albedo_texture(vs_out.tex_coords);
         } else {
             albedo = vec4<f32>(1.0);
@@ -378,26 +206,114 @@ fn fs_main(vs_out: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         albedo = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     }
+    albedo *= material_uniform.albedo;
 
-    albedo *= material.albedo;
+    var metallic: f32;
+    if extract_texture_enable(TEXTURE_METALLIC) {
+        metallic = get_metallic_texture(vs_out.tex_coords);
+    } else {
+        metallic = 1.0;
+    }
+    metallic *= material_uniform.metallic;
 
-    return albedo;
+    var roughness: f32;
+    if extract_texture_enable(TEXTURE_ROUGHNESS) {
+        roughness = get_roughness_texture(vs_out.tex_coords);
+    } else {
+        roughness = 1.0;
+    }
+    roughness *= material_uniform.roughness;
 
-    // if extract_material_flag(material.flags, FLAGS_UNLIT) {
-    //     return pixel.albedo;
+    var normal: vec3<f32>;
+    if extract_texture_enable(TEXTURE_NORMAL) {
+        normal = get_normal_texture(vs_out.tex_coords);
+    } else {
+        normal = vec3<f32>(1.0);
+    }
+    n *= normal;
+
+    // var occlusion: f32;
+    // if extract_texture_enable(TEXTURE_OCCLUSION) {
+    //     occlusion = get_occlusion_texture(vs_out.tex_coords);
+    // } else {
+    //     occlusion = 1.0;
     // }
+    // occlusion *= material_uniform.occlusion;
 
-    // let v = -normalize(vs_out.view_position.xyz);
+    var l_o = vec3<f32>(0.0);
+    for (var i = 0; i < i32(arrayLength(&directional_lights)); i += 1) {
+        let light = directional_lights[i];
+        let l = normalize(light.direction - vs_out.world_position.xyz);
+        let h = normalize(v + l);
 
-    // var color = pixel.emissive.rgb;
+        let distance = length(light.direction - vs_out.world_position.xyz);
+        let attenuation = 1.0 / (distance * distance);
+        let radiance = light.color * attenuation;
 
-    // for (var i = 0; i < i32(arrayLength(&directional_lights)); i += 1) {
-    //     let light = directional_lights[i];
-    //     color += surface_shading(light, pixel, v);
-    // }
+        var f0 = vec3<f32>(0.04);
+        f0 = mix(f0, albedo.rgb, metallic);
+        let f = fresnel_schlick(max(dot(h, v), 0.0), f0);
 
-    // let ambient = uniforms.ambient * pixel.albedo;
-    // let both = vec4<f32>(color, pixel.albedo.a);
-    // return max(ambient, both);
-    // return pixel.albedo;
+        let ndf = distribution_ggx(n, h, roughness);
+        let g = geometry_smith(n, v, l, roughness);
+
+        let numerator = ndf * g * f;
+        let denominator = 4.0 * max(dot(n, v), 0.0) * max(dot(n, l), 0.0) + 0.0001;
+        let specular = numerator / denominator;
+
+        let k_s = f;
+        var k_d = vec3<f32>(1.0) - k_s;
+
+        k_d *= 1.0 - metallic;
+
+        let n_dot_l = max(dot(n, l), 0.0);
+        l_o += (k_d * albedo.rgb / PI + specular) * radiance * n_dot_l;
+    }
+
+    let ambient = vec3<f32>(0.03) * albedo.rgb; // * occlusion;
+
+    var color = ambient + l_o;
+
+    color = color / (color + vec3<f32>(1.0));
+    color = pow(color, vec3<f32>(1.0 / 2.2));
+
+    return vec4<f32>(color, albedo.a);
+}
+
+// ----- PBR calculations ----- 
+
+fn distribution_ggx(n: vec3<f32>, h: vec3<f32>, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let n_dot_h = max(dot(n, h), 0.0);
+    let n_dot_h2 = n_dot_h * n_dot_h;
+
+    let nom = a2;
+    var denom = (n_dot_h2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return nom / denom;
+}
+
+fn geometry_schlick_ggx(n_dot_v: f32, roughness: f32) -> f32 {
+    let r = (roughness + 1.0);
+    let k = (r * r) / 8.0;
+
+    let num = n_dot_v;
+    let denom = n_dot_v * (1.0 - k) + k;
+
+    return num / denom;
+}
+
+fn geometry_smith(n: vec3<f32>, v: vec3<f32>, l: vec3<f32>, roughness: f32) -> f32 {
+    let n_dot_v = max(dot(n, v), 0.0);
+    let n_dot_l = max(dot(n, l), 0.0);
+    let ggx1 = geometry_schlick_ggx(n_dot_v, roughness);
+    let ggx2 = geometry_schlick_ggx(n_dot_l, roughness);
+
+    return ggx1 * ggx2;
+}
+
+fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
+    return f0 + (1.0 - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }

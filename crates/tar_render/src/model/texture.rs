@@ -10,9 +10,10 @@ impl Texture for RgbaTexture {
         queue: &wgpu::Queue,
         bytes: &[u8],
         label: &str,
+        is_srgb: bool,
     ) -> ImageResult<Self> {
         let img = image::load_from_memory(bytes)?;
-        Ok(Self::from_image(device, queue, &img, label))
+        Ok(Self::from_image(device, queue, &img, label, is_srgb))
     }
 
     fn from_image(
@@ -20,6 +21,7 @@ impl Texture for RgbaTexture {
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
         label: &str,
+        is_srgb: bool,
     ) -> Self {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
@@ -29,13 +31,18 @@ impl Texture for RgbaTexture {
             height: dimensions.1,
             depth_or_array_layers: 1,
         };
+        let format = if is_srgb {
+            wgpu::TextureFormat::Rgba8UnormSrgb
+        } else {
+            wgpu::TextureFormat::Rgba8Unorm
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -72,9 +79,10 @@ impl Texture for GrayTexture {
         queue: &wgpu::Queue,
         bytes: &[u8],
         label: &str,
+        is_srgb: bool,
     ) -> ImageResult<Self> {
         let img: image::DynamicImage = image::load_from_memory(bytes)?;
-        Ok(Self::from_image(device, queue, &img, label))
+        Ok(Self::from_image(device, queue, &img, label, is_srgb))
     }
 
     fn from_image(
@@ -82,8 +90,9 @@ impl Texture for GrayTexture {
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
         label: &str,
+        _: bool,
     ) -> Self {
-        let gray = img.to_luma_alpha8();
+        let gray = img.to_luma8();
         let dimensions = img.dimensions();
 
         let size = wgpu::Extent3d {
@@ -129,6 +138,7 @@ pub trait Texture {
         queue: &wgpu::Queue,
         bytes: &[u8],
         label: &str,
+        is_srgb: bool,
     ) -> ImageResult<Self>
     where
         Self: Sized;
@@ -138,6 +148,7 @@ pub trait Texture {
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
         label: &str,
+        is_srgb: bool,
     ) -> Self;
 }
 

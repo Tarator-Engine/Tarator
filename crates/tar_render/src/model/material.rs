@@ -73,6 +73,7 @@ impl Material {
             roughness: stored.pbr.roughness_factor,
             metallic: stored.pbr.metallic_factor,
             reflectance: 0.5, // TODO!: figure out some sensible constant
+            // occlusion: stored.occlusion.unwrap_or(1.0),
             flags: mat_flags.bits(),
             texture_enable: tex_flags.bits(),
         };
@@ -189,6 +190,10 @@ impl Material {
                     .as_ref()
                     .map(|t| &t.view)
                     .unwrap_or(&empty_view),
+                occlusion_tex: occlusion
+                    .as_ref()
+                    .map(|t| &t.texture.view)
+                    .unwrap_or(&empty_view),
                 material_uniform: material_data_buffer.as_entire_buffer_binding(),
             },
         );
@@ -228,6 +233,7 @@ impl PbrMaterial {
                     queue,
                     &DynamicImage::ImageRgba8(img.inner),
                     "base_color_texture",
+                    true,
                 )
             }),
             metallic_texture: stored.metallic_texture.map(|img| {
@@ -236,6 +242,7 @@ impl PbrMaterial {
                     queue,
                     &DynamicImage::ImageLuma8(img.inner),
                     "metallic_texture",
+                    false,
                 )
             }),
             // metallic_factor: stored.metallic_factor,
@@ -245,6 +252,7 @@ impl PbrMaterial {
                     queue,
                     &DynamicImage::ImageLuma8(img.inner),
                     "roughness_texture",
+                    false,
                 )
             }),
             // roughness_factor: stored.roughness_factor,
@@ -269,6 +277,7 @@ impl NormalMap {
                 queue,
                 &DynamicImage::ImageRgb8(stored.texture.inner),
                 "normal_texture",
+                false,
             ),
             // factor: stored.factor,
         }
@@ -292,6 +301,7 @@ impl Occlusion {
                 queue,
                 &DynamicImage::ImageLuma8(stored.texture.inner),
                 "occlusion_texture",
+                false,
             ),
             // factor: stored.factor,
         }
@@ -316,6 +326,7 @@ impl Emissive {
                     queue,
                     &DynamicImage::ImageRgb8(img.inner),
                     "emissive_texture",
+                    false,
                 )
             }),
             // factor: stored.factor,

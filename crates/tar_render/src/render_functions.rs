@@ -113,6 +113,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         ambient: Vec4::new(0.2, 0.3, 0.5, 1.0),
         view: view.into(),
         proj: proj.into(),
+        camera_pos: Vec4::splat(0.0),
     };
 
     let mut uni_buff = encase::UniformBuffer::new(vec![]);
@@ -136,7 +137,7 @@ pub async fn new_state(window: &Window) -> RenderState {
     });
 
     let light_data = vec![shader::DirectionalLight {
-        color: [0.5, 0.5, 0.0].into(),
+        color: [23.47, 21.31, 20.79].into(),
         padding: 0.0,
         direction: [0.5, 0.5, 0.5].into(),
         padding2: 0.0,
@@ -159,13 +160,21 @@ pub async fn new_state(window: &Window) -> RenderState {
             directional_lights: light_storage_buffer.as_entire_buffer_binding(),
         },
     );
+    let box_models = tar_res::import_models("assets/box/Box.gltf").unwrap();
 
-    let models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
-
-    let models = models
+    let mut box_models = box_models
         .into_iter()
         .map(|model| Model::from_stored(model, &device, &queue, config.format))
         .collect();
+
+    let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
+
+    let mut models: Vec<Model> = schifi_models
+        .into_iter()
+        .map(|model| Model::from_stored(model, &device, &queue, config.format))
+        .collect();
+
+    models.append(&mut box_models);
 
     let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), -PI / 4.0 * 3.0, -PI / 4.0);
     let editor_cam_controller = camera::CameraController::new(1.0, 1.0);
@@ -238,6 +247,7 @@ pub fn render(
 
     state.uniform_data.view = view;
     state.uniform_data.proj = proj;
+    state.uniform_data.camera_pos = Vec4::from((state.editor_cam.position, 0.0));
 
     let mut uni_buff = encase::UniformBuffer::new(vec![]);
 

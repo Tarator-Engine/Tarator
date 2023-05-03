@@ -6,3 +6,4 @@ crates/*/Cargo.lock/
 .scr/
 assets/
 .vscode/
+imgs/
