@@ -2,183 +2,65 @@ use std::sync::{Arc, Barrier};
 
 use egui_wgpu::renderer::ScreenDescriptor;
 use parking_lot::Mutex;
-use scr_types::{
-    components::{Camera, Rendering, Transform},
-    prims::{Mat4, Quat},
-};
+use tar_render::render_functions;
+use winit::event::{DeviceEvent, KeyboardInput};
 
-use crate::{DoubleBuffer, EngineState};
+use crate::{state::ShareState, DoubleBuffer};
 
-// /// Takes a window event and a renderer and an event
-// fn input(
-//     renderer: &mut tar_render::render::forward::ForwardRenderer,
-//     event: &WindowEvent,
-//     cam: &uuid::Uuid,
-// ) -> bool {
-//     match event {
-//         WindowEvent::KeyboardInput {
-//             input:
-//                 KeyboardInput {
-//                     virtual_keycode: Some(key),
-//                     state,
-//                     ..
-//                 },
-//             ..
-//         } => renderer
-//             .cameras
-//             .get_mut(cam)
-//             .unwrap()
-//             .controller
-//             .process_keyboard(*key, *state),
-//         WindowEvent::MouseWheel { delta, .. } => {
-//             renderer
-//                 .cameras
-//                 .get_mut(cam)
-//                 .unwrap()
-//                 .controller
-//                 .process_scroll(delta);
-//             true
-//         }
-//         WindowEvent::MouseInput {
-//             button: MouseButton::Left,
-//             state,
-//             ..
-//         } => {
-//             renderer.mouse_pressed = *state == ElementState::Pressed;
-//             true
-//         }
+pub struct RenderData {
+    pub pre_render_finished_barrier: Arc<Barrier>,
+    pub shared_state: Arc<Mutex<DoubleBuffer<ShareState>>>,
+    pub game_render_state: tar_render::state::RenderState,
+    pub egui_renderer: egui_wgpu::Renderer,
+}
 
-//         _ => false,
-//     }
-// }
-
-// fn update(
-//     renderer: &mut tar_render::render::forward::ForwardRenderer,
-//     dt: std::time::Duration,
-//     cam: &uuid::Uuid,
-// ) {
-//     let cam = &mut renderer.cameras.get_mut(cam).unwrap();
-//     cam.controller.update_camera(&mut cam.cam, dt);
-//     cam.uniform.update_view_proj(&cam.cam, &cam.proj);
-// }
-
-pub fn render_fn(
-    r_barrier: Arc<Barrier>,
-    engine_state: Arc<DoubleBuffer<EngineState>>,
-    mut game_renderer: tar_render::render::forward::ForwardRenderer,
-    mut egui_renderer: egui_wgpu::Renderer,
-    mut config: wgpu::SurfaceConfiguration,
-    surface: Arc<wgpu::Surface>,
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
-) {
-    // let int_camera = tar_render::camera::IntCamera::new(
-    //     (0.0, 5.0, 10.0),
-    //     cgmath::Deg(-90.0),
-    //     cgmath::Deg(-20.0),
-    // );
-    // let projection = tar_render::camera::Projection::new(
-    //     config.width,
-    //     config.height,
-    //     cgmath::Deg(45.0),
-    //     0.1,
-    //     100.0,
-    // );
-    // let camera_controller = tar_render::camera::CameraController::new(4.0, 0.4);
-
-    // let camera = tar_render::camera::Camera {
-    //     cam: int_camera,
-    //     proj: projection,
-    //     controller: camera_controller,
-    // };
-
-    // let test_id =
-    //     game_renderer.add_object(tar_render::GameObject::ImportedPath("assets/helmet.rmp"));
-
-    // let cam = game_renderer.add_camera(camera);
-    // game_renderer.select_camera(cam);
-
-    let mut loaded_objects = vec![];
+pub fn render_fn(data: RenderData) {
+    let RenderData {
+        pre_render_finished_barrier,
+        shared_state,
+        mut game_render_state,
+        mut egui_renderer,
+    } = data;
 
     loop {
-        r_barrier.wait();
-        let state = engine_state.lock().update_read();
-        if state.halt {
-            return;
-        }
-        // let objects_state = world.lock().component_collect::<(Transform, Rendering)>();
-        // let cameras_state = world.lock().component_collect::<(Transform, Camera)>();
+        pre_render_finished_barrier.wait();
+        let shared_state = shared_state.lock().update_read();
 
         // do rendering here
-        for obj in &loaded_objects {
-            game_renderer.check_done(*obj).unwrap();
-        }
 
-        // for (t, r) in &objects_state {
-        //     if let Some(obj) = game_renderer.objects.get_mut(&r.model_id) {
-        //         //TODO!: implementation for multiple nodes
-        //         for node in &mut obj.nodes {
-        //             node.translation = t.pos;
-        //             node.rotation = Quat::from(t.rot);
-        //             node.scale = t.scale;
-        //             match node.update_transform(&Mat4::from_translation(t.pos)) {
-        //                 Ok(()) => (),
-        //                 Err(e) => eprintln!("failed to update model 0 with error {e:?}"),
-        //             }
-        //         }
-        //     }
-        // }
+        for event in shared_state.device_events {
+            match event {
+                DeviceEvent::Key(KeyboardInput {
+                    state,
+                    virtual_keycode: Some(key),
+                    ..
+                }) => game_render_state
+                    .editor_cam_controller
+                    .process_keyboard(key, state),
 
-        if let Some((id, path)) = state.add_object {
-            match path.split('.').last().unwrap() {
-                "rmp" => {
-                    game_renderer.add_object(tar_render::GameObject::ImportedPath(&path), id);
-                    loaded_objects.push(id);
+                DeviceEvent::MouseMotion { delta } => {
+                    if shared_state.mouse_in_view && shared_state.mouse_pressed {
+                        game_render_state
+                            .editor_cam_controller
+                            .process_mouse(delta.0, delta.1)
+                    }
                 }
-                "gltf" | "glb" => {
-                    game_renderer.add_object(
-                        tar_render::GameObject::ModelPath(
-                            &path,
-                            path.split(|x| x == '\\' || x == '/')
-                                .last()
-                                .unwrap()
-                                .split('.').next()
-                                .unwrap(),
-                        ),
-                        id,
-                    );
-                    loaded_objects.push(id);
-                }
+
                 _ => (),
             }
         }
 
-        // for event in state.events {
-        //     input(&mut game_renderer, &event, &cam);
-        // }
+        if shared_state.halt {
+            return;
+        }
+        if shared_state.resize {
+            render_functions::resize(shared_state.window_size, &mut game_render_state)
+        }
 
-        // if game_renderer.mouse_pressed {
-        //     game_renderer
-        //         .cameras
-        //         .get_mut(&cam)
-        //         .unwrap()
-        //         .controller
-        //         .process_mouse(state.mouse_movement.0, state.mouse_movement.1);
-        // }
-        // game_renderer
-        //     .cameras
-        //     .get_mut(&cam)
-        //     .unwrap()
-        //     .controller
-        //     .sensitivity = state.cam_sensitivity;
-
-        // update(&mut game_renderer, state.dt, &cam);
-
-        let output_frame = match surface.get_current_texture() {
+        let output_frame = match game_render_state.surface.get_current_texture() {
             Ok(frame) => Some(frame),
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                game_renderer.resize(state.size, &mut config);
-                surface.configure(&device, &config);
+                render_functions::resize(shared_state.window_size, &mut game_render_state);
                 None
             }
             Err(wgpu::SurfaceError::Timeout) => {
@@ -187,6 +69,7 @@ pub fn render_fn(
             }
             Err(wgpu::SurfaceError::OutOfMemory) => return,
         };
+
         if let Some(output_frame) = output_frame {
             let view = output_frame
                 .texture
@@ -194,46 +77,47 @@ pub fn render_fn(
 
             // rendering
 
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("encoder"),
-            });
+            let mut encoder =
+                game_render_state
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("encoder"),
+                    });
 
-            // Game rendering
-            // if let Some(cam) = cameras_state.into_iter().find(|cam| cam.1.active) {
-            //     match game_renderer.render(&mut encoder, &view, objects_state, cam, state.size) {
-            //         Ok(()) => (),
-            //         Err(e) => eprintln!("Rendering failed with error: {e:?}"),
-            //     }
-            // }
+            // My rendering
+            render_functions::render(&mut game_render_state, &mut encoder, &view, shared_state.dt)
+                .unwrap();
 
             // Egui rendering now
+
             let screen_descriptor = ScreenDescriptor {
-                size_in_pixels: [config.width, config.height],
+                size_in_pixels: [
+                    shared_state.window_size.width,
+                    shared_state.window_size.height,
+                ],
                 // Forcing pixels per point 1.0 - the egui input handling seems to not scale the cursor coordinates automatically
                 pixels_per_point: 1.0,
             };
 
             let user_cmd_bufs = {
-                for (id, image_delta) in &state.egui_textures_delta.set {
-                    egui_renderer.update_texture(&device, &queue, *id, image_delta);
+                for (id, image_delta) in &shared_state.egui_textures_delta.set {
+                    egui_renderer.update_texture(
+                        &game_render_state.device,
+                        &game_render_state.queue,
+                        *id,
+                        image_delta,
+                    );
                 }
 
                 egui_renderer.update_buffers(
-                    &device,
-                    &queue,
+                    &game_render_state.device,
+                    &game_render_state.queue,
                     &mut encoder,
-                    state.paint_jobs.as_ref(),
+                    &shared_state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 )
             };
 
-            egui_renderer.update_buffers(
-                &device,
-                &queue,
-                &mut encoder,
-                state.paint_jobs.as_ref(),
-                &screen_descriptor,
-            );
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("UI Render Pass"),
@@ -250,17 +134,19 @@ pub fn render_fn(
 
                 egui_renderer.render(
                     &mut render_pass,
-                    state.paint_jobs.as_ref(),
+                    &shared_state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 );
             }
 
-            for id in &state.egui_textures_delta.free {
+            for id in &shared_state.egui_textures_delta.free {
                 egui_renderer.free_texture(id);
             }
 
-            queue.submit(user_cmd_bufs.into_iter());
-            queue.submit(std::iter::once(encoder.finish()));
+            game_render_state.queue.submit(user_cmd_bufs.into_iter());
+            game_render_state
+                .queue
+                .submit(std::iter::once(encoder.finish()));
             output_frame.present();
         }
     }

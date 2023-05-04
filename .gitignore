@@ -3,6 +3,7 @@ target/
 crates/*/target/
 crates/*/Cargo.lock/
 .github/
+.scr/
 assets/
 .idea/
 .vscode/
