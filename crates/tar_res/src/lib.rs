@@ -5,7 +5,7 @@ use std::error::Error;
 use log::warn;
 use model::Model;
 
-type SomeResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
+pub type SomeResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 /// imports models from a gltf file.
 pub fn import_models(file_path: &str) -> SomeResult<Vec<Model>> {

@@ -1,0 +1,9 @@
+[package]
+name = "tar_abi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+scr_types = { path = "../scr_types" }
+libloading = "0.8.0"
+fs_extra = "1.3"

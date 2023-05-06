@@ -9,7 +9,7 @@ impl<T: Clone> DoubleBuffer<T> {
         Self { state: init }
     }
     pub fn update_read(&mut self) -> T {
-        return self.state.clone();
+        self.state.clone()
     }
 }
 

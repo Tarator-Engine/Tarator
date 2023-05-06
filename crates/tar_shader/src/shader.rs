@@ -88,22 +88,6 @@ const _: () = assert!(
     serde::Serialize,
     serde::Deserialize
 )]
-pub struct PointLight {
-    pub color: glam::Vec3,
-    pub position: glam::Vec3,
-}
-#[repr(C)]
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    bytemuck::Pod,
-    bytemuck::Zeroable,
-    encase::ShaderType,
-    serde::Serialize,
-    serde::Deserialize
-)]
 pub struct MaterialData {
     pub albedo: glam::Vec4,
     pub emissive: glam::Vec3,

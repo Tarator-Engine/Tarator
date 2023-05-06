@@ -7,4 +7,7 @@ fn main() {
     // }
     env_logger::init();
     pollster::block_on(tar_core::run());
+
+    // let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
+    // tar_abi::run_scripts(&lib, &systems);
 }

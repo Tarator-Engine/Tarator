@@ -1,5 +1,5 @@
+use scr_types::prims::Mat4;
 use tar_shader::shader;
-use tar_types::Mat4;
 use wgpu::util::DeviceExt;
 
 pub mod material;
