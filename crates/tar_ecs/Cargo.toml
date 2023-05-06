@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 tar_ecs_macros = { path = "macros" }
+fxhash = "0.2"
