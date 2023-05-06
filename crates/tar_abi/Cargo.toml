@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 scr_types = { path = "../scr_types" }
 libloading = "0.8.0"
+fs_extra = "1.3"

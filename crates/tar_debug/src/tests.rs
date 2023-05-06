@@ -28,13 +28,13 @@ fn second_session<'a>(num: &'a u32) -> &'a u32 {
 }
 
 #[trace]
-fn _500<'a: 'static>() -> &'a str {
+fn _500() -> &'static str {
     pause_for(500);
     return "should compile";
 }
 
 #[trace]
-fn _500_200_100<'a: 'static>() -> &'a str {
+fn _500_200_100() -> &'static str {
     pause_for(500);
     pause_for(200);
     pause_for(100);

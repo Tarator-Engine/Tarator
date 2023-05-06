@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use tar_types::{Mat4, Vec3, Vec4};
+use scr_types::prims::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -78,8 +78,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         .formats
         .iter()
         .copied()
-        .filter(|f| f.describe().srgb)
-        .next()
+        .find(|f| f.describe().srgb)
         .unwrap_or(surface_caps.formats[0]);
 
     dbg!(surface_caps.formats);
@@ -102,17 +101,16 @@ pub async fn new_state(window: &Window) -> RenderState {
     );
 
     let proj = glam::Mat4::perspective_rh(
-        0.7853982,
+        std::f32::consts::FRAC_PI_4,
         config.width as f32 / config.height as f32,
         0.1,
         100.0,
     );
 
-    // TODO!: move at least the object transform part to somewhere in the object
     let uniform_data = shader::UniformData {
         ambient: Vec4::new(0.2, 0.3, 0.5, 1.0),
-        view: view.into(),
-        proj: proj.into(),
+        view: view,
+        proj: proj,
         camera_pos: Vec4::splat(0.0),
     };
 
@@ -162,19 +160,22 @@ pub async fn new_state(window: &Window) -> RenderState {
     );
     let box_models = tar_res::import_models("assets/box/Box.gltf").unwrap();
 
-    let mut box_models = box_models
+    let models = box_models
         .into_iter()
-        .map(|model| Model::from_stored(model, &device, &queue, config.format))
+        .map(|model| {
+            (
+                uuid::Uuid::new_v4(),
+                Model::from_stored(model, &device, &queue, config.format),
+            )
+        })
         .collect();
 
-    let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
+    // let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
-    let mut models: Vec<Model> = schifi_models
-        .into_iter()
-        .map(|model| Model::from_stored(model, &device, &queue, config.format))
-        .collect();
-
-    models.append(&mut box_models);
+    // let mut models: Vec<Model> = schifi_models
+    //     .into_iter()
+    //     .map(|model| Model::from_stored(model, &device, &queue, config.format))
+    //     .collect();
 
     let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), -PI / 4.0 * 3.0, -PI / 4.0);
     let editor_cam_controller = camera::CameraController::new(1.0, 1.0);
@@ -288,7 +289,7 @@ pub fn render(
 
         state.global_frame_bind_group.set(&mut render_pass);
 
-        for model in &state.models {
+        for (_, model) in &state.models {
             model.render(&mut render_pass);
         }
     }

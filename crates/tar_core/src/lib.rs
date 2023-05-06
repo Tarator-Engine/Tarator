@@ -1,12 +1,10 @@
+mod add_object;
 mod convert_event;
 mod double_buffer;
 mod render;
 mod state;
 
-use std::{
-    f32::consts::FRAC_2_PI,
-    sync::{Arc, Barrier},
-};
+use std::sync::{Arc, Barrier};
 
 use convert_event::deref_event;
 use parking_lot::{Mutex, MutexGuard};
@@ -86,7 +84,11 @@ pub async fn run() {
     let mut since_start = 0;
     let mut frames: u32 = 0;
 
-    let main_thread_state = state::MainThreadState { window };
+    let mut main_thread_state = state::MainThreadState {
+        window,
+        scripts_lib: None,
+        scripts_systems: None,
+    };
 
     let mut gui_data = GuiInData::default();
 
@@ -97,6 +99,7 @@ pub async fn run() {
                 share_state.resize = false;
                 let now = instant::Instant::now();
                 share_state.dt = now - last_render_time;
+                gui_data.dt = share_state.dt;
                 last_render_time = now;
                 let secs = start_time.elapsed().as_secs();
                 frames += 1;
@@ -158,6 +161,23 @@ pub async fn run() {
                 let gui_out = tar_gui::gui(&context, &mut gui_data);
 
                 share_state.mouse_in_view = gui_out.mouse_in_game_view;
+
+                // run scripts
+                if gui_data.running {
+                    if let Some(scr_lib) = &main_thread_state.scripts_lib {
+                        tar_abi::run_scripts(
+                            scr_lib,
+                            main_thread_state.scripts_systems.as_ref().unwrap(),
+                        );
+                    }
+                }
+                if gui_out.reload_scripts {
+                    main_thread_state.scripts_lib = None;
+                    main_thread_state.scripts_systems = None;
+                    let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
+                    main_thread_state.scripts_lib = Some(lib);
+                    main_thread_state.scripts_systems = Some(systems);
+                }
 
                 let output = context.end_frame();
 
