@@ -1,6 +1,6 @@
+use scr_types::prims::{Mat4, Rad, Vec3};
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
-use tar_types::{Mat4, Rad, Vec3};
 use winit::dpi::PhysicalPosition;
 use winit::event::*;
 
@@ -79,6 +79,7 @@ pub struct CameraController {
 }
 
 impl CameraController {
+    #[must_use]
     pub fn new(speed: f32, sensitivity: f32) -> Self {
         Self {
             amount_left: 0.0,

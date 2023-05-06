@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use scr_types::prims::{Vec3, Vec4};
 use serde::{Deserialize, Serialize};
-use tar_types::{Vec3, Vec4};
 
 use super::serde_helpers::*;
 

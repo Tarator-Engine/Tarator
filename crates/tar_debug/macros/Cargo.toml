@@ -1,11 +1,15 @@
 [package]
-name = "tar_types"
+name = "tar_debug_macros"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+proc-macro = true
+
 [dependencies]
-glam = { version = "0.23.0" }
-bytemuck = { version = "1.13", features = ["derive"] }
-tar_shader = { path = "../tar_shader" }
+syn = { version = "1.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+rand = "0.8"

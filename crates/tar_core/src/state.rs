@@ -19,4 +19,6 @@ pub struct ShareState {
 #[derive(Debug)]
 pub struct MainThreadState {
     pub window: winit::window::Window,
+    pub scripts_lib: Option<libloading::Library>,
+    pub scripts_systems: Option<scr_types::Systems>,
 }

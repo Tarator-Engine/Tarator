@@ -18,7 +18,7 @@ impl Model {
         let vertices = model
             .vertices()
             .into_iter()
-            .map(|v| Vertex::from(v))
+            .map(Vertex::from)
             .collect::<Vec<Vertex>>();
         let indices = model
             .indices()

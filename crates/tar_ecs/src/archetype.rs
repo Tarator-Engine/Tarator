@@ -1,492 +1,109 @@
-use std::collections::HashMap;
-
 use crate::{
-    component::{ ComponentId, Components },
-    store::{
-        sparse::{ SparseSetIndex, SparseSet, MutSparseSet },
-        raw_store::RawStore
-    },
-    entity::Entity,
-    bundle::{ BundleInfo, Bundle, BundleComponents }
+    bundle::BundleId,
+    store::{sparse::MutSparseSet, table::Table},
+    type_info::TypeInfo
 };
 
-
-/// Each [`Archetype`] gets its own unique [`ArchetypeId`]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct ArchetypeId(u32);
-
-impl ArchetypeId {
-    pub const EMPTY: Self = Self(0);
-
-    /// Also marks [`EntityMeta`] as destroyed
-    pub const INVALID: Self = Self(u32::MAX);
-
-    #[inline]
-    pub fn new(index: usize) -> Self {
-        Self(index as u32)
-    }
-
-    #[inline]
-    pub fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl SparseSetIndex for ArchetypeId {
-    #[inline]
-    fn as_usize(&self) -> usize {
-        self.index()
-    }
-
-    #[inline]
-    fn from_usize(value: usize) -> Self {
-        Self::new(value)
-    }
-}
-
-
-/// Stores an unique set of [`Component`](crate::component::Component)s ([`Bundle`]) and keeps all
-/// stored [`Component`](crate::componen::Component) packed, with no empty indices between them.
-///
-/// Every function that returns an [`Entity`] relocated some [`Component`]s of another [`Entity`],
-/// which means that its [`EntityMeta`](crate::entity::EntityMeta) must get updated!
 #[derive(Debug)]
 pub struct Archetype {
-    id: ArchetypeId,
-    components: SparseSet<ComponentId, RawStore>,
-    parents: Vec<ArchetypeId>,
-    entities: Vec<Entity>,
+    table: Table,
+    parents: Vec<BundleId>,
 }
 
 impl Archetype {
-    /// SAFETY:
-    /// - Function should only be used for the empty ArchetypeId
-    /// - Will mess with [`World`](crate::world::World) if above is not regarded
-    pub unsafe fn empty(id: ArchetypeId) -> Self {
+    #[inline]
+    pub fn new(bundle_id: BundleId, parents: Vec<BundleId>, type_info: &impl TypeInfo) -> Self {
         Self {
-            id,
-            components: SparseSet::new(),
-            parents: Vec::new(),
-            entities: Vec::new()
-        }
-    }
-
-    /// SAFETY:
-    /// - Should be called with `capacity` > 0, could else lead to possible problems
-    pub fn with_capacity<'a>(
-        id: ArchetypeId,
-        component_ids: impl Iterator<Item = &'a ComponentId>,
-        components: &Components,
-        capacity: usize
-    ) -> Self {
-        let mut component_set = MutSparseSet::new();
-
-        for component_id in component_ids {
-            let description = components.get_description(*component_id).unwrap();
-            let store = unsafe { RawStore::with_capacity(description.layout(), description.drop(), capacity) };
-            component_set.insert(*component_id, store);
-        }
-
-        Self {
-            id,
-            components: component_set.lock(),
-            parents: Vec::new(),
-            entities: Vec::with_capacity(capacity)
-        }
-    }
-
-    /// Pushes given `data` for `entity` into its [`RawStore`]. This means the related
-    /// [`EntityMeta`](crate::entity::EntityMeta) index can just be set using [`Archetype::len()`].
-    ///
-    /// SAFETY:
-    /// - `data` must contain all components of this [`Archetype`]
-    #[inline]
-    pub fn init<T: Bundle>(&mut self, components: &Components, entity: Entity, data: T) {
-        self.entities.push(entity);
-
-        let len = self.len();
-
-        // SAFETY:
-        // We initialize `component` in our store via [`RawStore::push()`]
-        unsafe {
-            data.get_components(components, &mut |component_id, component| {
-                let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
-
-                // If the [`Component`] already has been initialized, drop/replace the last index
-                if store.len() == len {
-                    store.replace_unchecked(len - 1, component);
-                } else {
-                    store.push(component);
-                }
-            });
-        }
-    }
-
-    /// Initializes  given `data` for `entity` in its [`RawStore`].
-    ///
-    /// SAFETY:
-    /// - `data` must contain all components of this [`Archetype`]
-    #[inline]
-    pub fn set<T: Bundle>(&mut self, components: &Components, index: usize, data: T) {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-        // SAFETY:
-        // We initialize `component` in our store via [`RawStore::push`]
-        unsafe {
-            data.get_components(components, &mut |component_id, component| {
-                let store = self.components.get_mut(component_id).expect("Component is not part of this archetype!");
-                store.replace_unchecked(index, component);
-            });
-        }
-    }
-
-    /// SAFETY:
-    /// - Function should only be used for the empty ArchetypeId
-    /// - Will mess with [`World`] if above is not regarded
-    #[inline]
-    pub unsafe fn set_empty(&mut self, entity: Entity) {
-        self.entities.push(entity);
-    }
-
-    #[inline]
-    pub fn get<'a, T: Bundle>(&self, components: &Components, index: usize) -> T::WrappedRef<'a> {
-        if index >= self.len() {
-            debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
-            return T::empty_ref();
-        }
-
-        // SAFETY:
-        // Already bounds checked
-        unsafe {
-            T::from_components(components, &mut |id| {
-                let raw_store = self.components.get(id)?;
-                Some(raw_store.get_unchecked(index))
-            })
-        }
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    /// - Returned references may be invalid
-    #[inline]
-    pub unsafe fn get_unchecked<'a, T: Bundle>(&self, components: &Components, index: usize) -> T::Ref<'a> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        unsafe {
-            T::from_components_unchecked(components, &mut |id| {
-                let raw_store = self.components.get(id).unwrap();
-                raw_store.get_unchecked(index)
-            })
+            table: unsafe { Table::new(bundle_id, type_info) },
+            parents,
         }
     }
 
     #[inline]
-    pub fn get_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::WrappedMutRef<'a> {
-        if index >= self.len() {
-            debug_assert!(false, "DEBUG: Index is out of bounds! ({}>={})", index, self.len());
-            return T::empty_mut_ref();
-        }
-
-        // SAFETY:
-        // Already bounds checked
-        unsafe {
-            T::from_components_mut(components, &mut |id| {
-                let raw_store = self.components.get_mut(id)?;
-                Some(raw_store.get_unchecked_mut(index))
-            })
-        }
-    }
-
-    /// SAFETY:
-    /// - `index` has to be valid and in bounds
-    /// - Returned mutable references may be invalid
-    #[inline]
-    pub unsafe fn get_unchecked_mut<'a, T: Bundle>(&mut self, components: &Components, index: usize) -> T::MutRef<'a> {
-        debug_assert!(index < self.len(), "Index is out of bounds! ({}>={})", index, self.len());
-
-        unsafe {
-            T::from_components_unchecked_mut(components, &mut |id| {
-                let raw_store = self.components.get_mut(id).unwrap();
-                raw_store.get_unchecked_mut(index)
-            })
-        }
+    pub fn table(&self) -> &Table {
+        &self.table
     }
 
     #[inline]
-    pub fn get_entity(&self, index: usize) -> Option<Entity> {
-        self.entities.get(index).map(|entity| *entity)
+    pub fn table_mut(&mut self) -> &mut Table {
+        &mut self.table
     }
 
-    #[inline]
-    pub fn id(&self) -> ArchetypeId {
-        self.id
-    }
-
-    #[inline]
-    pub fn entities(&self) -> impl Iterator<Item = &Entity> {
-        self.entities.iter()
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.entities.len()
-    }
-
-    #[inline]
-    pub fn contains(&self, component_id: ComponentId) -> bool {
-        self.components.contains(component_id)
-    }
-
-    #[inline]
-    pub fn component_ids(&self) -> impl Iterator<Item = ComponentId> + '_ {
-        self.components.indices()
-    }
-
-    /// Checks if `archetype` is contains at least all [`Component`](crate::component::Component)s,
-    /// and if so, add them to the list of parents.
-    #[inline]
-    pub fn init_parent(&mut self, archetype: &Archetype) {
-
-        // If `archetype` is already a set parent, ignore
-        if self.parents.contains(&archetype.id()) {
-            return;
-        }
-
-        for component_id in self.component_ids() {
-            // If the `archetype` does not contain every component_id of `self`, `archetype` is not
-            // a parent. We only care about parents for now.
-            if !archetype.contains(component_id) {
-                return;
-            }
-        }
-
-        self.parents.push(archetype.id());
-    }
-
-    #[inline]
-    pub fn get_parent(&self, component_id: usize) -> Option<ArchetypeId> {
-        self.parents.get(component_id).map(|v| *v)
-    }
-
-    #[inline]
-    pub fn has_parents(&self) -> bool {
-        self.parents.len() != 0
-    }
-
-    #[inline]
-    pub fn parents(&self) -> impl Iterator<Item = &ArchetypeId> {
-        self.parents.iter() 
-    }
-
-    #[inline]
-    pub fn is_empty_archetype(&self) -> bool {
-        self.components.len() == 0
-    }
-
-    /// Performs a swap_remove and moves the removed into the parent. The returned [`Entity`] is
-    /// the [`Entity`] that may have been relocated by the process.
-    ///
-    /// SAFETY:
-    /// - Unset components in the parent have to be set immediately after this call
-    /// - `index` has to be valid
-    #[must_use = "The returned variant may contain a relocated Entity!"]
-    pub unsafe fn move_into_parent(&mut self, parent: &mut Archetype, index: usize) -> Option<Entity> {
-
-        let is_last = index == self.len() - 1;
-
-        let swapped_entity = if is_last {
-            self.entities.pop();
-
-            None
-        } else {
-            self.entities.swap_remove(index);
-
-            // SAFETY:
-            // We just moved in a new entity
-            Some(unsafe { *self.entities.get_unchecked(index) })
-        };
-
-        for (component_id, parent_raw_store) in parent.components.iter_mut() {
-            if let Some(raw_store) = self.components.get_mut(*component_id) {
-                    let ptr = raw_store.swap_remove_and_forget_unchecked(index);
-                    parent_raw_store.push(ptr);
-            }
-        }
-
-        swapped_entity
-    }
-
-    /// Performs a swap_remove and moves the removed into the child. The returned [`Entity`] is
-    /// the [`Entity`] that may have been relocated by the process.
-    ///
-    // SAFETY:
-    // - Drops the components which are not in the child
-    /// - `index` has to be valid
-    pub unsafe fn move_into_child(&mut self, child: &mut Archetype, index: usize) -> Option<Entity> {
-        let is_last = index == self.len() - 1;
-
-        let swapped_entity = if is_last {
-            self.entities.pop();
-
-            None
-        } else {
-            self.entities.swap_remove(index);
-
-            // SAFETY:
-            // We just moved in a new entity
-            Some(unsafe { *self.entities.get_unchecked(index) })
-        };
-        
-        for (component_id, raw_store) in self.components.iter_mut() {
-            if let Some(child_raw_store) = child.components.get_mut(*component_id) {
-                let ptr = raw_store.swap_remove_and_forget_unchecked(index);
-                child_raw_store.push(ptr);
-            } else {
-                raw_store.swap_remove_and_drop_unchecked(index);
-            }
-        }
-
-        swapped_entity
-    }
-
-    /// Performs a swap_remove. The returned [`Entity`] is the [`Entity`] that may have been
-    /// relocated by the process.
-    ///
-    // SAFETY:
-    // - Drops all components at `index`
-    // - `index` has to be valid
-    pub unsafe fn drop_entity(&mut self, index: usize) -> Option<Entity> {
-        let is_last = index == self.len() - 1;
-
-        let swapped_entity = if is_last {
-            self.entities.pop();
-
-            None
-        } else {
-            self.entities.swap_remove(index);
-
-            // SAFETY:
-            // We just moved in a new entity
-            Some(unsafe { *self.entities.get_unchecked(index) })
-        };
-
-        for (_, raw_store) in self.components.iter_mut() {
-            raw_store.swap_remove_and_drop_unchecked(index);
-        }
-
-        swapped_entity
+    pub fn parents(&self) -> &Vec<BundleId> {
+        &self.parents
     }
 }
 
-
-/// Manages all [`Archetype`]s of a [`World`](crate::world::World), as well as each one's parent
-/// [`Archetype`]s.
 #[derive(Debug)]
 pub struct Archetypes {
-    archetypes: Vec<Archetype>,
-    archetype_ids: HashMap<BundleComponents, ArchetypeId>
+    archetypes: MutSparseSet<BundleId, Archetype>,
 }
 
 impl Archetypes {
     #[inline]
-    pub fn new() -> Self {
-        // Entities with no components will be assigned this archetype
-        let empty = unsafe { Archetype::empty(ArchetypeId::new(0)) };
+    pub unsafe fn new() -> Self {
         Self {
-            archetypes: vec![empty],
-            archetype_ids: HashMap::new()
+            archetypes: MutSparseSet::new(),
         }
     }
 
-    /// Automatically initializes all the parent [`ArchetypeId`]s in the new [`Archetype`], as well
-    /// as in all the other [`Archetype`]s.
-    pub fn create_with_capacity(
+    #[inline]
+    pub fn try_init(&mut self, bundle_id: BundleId, type_info: &impl TypeInfo) {
+        if self.get(bundle_id).is_some() {
+            return;
+        }
+
+        let parents = type_info
+            .get_bundle_info(bundle_id, |info| {
+                let mut parents = Vec::new();
+
+                for (id, archetype) in self.archetypes.iter_mut() {
+                    type_info.get_bundle_info(*id, |parent_info| {
+                        if info.is_superset(parent_info) {
+                            archetype.parents.push(bundle_id);
+                        } else if info.is_subset(parent_info) {
+                            parents.push(*id)
+                        }
+                    });
+                }
+
+                parents
+            })
+            .expect("Bundle wasn't initialized!");
+
+        let archetype = Archetype::new(bundle_id, parents, type_info);
+        self.archetypes.insert(bundle_id, archetype);
+    }
+}
+
+impl Archetypes {
+    #[inline]
+    pub fn get(&self, bundle_id: BundleId) -> Option<&Archetype> {
+        self.archetypes.get(bundle_id)
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, bundle_id: BundleId) -> Option<&mut Archetype> {
+        self.archetypes.get_mut(bundle_id)
+    }
+
+    #[inline]
+    pub fn get_2_mut(
         &mut self,
-        bundle_components: &BundleComponents,
-        components: &Components,
-        capacity: usize
-    ) -> ArchetypeId {
-        let id = ArchetypeId::new(self.len());
-        let mut archetype = Archetype::with_capacity(id, bundle_components.iter(), components, capacity);
-
-        // Check every current archetype and our newly created archetype if they are parents.
-        for other_archetype in &mut self.archetypes {
-            other_archetype.init_parent(&archetype);
-            archetype.init_parent(&other_archetype);
-        }
-
-        self.archetypes.push(archetype);
-        self.archetype_ids.insert(bundle_components.clone(), id);
-
-        id
+        i1: BundleId,
+        i2: BundleId,
+    ) -> Option<(&mut Archetype, &mut Archetype)> {
+        self.archetypes.get_2_mut(i1, i2)
     }
 
     #[inline]
-    pub fn get_id_from_components(&self, components: &BundleComponents) -> Option<ArchetypeId> {
-        self.archetype_ids.get(components).map(|v| *v)
-    }
-
-    pub fn get_id_from_components_or_create_with_capacity(
-        &mut self,
-        components: &Components,
-        bundle_components: &BundleComponents,
-        capacity: usize
-    ) -> ArchetypeId {
-        self.get_id_from_components(bundle_components).unwrap_or_else(|| {
-            self.create_with_capacity(bundle_components, components, capacity)
-        })
-    }
-
-    #[inline]
-    pub fn get_from_bundle(&self, info: &BundleInfo) -> Option<&Archetype> {
-        let id = self.get_id_from_components(info.components())?;
-        self.archetypes.get(id.index())
-    }
-
-    #[inline]
-    pub fn get_from_bundle_mut(&mut self,info: &BundleInfo) -> Option<&mut Archetype> {
-        let id = self.get_id_from_components(info.components())?;
-        self.archetypes.get_mut(id.index())
-    }
-
-    #[inline]
-    pub fn get(&self, id: ArchetypeId) -> Option<&Archetype> {
-        self.archetypes.get(id.index())
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, id: ArchetypeId) -> Option<&mut Archetype> {
-        self.archetypes.get_mut(id.index())
-    }
-
-    #[inline]
-    pub fn get_2_mut(&mut self, a: ArchetypeId, b: ArchetypeId) -> (&mut Archetype, &mut Archetype) {
-        if a.index() > b.index() {
-            let (b_slice, a_slice) = self.archetypes.split_at_mut(a.index());
-            (&mut a_slice[0], &mut b_slice[b.index()])
-        } else {
-            let (a_slice, b_slice) = self.archetypes.split_at_mut(b.index());
-            (&mut a_slice[a.index()], &mut b_slice[0])
-        }
-    }
-
-    #[inline]
-    pub unsafe fn get_unchecked(&self, index: usize) -> &Archetype {
-        self.archetypes.get_unchecked(index)  
-    }
-
-    #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Archetype {
-        self.archetypes.get_unchecked_mut(index)  
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &Archetype> {
+    pub fn iter(&self) -> impl Iterator<Item = (&BundleId, &Archetype)> {
         self.archetypes.iter()
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
-        self.archetypes.len()
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&BundleId, &mut Archetype)> {
+        self.archetypes.iter_mut()
     }
-}
 
+}
