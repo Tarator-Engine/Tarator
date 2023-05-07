@@ -5,9 +5,13 @@ fn main() {
     // } else {
     //     env_logger::init();
     // }
-    env_logger::init();
-    pollster::block_on(tar_core::run());
+    // env_logger::init();
+    // pollster::block_on(tar_core::run());
 
     // let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
     // tar_abi::run_scripts(&lib, &systems);
+
+    let mut engine = tar_audio::AudioManager::new();
+
+    engine.load_file("test.mp3");
 }

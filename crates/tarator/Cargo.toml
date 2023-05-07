@@ -18,3 +18,4 @@ log = "0.4"
 pollster = "0.3.0"
 tar_core = { path = "../tar_core" }
 tar_abi = { path = "../tar_abi" }
+tar_audio = { path = "../tar_audio" }
