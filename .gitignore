@@ -5,3 +5,8 @@ crates/*/Cargo.lock/
 .github/
 .scr/
 assets/
+.idea/
+.vscode/
+.scr/
+lazygit
+lazygit.tar.gz

@@ -1,0 +1,20 @@
+[package]
+name = "tarator"
+version = "0.1.0"
+edition = "2021"
+license-file = "../../LICENSE"
+description = "A rust game engine with an ECS and a UI."
+homepage = "https://github.com/Tarator-Engine/Tarator"
+documentation = "https://docs.rs/tarator"
+repository = "https://github.com/Tarator-Engine/Tarator"
+readme = "../../README.md"
+
+[[bin]]
+name = "tarator"
+
+[dependencies]
+env_logger = "0.10"
+log = "0.4"
+pollster = "0.3.0"
+tar_core = { path = "../tar_core" }
+tar_abi = { path = "../tar_abi" }
