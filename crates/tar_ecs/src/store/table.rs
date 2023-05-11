@@ -14,7 +14,7 @@ use crate::{
 };
 
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ComponentItem {
     index: usize,
     size: usize,
@@ -22,7 +22,7 @@ struct ComponentItem {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Table {
     store: RawStore,
     indexer: SparseSet<ComponentId, ComponentItem>,

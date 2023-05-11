@@ -41,7 +41,7 @@ impl Entity {
 /// Saves the component location of an [`Entity`], as well as it's current version. Every time an
 /// [`Entity`] gets deleted, the corresponding [`EntityMeta`] gets invalidated and the version gets
 /// incremented (in order to recycle it's existanse).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EntityMeta {
     pub bundle_id: BundleId,
     pub index: usize,
@@ -76,7 +76,7 @@ impl EntityMeta {
 /// # Links
 ///
 /// [ECS back and forth - Part 3](https://skypjack.github.io/2019-05-06-ecs-baf-part-3)
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Entities {
     meta: Vec<EntityMeta>,
     /// `free_next` is pointing to the next dead [`Entity`] that can get revived, and `free_count`

@@ -82,23 +82,15 @@ fn component_query() {
 
     fn check_component<T: Bundle>(world: &mut World, rec: usize) {
         let mut count = 0;
-        world.component_query::<T>(|_| {
+        world.component_query::<T>().for_each(|_| {
             count += 1;
         });
         assert!(count == rec, "{}", count);
 
         count = 0;
-        world.component_query_mut::<T>(|_| {
+        world.component_query_mut::<T>().for_each(|_| {
             count += 1;
         });
-        assert!(count == rec, "{}", count);
-
-        count = 0;
-        world.get_component_query::<T>().for_each(|_| count += 1);
-        assert!(count == rec, "{}", count);
-
-        count = 0;
-        world.get_component_query_mut::<T>().for_each(|_| count += 1);
         assert!(count == rec, "{}", count);
     }
 
@@ -120,7 +112,7 @@ fn component_query() {
     check_component::<(Label, Rotation, Position)>(&mut world, 2);
     check_component::<(Label, Player, Rotation, Position)>(&mut world, 1);
 
-    world.component_query::<Label>(|label| {
+    world.component_query::<Label>().for_each(|label| {
         assert!(label.0.as_str() == "Entity");
     });
 }

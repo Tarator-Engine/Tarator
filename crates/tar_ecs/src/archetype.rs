@@ -4,7 +4,7 @@ use crate::{
     type_info::TypeInfo
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Archetype {
     table: Table,
     parents: Vec<BundleId>,
@@ -34,21 +34,21 @@ impl Archetype {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Archetypes {
     archetypes: MutSparseSet<BundleId, Archetype>,
 }
 
 impl Archetypes {
     #[inline]
-    pub unsafe fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             archetypes: MutSparseSet::new(),
         }
     }
 
     #[inline]
-    pub fn try_init(&mut self, bundle_id: BundleId, type_info: &impl TypeInfo) {
+    pub fn try_init(&self, bundle_id: BundleId, type_info: &impl TypeInfo) {
         if self.get(bundle_id).is_some() {
             return;
         }
@@ -57,14 +57,16 @@ impl Archetypes {
             .get_bundle_info(bundle_id, |info| {
                 let mut parents = Vec::new();
 
-                for (id, archetype) in self.archetypes.iter_mut() {
-                    type_info.get_bundle_info(*id, |parent_info| {
-                        if info.is_superset(parent_info) {
-                            archetype.parents.push(bundle_id);
-                        } else if info.is_subset(parent_info) {
-                            parents.push(*id)
-                        }
-                    });
+                unsafe {
+                    for (id, archetype) in (*(&self.archetypes as *const _ as *mut MutSparseSet<BundleId, Archetype>)).iter_mut() {
+                        type_info.get_bundle_info(*id, |parent_info| {
+                            if info.is_superset(parent_info) {
+                                archetype.parents.push(bundle_id);
+                            } else if info.is_subset(parent_info) {
+                                parents.push(*id)
+                            }
+                        });
+                    }
                 }
 
                 parents
@@ -72,7 +74,7 @@ impl Archetypes {
             .expect("Bundle wasn't initialized!");
 
         let archetype = Archetype::new(bundle_id, parents, type_info);
-        self.archetypes.insert(bundle_id, archetype);
+        unsafe { (*(&self.archetypes as *const _ as *mut MutSparseSet<_, _>)).insert(bundle_id, archetype) };
     }
 }
 
