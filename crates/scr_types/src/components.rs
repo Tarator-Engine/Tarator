@@ -1,9 +1,10 @@
-use tar_ecs::prelude::Component;
+use tar_ecs::prelude::*;
+use serde::{Serialize, Deserialize};
 
-use crate::prims::{Quat, Rad, Vec3};
+use crate::{ecs_serde::SerdeComponent, prims::{Quat, Rad, Vec3}};
 
 /// This component stored transform attributes
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Transform {
     pub pos: Vec3,
     pub rot: Quat,
@@ -19,6 +20,11 @@ impl Default for Transform {
         }
     }
 }
+
+impl SerdeComponent for Transform {
+    const NAME: &'static str = "transform";
+}
+
 
 /// This Component indicates that an entity is rendered
 ///
@@ -54,7 +60,7 @@ impl Default for Camera {
 
 /// This component stores basic entity info e.g. name
 /// it is required for it to be shown in the editor
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component)]
 pub struct Info {
     pub name: String,
     pub id: uuid::Uuid,

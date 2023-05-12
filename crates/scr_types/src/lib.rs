@@ -1,5 +1,7 @@
 pub mod components;
 pub mod prims;
+pub mod ecs_serde;
+
 use std::fmt::Debug;
 
 pub use macros::{InitSystems, System};
