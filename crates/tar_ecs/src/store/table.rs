@@ -125,7 +125,7 @@ impl Table {
         let indexer = RowIndexer::new(index, self);
 
         data.get_components(type_info, &mut |id, data| {
-            let size = indexer.get_size(id).unwrap();
+            let size = indexer.get_size(id).expect("Component not part of table!");
             if size != 0 {
                 let dst = indexer.get_unchecked(id);
                 ptr::copy_nonoverlapping(data, dst, size);

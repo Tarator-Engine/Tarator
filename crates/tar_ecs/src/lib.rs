@@ -16,9 +16,9 @@ pub mod prelude {
     pub type Query<'a, T> = super::query::Query<'a, T, super::type_info::Local>;
     pub type QueryMut<'a, T> = super::query::Query<'a, T, super::type_info::Local>;
 
-    pub use super::bundle::{Bundle, CloneBundle};
-    pub use super::callback::{Callback, InnerCallback};
-    pub use super::component::{Component, ComponentInfo};
+    pub use super::bundle::{Bundle, CloneBundle, UBundleId};
+    pub use super::callback::{Callback, InnerCallback, UCallbackId};
+    pub use super::component::{Component, ComponentInfo, UComponentId};
     pub use super::entity::Entity;
     pub use super::store::table::Indexer;
     pub use tar_ecs_macros::{Callback, Component};

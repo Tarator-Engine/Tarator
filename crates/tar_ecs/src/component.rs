@@ -1,8 +1,8 @@
-use std::{alloc::Layout, mem::needs_drop, any::TypeId};
+use std::{alloc::Layout, mem::needs_drop};
 
 use tar_ecs_macros::identifier;
 
-use crate::callback::{CallbackFunc, CallbackId, Callbacks};
+use crate::callback::{ Callback, CallbackFunc, CallbackId, Callbacks };
 
 /// A [`Component`] is nothing more but data, which can be stored in a given
 /// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can
@@ -13,15 +13,16 @@ use crate::callback::{CallbackFunc, CallbackId, Callbacks};
 /// SAFETY:
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
-    fn type_id() -> TypeId {
-        TypeId::of::<Self>()
-    }
+    const UID: UComponentId;
 }
 
-unsafe impl Component for () {}
+unsafe impl Component for () {
+    const UID: UComponentId = UComponentId::new(0);
+}
 
 
 identifier!(ComponentId, u32);
+identifier!(UComponentId, u64);
 
 
 #[derive(Debug)]
@@ -68,5 +69,10 @@ impl ComponentInfo {
     #[inline]
     pub unsafe fn set_callback(&mut self, id: CallbackId, func: CallbackFunc) {
         self.callbacks.add(id, func)
+    }
+
+    #[inline]
+    pub fn set_callback_from<T: Callback<U>, U: Component>(&mut self, id: CallbackId) {
+        self.callbacks.add_from::<T, U>(id)
     }
 }

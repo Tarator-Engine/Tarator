@@ -85,9 +85,12 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 
     let name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
+    let (_, uid) = uuid::Uuid::new_v4().as_u64_pair();
 
     quote! {
-        unsafe impl #impl_generics Component for #name #type_generics #where_clause {}
+        unsafe impl #impl_generics Component for #name #type_generics #where_clause {
+            const UID: UComponentId = UComponentId::new(#uid);
+        }
     }
     .into()
 }
@@ -98,13 +101,13 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
 
     let name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
+    let (_, uid) = uuid::Uuid::new_v4().as_u64_pair();
 
     quote! {
-        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {}
-
-        impl #impl_generics Callback<()> for #name #type_generics #where_clause {
-            fn callback(&mut self, _: &mut ()) {}
+        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {
+            const UID: UCallbackId = UCallbackId::new(#uid);
         }
+        impl #impl_generics Callback<()> for #name #type_generics #where_clause {}
     }
     .into()
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem, ops::{Add, Sub}, any::TypeId};
+use std::{collections::HashSet, any, mem, ops::{Add, Sub}};
 
 use crate::{
     component::{ Component, ComponentId },
@@ -18,13 +18,14 @@ use tar_ecs_macros::{ foreach_tuple, identifier };
 /// SAFETY:
 /// - Manual implementations are discouraged
 pub unsafe trait Bundle: Sized + Send + Sync + 'static {
-    /// Implemented as a tuple of mutable [`Component`] raw pointer
+    /// Implemented as a tuple of [`Component`] refs/ptr
     type Ptr: Copy;
-    type Ref<'a>: Copy;
-    type Mut<'a>;
+    type Ref<'a>: 'a + Copy;
+    type Mut<'a>: 'a;
 
-    fn b_type_id() -> TypeId {
-        TypeId::of::<Self>()
+    #[inline]
+    fn uid() -> UBundleId {
+        unsafe { mem::transmute(any::TypeId::of::<Self>()) }
     }
 
     /// Initializes and gets the [`ComponentId`]s via `func`
@@ -46,6 +47,7 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
         type_info: &impl TypeInfo,
         func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
     ) -> Option<Self::Ref<'a>>;
+
     unsafe fn from_components_as_mut<'a>(
         type_info: &impl TypeInfo,
         func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
@@ -69,6 +71,7 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
 pub unsafe trait CloneBundle: Bundle + Clone {
     fn clone_bundles<'a>(bundles: Self::Ref<'a>) -> Self;
 }
+
 
 unsafe impl<T: Component> Bundle for T {
     type Ptr = *mut Self;
@@ -181,6 +184,8 @@ macro_rules! component_tuple_impl {
 foreach_tuple!(component_tuple_impl, 1, 15, T);
 
 identifier!(BundleId, u32);
+identifier!(UBundleId, u64);
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BundleInfo {

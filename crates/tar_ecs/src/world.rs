@@ -101,12 +101,12 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn bundle_init<T: Bundle>(&mut self) -> BundleId {
+    pub fn bundle_init<'a, T: Bundle>(&mut self) -> BundleId {
         unsafe { (*self.type_info.get()).init_bundle_from::<T>() }
     }
 
     #[inline]
-    pub fn bundle_id<T: Bundle>(&self) -> Option<BundleId> {
+    pub fn bundle_id<'a, T: Bundle>(&self) -> Option<BundleId> {
         unsafe { (*self.type_info.get()).get_bundle_id_from::<T>() }
     }
 } 
@@ -116,16 +116,16 @@ impl World<Local> {
     /// Will panic if it gets called more than [`usize::MAX`] times
     #[inline]
     pub fn new() -> Self {
-        let type_info = UnsafeCell::new(Local::new());
+        let mut type_info = Local::new();
         let archetypes = Archetypes::new();
-        let bundle_id = unsafe { (*type_info.get()).init_bundle_from::<()>() };
-        archetypes.try_init(bundle_id, unsafe { &mut *type_info.get() });
+        let bundle_id = type_info.init_bundle_from::<()>();
+        archetypes.try_init(bundle_id, &type_info);
         
         Self {
             id: WorldId::new(),
             entities: Entities::new(),
             archetypes,
-            type_info
+            type_info: UnsafeCell::new(type_info)
         }
     }
 }
@@ -178,7 +178,7 @@ impl<TI: TypeInfo> World<TI> {
     /// Using this function may result in some memory relocations, so calling this often may result
     /// in fairly poor performance.
     #[inline]
-    pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
+    pub fn entity_set<'a, T: Bundle>(&mut self, entity: Entity, data: T) {
         let to_set_bundle_id = self.bundle_init::<T>();
 
         let Some(meta) = self.entities.get_mut(entity) else {
@@ -235,7 +235,7 @@ impl<TI: TypeInfo> World<TI> {
         }
     }
 
-    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
+    pub fn entity_unset<'a, T: Bundle>(&mut self, entity: Entity) {
         let to_unset_bundle_id = self.bundle_init::<T>();
 
         let Some(meta) = self.entities.get_mut(entity) else {
@@ -278,42 +278,30 @@ impl<TI: TypeInfo> World<TI> {
 
 impl<TI: TypeInfo> World<TI> {
     #[inline]
-    pub fn entity_get<T: Bundle, U>(
-        &self,
-        entity: Entity,
-        func: impl for <'a> FnOnce(T::Ref<'a>) -> U
-    ) -> Option<U> {
+    pub fn entity_get<'a, T: Bundle>(&self, entity: Entity) -> Option<T::Ref<'a>> {
         let meta = self.entities.get(entity)?;
 
         let archetype = self.archetypes.get(meta.bundle_id).unwrap();
         let table = archetype.table();
         let indexer = unsafe { ConstRowIndexer::new(meta.index, table as *const _ as *mut Table) };
 
-        let bundle = unsafe { T::from_components_as_ref(&*self.type_info.get(), &mut |id| indexer.get(id) )? };
-
-        Some(func(bundle))
+        unsafe { T::from_components_as_ref(&*self.type_info.get(), &mut |id| indexer.get(id) ) }
     }
 
     #[inline]
-    pub fn entity_get_mut<T: Bundle, U>(
-        &mut self,
-        entity: Entity,
-        func: impl for<'a> FnOnce(T::Mut<'a>) -> U
-    ) -> Option<U> {
+    pub fn entity_get_mut<'a, T: Bundle>(&mut self, entity: Entity) -> Option<T::Mut<'a>> {
         let meta = self.entities.get(entity)?;
 
         let archetype = self.archetypes.get_mut(meta.bundle_id).unwrap();
         let table = archetype.table_mut();
         let indexer = unsafe { RowIndexer::new(meta.index, table) };
 
-        let bundle = unsafe { T::from_components_as_mut(&*self.type_info.get(), &mut |id| indexer.get(id) )? };
-
-        Some(func(bundle))
+        unsafe { T::from_components_as_mut(&*self.type_info.get(), &mut |id| indexer.get(id) ) }
     }
 
     /// Returns a [`Vec<Entity>`] with every [`Entity`] that has given [`Bundle`].
     #[inline]
-    pub fn entity_collect<T: Bundle>(&self) -> Vec<Entity> {
+    pub fn entity_collect<'a, T: Bundle>(&self) -> Vec<Entity> {
         let o_bundle_id = unsafe { (*self.type_info.get()).init_bundle_from::<T>() };
         self.archetypes.try_init(o_bundle_id, unsafe { &*self.type_info.get() });
 
@@ -331,7 +319,31 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn entity_callback<T: Callback<()>>(&mut self, entity: Entity, callback: &mut T) {
+    pub fn entity_callback<T: Callback<()>>(&self, entity: Entity, callback: &mut T) {
+        let callback_id = unsafe { (*self.type_info.get()).init_callback_from::<T, ()>() };
+
+        let Some(meta) = self.entities.get(entity) else {
+            return;
+        };
+
+        let archetype = self.archetypes.get(meta.bundle_id).unwrap();
+        let table = archetype.table();
+
+        let indexer = unsafe { ConstRowIndexer::new(meta.index, table) };
+
+        for component_id in table.component_ids() {
+            unsafe {
+                (*self.type_info.get()).get_component_info(component_id, |info| {
+                    if let Some(callback_fn) = info.get_callback(callback_id) {
+                        (callback_fn.func)(callback as *mut _ as *mut u8, indexer.get(component_id).unwrap())
+                    }
+                })
+            };
+        }
+    }
+
+    #[inline]
+    pub fn entity_callback_mut<T: Callback<()>>(&mut self, entity: Entity, callback: &mut T) {
         let callback_id = self.callback_init::<T>();
 
         let Some(meta) = self.entities.get(entity) else {
@@ -347,7 +359,7 @@ impl<TI: TypeInfo> World<TI> {
             unsafe {
                 (*self.type_info.get()).get_component_info(component_id, |info| {
                     if let Some(callback_fn) = info.get_callback(callback_id) {
-                        callback_fn(callback as *mut _ as *mut u8, indexer.get(component_id).unwrap())
+                        (callback_fn.func_mut)(callback as *mut _ as *mut u8, indexer.get(component_id).unwrap())
                     }
                 })
             };
@@ -358,7 +370,7 @@ impl<TI: TypeInfo> World<TI> {
 impl<TI: TypeInfo> World<TI> {
     /// Clones every [`CloneBundle`] into a [`Vec`]
     #[inline]
-    pub fn component_collect<T: CloneBundle>(&mut self) -> Vec<T> {
+    pub fn component_collect<'a, T: CloneBundle>(&'a self) -> Vec<T> {
         let mut bundles = Vec::new();
         self.component_query::<T>().for_each(|bundle| bundles.push(T::clone_bundles(bundle)));
 
@@ -366,7 +378,7 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn component_query<T: Bundle>(&self) -> Query<T, TI> {
+    pub fn component_query<'a, T: Bundle>(&'a self) -> Query<'a, T, TI> {
         let bundle_id = unsafe { (*self.type_info.get()).init_bundle_from::<T>() };
         self.archetypes.try_init(bundle_id, unsafe { &*self.type_info.get() });
 
@@ -374,7 +386,7 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn component_query_mut<T: Bundle>(&mut self) -> QueryMut<T, TI> {
+    pub fn component_query_mut<'a, T: Bundle>(&'a mut self) -> QueryMut<'a, T, TI> {
         let bundle_id = unsafe { (*self.type_info.get()).init_bundle_from::<T>() };
         self.archetypes.try_init(bundle_id, unsafe { &*self.type_info.get() });
 
