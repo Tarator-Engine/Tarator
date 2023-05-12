@@ -320,7 +320,9 @@ impl<TI: TypeInfo> World<TI> {
 
     #[inline]
     pub fn entity_callback<T: Callback<()>>(&self, entity: Entity, callback: &mut T) {
-        let callback_id = unsafe { (*self.type_info.get()).init_callback_from::<T, ()>() };
+        let Some(callback_id) = self.callback_id::<T>() else {
+            return;
+        };
 
         let Some(meta) = self.entities.get(entity) else {
             return;
@@ -344,7 +346,9 @@ impl<TI: TypeInfo> World<TI> {
 
     #[inline]
     pub fn entity_callback_mut<T: Callback<()>>(&mut self, entity: Entity, callback: &mut T) {
-        let callback_id = self.callback_init::<T>();
+        let Some(callback_id) = self.callback_id::<T>() else {
+            return;
+        };
 
         let Some(meta) = self.entities.get(entity) else {
             return;
