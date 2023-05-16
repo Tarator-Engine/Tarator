@@ -409,27 +409,24 @@ mod tests {
 
     #[test]
     fn serdeialize() {
+        let id = uuid::Uuid::new_v4();
         let serialized = {
             let mut world = World::new();
             world.component_add_callback::<SerializeCallback, Transform>();
             world.component_add_callback::<SerializeCallback, Foo>();
             world.component_add_callback::<SerializeCallback, Bar>();
 
-            for n in 0..10 {
-                let entity = world.entity_create();
-                let data = (
-                    Info { id: uuid::Uuid::new_v4(), name: format!("Entity {n}") },
-                    Transform::default(),
-                    Foo { foo1: n, foo2: format!("We are baba!") },
-                    Bar(vec![n, n+5, n+7, n])
-                );
-                world.entity_set(entity, data);
-            }
+            let entity = world.entity_create();
+            let data = (
+                Info { id, name: "GigachadEntity".into() },
+                Transform::default(),
+                Foo { foo1: 50, foo2: "We are baba!".into() },
+                Bar(vec![50, 6665, 13407, 324])
+            );
+            world.entity_set(entity, data);
 
             serde_json::to_string_pretty(&SerWorld::new(&world, uuid::Uuid::new_v4())).unwrap()
         };
-
-        println!("{serialized}");
 
         let deworld = DeWorldBuilder::new()
             .constructor::<Transform>()
@@ -439,9 +436,14 @@ mod tests {
 
         deworld.world
             .component_query::<(Info, Transform, Foo, Bar)>()
-            .for_each(|(info, t, foo, bar)|
-                println!("{:?}\n{:?}\n{:?}\n{:?}\n", info, t, foo, bar)
-            );
+            .for_each(|(info, t, foo, bar)| {
+                assert!(info.name == "GigachadEntity");
+                assert!(info.id == id);
+                assert!(t == &Transform::default());
+                assert!(foo.foo1 == 50);
+                assert!(foo.foo2 == "We are baba!");
+                assert!(bar.0 == vec![50, 6665, 13407, 324]);
+            });
     }
 }
 

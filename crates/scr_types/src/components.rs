@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize};
 use crate::{ecs_serde::SerdeComponent, prims::{Quat, Rad, Vec3}};
 
 /// This component stored transform attributes
-#[derive(Debug, Clone, Component, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct Transform {
     pub pos: Vec3,
     pub rot: Quat,

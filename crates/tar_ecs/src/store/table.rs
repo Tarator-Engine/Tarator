@@ -66,7 +66,15 @@ impl Table {
             });
         }
 
-        size = (size != 0).then(|| (size + 7) & !7).unwrap_or_default();
+        if size != 0 {
+            size -= 1;
+            size |= size >> 1;
+            size |= size >> 2;
+            size |= size >> 4;
+            size |= size >> 8;
+            size |= size >> 16;
+            size += 1;
+        }
 
         let layout = Layout::from_size_align(size, align).unwrap();
 
