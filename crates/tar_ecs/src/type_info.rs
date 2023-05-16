@@ -52,13 +52,13 @@ impl TypeInfo for Local {
     #[inline]
     fn init_component_from<T: Component>(&mut self) -> ComponentId {
         self.component_ids
-            .get(&T::UID)
+            .get(&T::uid())
             .map(|id| *id)
             .unwrap_or_else(|| {
                 let index = self.components.len();
                 self.components.push(ComponentInfo::new_from::<T>());
                 let id = ComponentId::from_usize(index);
-                self.component_ids.insert(T::UID, id);
+                self.component_ids.insert(T::uid(), id);
 
                 id
             })
@@ -66,7 +66,7 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_component_id_from<T: Component>(&self) -> Option<ComponentId> {
-        self.component_ids.get(&T::UID).map(|id| *id)
+        self.component_ids.get(&T::uid()).map(|id| *id)
     }
 
     #[inline]

@@ -8,6 +8,9 @@
 //! | | | id: Uuid
 //! | | | components[]:
 //! | | | | name > component
+//!
+//! An example of a (de)serialization of a world can be found in `tests::serdeialize` at the
+//! bottom of this file.
 
 use std::collections::HashMap;
 use fxhash::FxBuildHasher;
@@ -22,48 +25,126 @@ use crate::components::Info;
 
 
 /// To be implemented on Components that want to be serde-ed
+///
+/// # Example
+///
+/// ```
+/// use serde::{Serialize, Deserialize};
+/// use tar_ecs::prelude::*;
+///
+/// #[derive(Component, Serialize, Deserialize)]
+/// struct Foo {
+///     bar: u32
+/// }
+///
+/// impl SerdeComponent for Foo {
+///     const NAME: &'static str = "example::Foo";
+/// }
+/// ```
 pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserialize<'a> {
     const NAME: &'static str;
 
     fn construct(deserializer: &mut dyn EDeserializer, world: &mut World, entity: Entity) -> Result<(), erased_serde::Error> {
-        let this: Self = erased_serde::deserialize(deserializer)?; 
+        let this: Self = erased_serde::deserialize(deserializer)?; // TODO: Use unwrap_or_default instad?
         world.entity_set(entity, this);
 
         Ok(())
     }
 }
 
+
+/// A wrapper for world serialization
+///
+/// # Example
+///
+/// ```
+/// use tar_ecs::prelude::*;
+/// 
+/// #[derive(Component, Serialize, Deserialize)]
+/// struct Foo(u32);
+///
+/// impl SerdeComponent for Foo {
+///     const NAME: &'static str = "example::Foo";
+/// }
+///
+/// let mut world = World::new();
+/// world.component_add_callback::<SerializeCallback, Foo>();
+/// let entity = world.entity_create();
+/// world.entity_set(entity, Foo(20));
+///
+/// // Entity needs Info component to be serialized
+/// let entity_id = uuid::Uuid::new_v4();
+/// world.entity_set(entity, Info { id: entity_id, name: "Entity".into() });
+///
+/// let world_id = uuid::Uuid::new_v4();
+/// serde_json::to_string(SerWorld::new(&world, entity_id)).unwrap();
+/// ```
 pub struct SerWorld<'a> {
     world: &'a World,
     id: uuid::Uuid
 }
 
-struct SerEntityEntry<'a> {
-    world: &'a World
+impl<'a> SerWorld<'a> {
+    pub fn new(world: &'a World, id: uuid::Uuid) -> Self {
+        Self { world, id }
+    }
 }
 
-struct SerEntity<'a> {
-    world: &'a World,
-    entity: Entity
+impl<'a> serde::Serialize for SerWorld<'a> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut s = serializer.serialize_struct("World", 2)?;
+        let entity_entries = SerEntityEntry::new(self.world);
+
+        s.serialize_field("id", &self.id.to_string())?;
+        s.serialize_field("ee", &entity_entries)?;
+
+        s.end()
+    }
 }
 
-struct SerComponent<'a> {
-    world: &'a World,
-    entity: Entity,
+
+pub struct DeWorld {
+    pub id: uuid::Uuid,
+    pub world: World
+}
+
+#[derive(Default)]
+pub struct DeWorldBuilder<'a> {
+    constuctors: ConstructorMap<'a>
+}
+
+impl<'a> DeWorldBuilder<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn constructor<T: SerdeComponent>(mut self) -> Self {
+        self.constuctors.insert(T::NAME, T::construct);
+        self
+    }
+
+    pub fn build<'de, D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<DeWorld, D::Error> {
+        use serde::de::DeserializeSeed;
+
+        self.deserialize(deserializer)
+    }
+}
+
+
+impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeWorldBuilder<'a> {
+    type Value = DeWorld;
+
+    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_struct("World", &["id", "ee"], DeWorldVisitor { constuctors: self.constuctors }) 
+    }
 }
 
 /// Serializes all the components existing on an entity
-#[derive(Callback)]
+#[derive(Callback, Default)]
 struct SerializeCallback {
     s: HashMap<&'static str, *const dyn ESerialize, FxBuildHasher>
 }
 
-
-impl SerializeCallback {
-    pub fn new() -> Self {
-        Self { s: Default::default() } 
-    }
-}
 
 impl<T: SerdeComponent> Callback<T> for SerializeCallback {
     fn callback(&mut self, component: &T) {
@@ -71,6 +152,11 @@ impl<T: SerdeComponent> Callback<T> for SerializeCallback {
     }
 }
 
+
+struct SerComponent<'a> {
+    world: &'a World,
+    entity: Entity,
+}
 
 impl<'a> SerComponent<'a> {
     pub fn new(world: &'a World, entity: Entity) -> Self {
@@ -80,7 +166,7 @@ impl<'a> SerComponent<'a> {
 
 impl<'a> serde::Serialize for SerComponent<'a> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut callback = SerializeCallback::new();
+        let mut callback = SerializeCallback::default();
         self.world.entity_callback(self.entity, &mut callback);
 
         let mut s = serializer.serialize_map(Some(callback.s.len()))?;
@@ -93,6 +179,11 @@ impl<'a> serde::Serialize for SerComponent<'a> {
     }
 }
 
+
+struct SerEntity<'a> {
+    world: &'a World,
+    entity: Entity
+}
 
 impl<'a> SerEntity<'a> {
     pub fn new(world: &'a World, entity: Entity) -> Self {
@@ -116,6 +207,10 @@ impl<'a> serde::Serialize for SerEntity<'a> {
 }
 
 
+struct SerEntityEntry<'a> {
+    world: &'a World
+}
+
 impl<'a> SerEntityEntry<'a> {
     pub fn new(world: &'a World) -> Self {
         Self { world }
@@ -137,37 +232,13 @@ impl<'a> serde::Serialize for SerEntityEntry<'a> {
 }
 
 
-impl<'a> SerWorld<'a> {
-    pub fn new(world: &'a World, id: uuid::Uuid) -> Self {
-        Self { world, id }
-    }
-}
 
-
-impl<'a> serde::Serialize for SerWorld<'a> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut s = serializer.serialize_struct("World", 2)?;
-        let entity_entries = SerEntityEntry::new(self.world);
-
-        s.serialize_field("id", &self.id.to_string())?;
-        s.serialize_field("ee", &entity_entries)?;
-
-        s.end()
-    }
-}
 
 
 type ConstructorFunc = fn(&mut dyn EDeserializer, &mut World, Entity) -> Result<(), erased_serde::Error>;
 type ConstructorMap<'a> = HashMap<&'a str, ConstructorFunc, FxBuildHasher>;
 
-pub struct DeWorld {
-    pub id: uuid::Uuid,
-    pub world: World
-}
 
-pub struct DeWorldBuilder<'a> {
-    constuctors: ConstructorMap<'a>
-}
 
 struct DeWorldVisitor<'a> {
     constuctors: ConstructorMap<'a>
@@ -354,32 +425,7 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeWorldVisitor<'a> {
 }
 
 
-impl<'a> DeWorldBuilder<'a> {
-    pub fn new() -> Self {
-        Self {
-            constuctors: Default::default()
-        }
-    }
 
-    pub fn constructor<T: SerdeComponent>(mut self) -> Self {
-        self.constuctors.insert(T::NAME, T::construct);
-        self
-    }
-
-    pub fn build<'de, D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<DeWorld, D::Error> {
-        use serde::de::DeserializeSeed;
-
-        self.deserialize(deserializer)
-    }
-}
-
-impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeWorldBuilder<'a> {
-    type Value = DeWorld;
-
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_struct("World", &["id", "ee"], DeWorldVisitor { constuctors: self.constuctors }) 
-    }
-}
 
 
 #[cfg(test)]

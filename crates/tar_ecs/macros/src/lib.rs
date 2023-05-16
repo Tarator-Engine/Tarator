@@ -85,12 +85,9 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 
     let name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
-    let (_, uid) = uuid::Uuid::new_v4().as_u64_pair();
 
     quote! {
-        unsafe impl #impl_generics Component for #name #type_generics #where_clause {
-            const UID: UComponentId = UComponentId::new(#uid);
-        }
+        unsafe impl #impl_generics Component for #name #type_generics #where_clause {}
     }
     .into()
 }

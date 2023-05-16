@@ -1,4 +1,4 @@
-use std::{alloc::Layout, mem::needs_drop};
+use std::{alloc::Layout, mem::{self, needs_drop}, any};
 
 use tar_ecs_macros::identifier;
 
@@ -8,17 +8,17 @@ use crate::callback::{ Callback, CallbackFunc, CallbackId, Callbacks };
 /// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can
 /// be derived via `#[derive(Component)]`.
 ///
-/// Read further: [`Bundle`]
+/// Read further: [`Bundle`](crate::bundle::Bundle)
 ///
 /// SAFETY:
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
-    const UID: UComponentId;
+    fn uid() -> UComponentId {
+        unsafe { mem::transmute(any::TypeId::of::<Self>()) }
+    }
 }
 
-unsafe impl Component for () {
-    const UID: UComponentId = UComponentId::new(0);
-}
+unsafe impl Component for () {}
 
 
 identifier!(ComponentId, u32);
