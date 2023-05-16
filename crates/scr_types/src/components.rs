@@ -22,7 +22,7 @@ impl Default for Transform {
 }
 
 impl SerdeComponent for Transform {
-    const NAME: &'static str = "transform";
+    const NAME: &'static str = "scr::Transform";
 }
 
 
@@ -39,7 +39,7 @@ pub struct Rendering {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to act like a camera
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Camera {
     pub fovy: Rad,
     pub znear: f32,
@@ -58,8 +58,16 @@ impl Default for Camera {
     }
 }
 
+impl SerdeComponent for Camera {
+    const NAME: &'static str = "scr::Camera";
+}
+
 /// This component stores basic entity info e.g. name
 /// it is required for it to be shown in the editor
+///
+/// **Note**: [`Info`] does not derive Serialize, Deserialize or SerdeComponent,
+/// because we use [`Info`] as a top-level entity descriptor and not part of the
+/// components section in the serializations of the worlds.
 #[derive(Debug, Clone, Component)]
 pub struct Info {
     pub name: String,

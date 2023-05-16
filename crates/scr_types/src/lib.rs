@@ -9,10 +9,11 @@ pub use macros::{InitSystems, System};
 pub type System = fn(&mut tar_ecs::prelude::World);
 
 pub mod prelude {
-    pub use crate::components::*;
-    pub use crate::InitSystems;
-    pub use crate::System;
-    pub use crate::Systems;
+    pub use super::components::*;
+    pub use super::ecs_serde::SerdeComponent;
+    pub use super::InitSystems;
+    pub use super::System;
+    pub use super::Systems;
 }
 
 #[repr(C)]

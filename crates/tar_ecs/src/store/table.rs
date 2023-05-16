@@ -66,7 +66,7 @@ impl Table {
             });
         }
 
-        size = (size == 0).then(|| 0).unwrap_or_else(|| (size + 7) & !7);
+        size = (size != 0).then(|| (size + 7) & !7).unwrap_or_default();
 
         let layout = Layout::from_size_align(size, align).unwrap();
 
