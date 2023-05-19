@@ -9,7 +9,7 @@
 //! | | | components[]:
 //! | | | | name > component
 //!
-//! An example of a (de)serialization of a world can be found in `tests::serdeialize` at the
+//! An example of a (de)serialization of a world can be found in `tests::serdeialize`] at the
 //! bottom of this file.
 
 use std::collections::HashMap;
@@ -400,6 +400,13 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeWorldVisitor<'a> {
         formatter.write_str("Could not parse world")
     }
 
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let id = uuid::Uuid::parse_str(seq.next_element()?.ok_or(serde::de::Error::invalid_length(0, &self))?).map_err(|e| serde::de::Error::custom(format!("Could not parse world id: {}", e)))?;
+        let world = seq.next_element_seed(DeEntityEntry { constuctors: &self.constuctors })?.ok_or(serde::de::Error::invalid_length(1, &self))?;
+
+        Ok(DeWorld { id, world })
+    }
+
     fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
         let mut id = None;
         let mut world = None;
@@ -471,7 +478,7 @@ mod tests {
             );
             world.entity_set(entity, data);
 
-            serde_json::to_string_pretty(&SerWorld::new(&world, uuid::Uuid::new_v4())).unwrap()
+            serde_json::to_string(&SerWorld::new(&world, uuid::Uuid::new_v4())).unwrap()
         };
 
         let deworld = DeWorldBuilder::new()
