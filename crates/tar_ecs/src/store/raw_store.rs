@@ -153,22 +153,22 @@ impl RawStore {
     }
 
     #[inline]
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.capacity
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.len
     }
     
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 
     #[inline]
-    pub fn get_ptr(&self) -> *mut u8 {
+    pub const fn get_ptr(&self) -> *mut u8 {
         self.data
     }
 
@@ -245,3 +245,19 @@ impl RawStore {
         len_rounded_up.wrapping_sub(len)
     }
 }
+
+impl Clone for RawStore {
+    fn clone(&self) -> Self {
+        let layout = Self::array_layout(&self.item_layout, self.len()).unwrap();
+        let data = unsafe { alloc::alloc(layout) };
+        unsafe { ptr::copy(self.get_ptr(), data, layout.size()); }
+
+        Self {
+            capacity: self.capacity,
+            len: self.len,
+            item_layout: self.item_layout,
+            data
+        }
+    }
+}
+

@@ -9,3 +9,4 @@ fn change_transforms(transforms: QueryMut<Transform>, state: GameState) {
 fn init() -> Systems {
     Systems::new().add(change_transforms)
 }
+

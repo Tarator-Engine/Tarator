@@ -91,7 +91,6 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             _ => panic!("queries should have a structure like: 'Query<(Component1, Component2)>'"),
         };
-
         if is_state {
             let arg: syn::FnArg = parse_quote!(#name: &::scr_types::game_state::GameState);
             if state_arg.is_some() {

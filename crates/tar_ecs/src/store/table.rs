@@ -14,7 +14,7 @@ use crate::{
 };
 
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ComponentItem {
     index: usize,
     size: usize,
@@ -22,7 +22,7 @@ struct ComponentItem {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Table {
     store: RawStore,
     indexer: SparseSet<ComponentId, ComponentItem>,
@@ -66,7 +66,15 @@ impl Table {
             });
         }
 
-        size = (size == 0).then(|| 0).unwrap_or_else(|| (size + 7) & !7);
+        if size != 0 {
+            size -= 1;
+            size |= size >> 1;
+            size |= size >> 2;
+            size |= size >> 4;
+            size |= size >> 8;
+            size |= size >> 16;
+            size += 1;
+        }
 
         let layout = Layout::from_size_align(size, align).unwrap();
 
@@ -125,7 +133,7 @@ impl Table {
         let indexer = RowIndexer::new(index, self);
 
         data.get_components(type_info, &mut |id, data| {
-            let size = indexer.get_size(id).unwrap();
+            let size = indexer.get_size(id).expect("Component not part of table!");
             if size != 0 {
                 let dst = indexer.get_unchecked(id);
                 ptr::copy_nonoverlapping(data, dst, size);

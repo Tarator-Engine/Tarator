@@ -1,15 +1,15 @@
-use std::{collections::{HashMap, HashSet}, any::TypeId};
+use std::collections::{ HashMap, HashSet };
 
 use fxhash::FxBuildHasher;
 
 use crate::{
-    bundle::{Bundle, BundleId, BundleInfo},
-    callback::{Callback, CallbackId},
-    component::{Component, ComponentId, ComponentInfo},
+    bundle::{ Bundle, BundleId, BundleInfo, UBundleId },
+    callback::{ Callback, CallbackId, UCallbackId },
+    component::{ Component, ComponentId, ComponentInfo, UComponentId },
     store::sparse::SparseSetIndex,
 };
 
-pub trait TypeInfo: Sized {
+pub trait TypeInfo: Sized + 'static {
     fn init_component_from<T: Component>(&mut self) -> ComponentId;
     fn get_component_id_from<T: Component>(&self) -> Option<ComponentId>;
     fn get_component_info<T>(&self, component_id: ComponentId, func: impl FnOnce(&ComponentInfo) -> T) -> Option<T>;
@@ -29,10 +29,10 @@ pub trait TypeInfo: Sized {
 
 pub struct Local {
     bundles: Vec<BundleInfo>,
-    bundle_ids: HashMap<TypeId, BundleId, FxBuildHasher>,
+    bundle_ids: HashMap<UBundleId, BundleId, FxBuildHasher>,
     components: Vec<ComponentInfo>,
-    component_ids: HashMap<TypeId, ComponentId, FxBuildHasher>,
-    callback_ids: HashMap<TypeId, CallbackId, FxBuildHasher>,
+    component_ids: HashMap<UComponentId, ComponentId, FxBuildHasher>,
+    callback_ids: HashMap<UCallbackId, CallbackId, FxBuildHasher>,
 }
 
 impl Local {
@@ -52,13 +52,13 @@ impl TypeInfo for Local {
     #[inline]
     fn init_component_from<T: Component>(&mut self) -> ComponentId {
         self.component_ids
-            .get(&T::type_id())
+            .get(&T::uid())
             .map(|id| *id)
             .unwrap_or_else(|| {
                 let index = self.components.len();
                 self.components.push(ComponentInfo::new_from::<T>());
                 let id = ComponentId::from_usize(index);
-                self.component_ids.insert(T::type_id(), id);
+                self.component_ids.insert(T::uid(), id);
 
                 id
             })
@@ -66,7 +66,7 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_component_id_from<T: Component>(&self) -> Option<ComponentId> {
-        self.component_ids.get(&T::type_id()).map(|id| *id)
+        self.component_ids.get(&T::uid()).map(|id| *id)
     }
 
     #[inline]
@@ -93,13 +93,7 @@ impl TypeInfo for Local {
         let callback_id = self.init_callback_from::<T, _>();
 
         self.get_component_info_mut(component_id, |info| {
-            unsafe fn callback<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
-                (*callback.cast::<T>()).callback(&mut *component.cast::<U>())
-            }
-
-            unsafe {
-                info.set_callback(callback_id, callback::<T, U>)
-            }
+            info.set_callback_from::<T, U>(callback_id)
         }).unwrap()
     }
 
@@ -107,7 +101,7 @@ impl TypeInfo for Local {
     fn init_callback_from<T: Callback<U>, U: Component>(&mut self) -> CallbackId {
         self.get_callback_id_from::<T, _>().unwrap_or_else(|| {
             let id = CallbackId::from_usize(self.callback_ids.len());
-            self.callback_ids.insert(T::type_id(), id);
+            self.callback_ids.insert(T::UID, id);
 
             id
         })
@@ -115,7 +109,7 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_callback_id_from<T: Callback<U>, U: Component>(&self) -> Option<CallbackId> {
-        self.callback_ids.get(&T::type_id()).map(|id| *id)
+        self.callback_ids.get(&T::UID).map(|id| *id)
     }
 
     #[inline]
@@ -138,7 +132,7 @@ impl TypeInfo for Local {
             T::init_component_ids(self, &mut |id| { set.insert(id); });
 
             let id = self.insert_bundle(BundleInfo::new(set));
-            self.bundle_ids.insert(T::b_type_id(), id);
+            self.bundle_ids.insert(T::uid(), id);
 
             id
         })
@@ -165,6 +159,6 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_bundle_id_from<T: Bundle>(&self) -> Option<BundleId> {
-        self.bundle_ids.get(&T::b_type_id()).map(|id| *id)
+        self.bundle_ids.get(&T::uid()).map(|id| *id)
     }
 }

@@ -1,23 +1,36 @@
-use std::any::TypeId;
-
 use tar_ecs_macros::identifier;
 
 use crate::{component::Component, store::sparse::MutSparseSet};
 
-pub unsafe trait InnerCallback: Sized + Send + Sync + 'static {
-    fn type_id() -> TypeId {
-        TypeId::of::<Self>()
-    }
+pub unsafe trait InnerCallback: Sized {
+    const UID: UCallbackId;
 }
 
 /// Callbacks provide a way to run functions anonymously on components without the need having the concrete type of the component.
-pub trait Callback<T: Component>: InnerCallback + Sized + Send + Sync + 'static {
-    fn callback(&mut self, component: &mut T);
+pub trait Callback<T: Component>: InnerCallback {
+    fn callback(&mut self, _: &T) {}
+    fn callback_mut(&mut self, _: &mut T) {}
 }
 
 identifier!(CallbackId, u32);
+identifier!(UCallbackId, u64);
 
-pub type CallbackFunc = unsafe fn(*mut u8, *mut u8);
+#[derive(Debug, Copy, Clone)]
+pub struct CallbackFunc {
+    pub(crate) func: unsafe fn(*mut u8, *const u8),
+    pub(crate) func_mut: unsafe fn(*mut u8, *mut u8)
+}
+
+impl CallbackFunc {
+    #[inline]
+    pub const fn new(
+        func: unsafe fn(*mut u8, *const u8),
+        func_mut: unsafe fn(*mut u8, *mut u8)
+    ) -> Self {
+        Self { func, func_mut }
+    }
+}
+
 
 #[derive(Debug)]
 pub struct Callbacks {
@@ -39,11 +52,15 @@ impl Callbacks {
 
     #[inline]
     pub fn add_from<T: Callback<U>, U: Component>(&mut self, id: CallbackId) {
-        unsafe fn callback<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
-            T::callback(&mut *callback.cast::<T>(), &mut *component.cast::<U>())
+        unsafe fn callback<T: Callback<U>, U: Component>(callback: *mut u8, component: *const u8) {
+            T::callback(&mut *callback.cast::<T>(), &*component.cast::<U>())
         }
 
-        self.add(id, callback::<T, U>)
+        unsafe fn callback_mut<T: Callback<U>, U: Component>(callback: *mut u8, component: *mut u8) {
+            T::callback_mut(&mut *callback.cast::<T>(), &mut *component.cast::<U>())
+        }
+
+        self.add(id, CallbackFunc::new(callback::<T, U>, callback_mut::<T, U>))
     }
 
     #[inline]
