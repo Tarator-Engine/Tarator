@@ -4,18 +4,22 @@ use std::process::Command;
 
 use fs_extra::dir::CopyOptions;
 use libloading::{Library, Symbol};
-use scr_types::Systems;
+use scr_types::{game_state::GameState, RenderEntities, Systems};
 
 type InitSystemsFunc<'lib> = Symbol<'lib, fn() -> Systems>;
-type RunSystemsFunc<'lib> = Symbol<'lib, fn(&Systems)>;
+type RunSystemsFunc<'lib> = Symbol<'lib, fn(&Systems, &GameState)>;
+type GetRenderEntitiesFunc<'lib> = Symbol<'lib, fn() -> RenderEntities>;
+type AddBasicModelFunc<'lib> = Symbol<'lib, fn(uuid::Uuid)>;
 
 const INTERNAL_RS_FILE: &str = "
-use scr_types::Systems;
+use scr_types::{game_state::GameState, Systems, RenderEntities};
+use scr_types::prelude::*;
+use tar_ecs::prelude::*;
 
 static mut WORLD: Option<tar_ecs::prelude::World> = None;
 
 #[no_mangle]
-pub fn run_systems(systems: &Systems) {
+pub fn run_systems(systems: &Systems, game_state: &GameState) {
     unsafe {
         if WORLD.is_none() {
             WORLD = Some(tar_ecs::prelude::World::new());
@@ -25,7 +29,37 @@ pub fn run_systems(systems: &Systems) {
     for sys in &systems.systems {
         let system = sys.0;
         unsafe {
-            system(&mut WORLD.as_mut().unwrap());
+            system(&mut WORLD.as_mut().unwrap(), game_state);
+        }
+    }
+}
+
+#[no_mangle]
+pub fn get_render_entities() -> RenderEntities {
+    unsafe {
+        if let Some(world) = &mut WORLD {
+            let mut res = vec![];
+            world.component_query::<(Transform, Rendering)>(|e| {
+                res.push((e.0.clone(), e.1.clone()));
+            });
+            return RenderEntities {
+                entities: res,
+            }
+        }
+    }
+
+    RenderEntities {
+        entities: vec![]
+    }
+}
+
+#[no_mangle]
+pub fn add_basic_model(id: uuid::Uuid) {
+    println!(\"adding moddel\");
+    unsafe {
+        if let Some(world) = &mut WORLD {
+            let e = world.entity_create();
+            world.entity_set(e, (scr_types::prelude::Transform::default(), scr_types::prelude::Rendering{model_id: id}));
         }
     }
 }
@@ -33,7 +67,9 @@ pub fn run_systems(systems: &Systems) {
 
 pub trait ScriptsLib {
     fn init(&self) -> Systems;
-    fn run(&self, systems: &Systems);
+    fn run(&self, systems: &Systems, game_state: &GameState);
+    fn get_render_entities(&self) -> RenderEntities;
+    fn add_model(&self, id: uuid::Uuid);
 }
 
 impl ScriptsLib for Library {
@@ -41,9 +77,24 @@ impl ScriptsLib for Library {
         let init_fn: InitSystemsFunc = unsafe { self.get("init_systems".as_bytes()).unwrap() };
         init_fn()
     }
-    fn run(&self, systems: &Systems) {
+    fn run(&self, systems: &Systems, game_state: &GameState) {
         let run_fn: RunSystemsFunc = unsafe { self.get("run_systems".as_bytes()).unwrap() };
-        run_fn(systems);
+        run_fn(systems, game_state);
+    }
+
+    fn get_render_entities(&self) -> RenderEntities {
+        let get_render_entities_fn: GetRenderEntitiesFunc =
+            unsafe { self.get("get_render_entities".as_bytes()).unwrap() };
+
+        get_render_entities_fn()
+    }
+
+    fn add_model(&self, id: uuid::Uuid) {
+        println!("adding model {id}");
+        let add_basic_model: AddBasicModelFunc =
+            unsafe { self.get("add_basic_model".as_bytes()).unwrap() };
+
+        add_basic_model(id);
     }
 }
 
@@ -76,6 +127,14 @@ pub fn load_scripts_lib() -> std::io::Result<(Library, Systems)> {
     Ok((scripts_lib, systems))
 }
 
-pub fn run_scripts(lib: &Library, systems: &Systems) {
-    lib.run(systems);
+pub fn run_scripts(lib: &Library, systems: &Systems, game_state: &GameState) {
+    lib.run(systems, game_state)
+}
+
+pub fn get_render_data(lib: &Library) -> RenderEntities {
+    lib.get_render_entities()
+}
+
+pub fn add_basic_model(lib: &Library, id: uuid::Uuid) {
+    lib.add_model(id)
 }

@@ -1,30 +1,41 @@
-use tar_render::model::Model;
+use tar_res::SomeResult;
 
-pub fn add_gltf_object(
-    render_state: &mut tar_render::state::RenderState,
-    path: String,
-) -> tar_res::SomeResult<Vec<uuid::Uuid>> {
+pub fn add_gltf_object(path: String) -> tar_res::SomeResult<Vec<String>> {
     let models = tar_res::import_models(&path)?;
 
-    let models: Vec<Model> = models
-        .into_iter()
-        .map(|model| {
-            tar_render::model::Model::from_stored(
-                model,
-                &render_state.device,
-                &render_state.queue,
-                render_state.config.format,
-            )
+    let paths: Vec<SomeResult<String>> = models
+        .iter()
+        .map(|model| -> tar_res::SomeResult<String> {
+            let path = format!("res/{}.tarasset", model.name);
+            std::fs::write(&path, ron::to_string(&model)?)?;
+            Ok(path)
         })
         .collect();
 
-    let mut ids = vec![];
+    let mut fin_paths = vec![];
 
-    for model in models {
-        let uid = uuid::Uuid::new_v4();
-        ids.push(uid);
-        render_state.models.insert(uid, model);
+    for path in paths {
+        fin_paths.push(path?);
     }
 
-    Ok(ids)
+    Ok(fin_paths)
+}
+
+pub fn load_object_to_renderer(
+    render_state: &mut tar_render::state::RenderState,
+    path: String,
+    id: uuid::Uuid,
+) -> tar_res::SomeResult<()> {
+    let model: tar_res::model::Model = ron::from_str(&std::fs::read_to_string(path)?)?;
+
+    let loaded_model = tar_render::model::Model::from_stored(
+        model,
+        &render_state.device,
+        &render_state.queue,
+        render_state.config.format,
+    );
+
+    render_state.models.insert(id, loaded_model);
+
+    Ok(())
 }
