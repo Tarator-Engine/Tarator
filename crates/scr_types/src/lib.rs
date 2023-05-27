@@ -1,19 +1,27 @@
 pub mod components;
+pub mod game_state;
 pub mod prims;
 pub mod ecs_serde;
 
 use std::fmt::Debug;
 
 pub use macros::{InitSystems, System};
+use prelude::{Rendering, Transform};
 
-pub type System = fn(&mut tar_ecs::prelude::World);
+pub type System = fn(&mut tar_ecs::prelude::World, &game_state::GameState);
 
 pub mod prelude {
-    pub use super::components::*;
-    pub use super::ecs_serde::SerdeComponent;
-    pub use super::InitSystems;
-    pub use super::System;
-    pub use super::Systems;
+    pub use crate::components::*;
+    pub use crate::game_state::GameState;
+    pub use crate::InitSystems;
+    pub use crate::System;
+    pub use crate::Systems;
+}
+
+#[derive(Debug, Default, Clone)]
+#[repr(C)]
+pub struct RenderEntities {
+    pub entities: Vec<(Transform, Rendering)>,
 }
 
 #[repr(C)]

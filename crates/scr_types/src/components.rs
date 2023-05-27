@@ -30,7 +30,7 @@ impl SerdeComponent for Transform {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to render
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component)]
 pub struct Rendering {
     pub model_id: uuid::Uuid,
 }

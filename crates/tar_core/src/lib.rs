@@ -110,7 +110,7 @@ pub async fn run() {
                 }
 
                 for event in &winit_window_events {
-                    let _res = egui_state.on_event(&context, &event);
+                    let _res = egui_state.on_event(&context, event);
 
                     // if state.mouse_in_view || !res.consumed {
                     //     state.events.push(event.clone().to_static().unwrap());
@@ -161,15 +161,33 @@ pub async fn run() {
                 let gui_out = tar_gui::gui(&context, &mut gui_data);
 
                 share_state.mouse_in_view = gui_out.mouse_in_game_view;
+                share_state.load_data = None;
+
+                if let Some(path) = gui_out.load_model {
+                    // TODO!: better impl
+                    if path.ends_with(".gltf") || path.ends_with(".glb") {
+                        add_object::add_gltf_object(path).unwrap();
+                    } else if path.ends_with(".tarasset") {
+                        let id = uuid::Uuid::new_v4();
+                        share_state.load_data = Some((path, id));
+                        if let Some(scr_lib) = &main_thread_state.scripts_lib {
+                            tar_abi::add_basic_model(scr_lib, id);
+                        } else {
+                            share_state.load_data = None;
+                        }
+                    }
+                }
 
                 // run scripts
-                if gui_data.running {
-                    if let Some(scr_lib) = &main_thread_state.scripts_lib {
+                if let Some(scr_lib) = &main_thread_state.scripts_lib {
+                    if gui_data.running {
                         tar_abi::run_scripts(
                             scr_lib,
                             main_thread_state.scripts_systems.as_ref().unwrap(),
+                            &scr_types::game_state::GameState { dt: share_state.dt },
                         );
                     }
+                    share_state.render_entities = tar_abi::get_render_data(scr_lib);
                 }
                 if gui_out.reload_scripts {
                     main_thread_state.scripts_lib = None;

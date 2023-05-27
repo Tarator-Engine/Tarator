@@ -1,14 +1,13 @@
-use std::f32::consts::PI;
+use std::{collections::HashMap, f32::consts::PI};
 
-use scr_types::prims::{Mat4, Vec3, Vec4};
+use scr_types::{
+    prims::{Mat4, Vec3, Vec4},
+    RenderEntities,
+};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::{
-    camera,
-    model::{texture, Model},
-    state::RenderState,
-};
+use crate::{camera, model::texture, state::RenderState};
 use tar_shader::shader::{
     self,
     bind_groups::{BindGroup0, BindGroupLayout0},
@@ -109,8 +108,8 @@ pub async fn new_state(window: &Window) -> RenderState {
 
     let uniform_data = shader::UniformData {
         ambient: Vec4::new(0.2, 0.3, 0.5, 1.0),
-        view: view,
-        proj: proj,
+        view,
+        proj,
         camera_pos: Vec4::splat(0.0),
     };
 
@@ -158,17 +157,7 @@ pub async fn new_state(window: &Window) -> RenderState {
             directional_lights: light_storage_buffer.as_entire_buffer_binding(),
         },
     );
-    let box_models = tar_res::import_models("assets/box/Box.gltf").unwrap();
-
-    let models = box_models
-        .into_iter()
-        .map(|model| {
-            (
-                uuid::Uuid::new_v4(),
-                Model::from_stored(model, &device, &queue, config.format),
-            )
-        })
-        .collect();
+    let models = HashMap::new();
 
     // let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
@@ -238,6 +227,7 @@ pub fn render(
     encoder: &mut wgpu::CommandEncoder,
     surface_view: &wgpu::TextureView,
     dt: std::time::Duration,
+    entities: RenderEntities,
 ) -> Result<(), wgpu::SurfaceError> {
     state
         .editor_cam_controller
@@ -264,7 +254,7 @@ pub fn render(
             color_attachments: &[
                 // This is what @location(0) in the fragment shader targets
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &surface_view,
+                    view: surface_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -289,8 +279,11 @@ pub fn render(
 
         state.global_frame_bind_group.set(&mut render_pass);
 
-        for (_, model) in &state.models {
-            model.render(&mut render_pass);
+        for model in &mut state.models {
+            if let Some((t, _)) = entities.entities.iter().find(|e| e.1.model_id == *model.0) {
+                model.1.update_transform(t, &state.queue);
+                model.1.render(&mut render_pass);
+            }
         }
     }
     Ok(())
