@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use crate::{Component, ecs_serde::SerdeComponent, prims::{Quat, Rad, Vec3}};
+use tar_ecs::component::Component as RawComponent;
 
 /// This component stored transform attributes
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
@@ -29,7 +30,9 @@ pub struct Rendering {
     pub model_id: uuid::Uuid,
 }
 
-unsafe impl tar_ecs::component::Component for Rendering {}
+// TODO: If you're able to (de)serialize, derive Component instead of manually implementing
+// `RawComponent`
+unsafe impl RawComponent for Rendering {}
 
 /// This Component indicates taht the entity is a camera.
 ///
@@ -67,7 +70,10 @@ pub struct Info {
     pub id: uuid::Uuid,
 }
 
+// Manually implementing, because we don't want to serialize [`Info`]
+// TODO: Use tar_ecs derive
 unsafe impl tar_ecs::component::Component for Info {}
+
 
 impl Default for Info {
     fn default() -> Self {
