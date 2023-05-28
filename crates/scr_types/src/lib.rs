@@ -5,7 +5,7 @@ pub mod ecs_serde;
 
 use std::fmt::Debug;
 
-pub use macros::{InitSystems, System};
+pub use scr_types_macros::{InitSystems, System, Component};
 use prelude::{Rendering, Transform};
 
 pub type System = fn(&mut tar_ecs::prelude::World, &game_state::GameState);

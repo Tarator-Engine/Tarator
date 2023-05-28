@@ -41,6 +41,8 @@ use crate::components::Info;
 ///     const NAME: &'static str = "example::Foo";
 /// }
 /// ```
+///
+/// TODO: SUPPORT GENERICS
 pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserialize<'a> {
     const NAME: &'static str;
 
