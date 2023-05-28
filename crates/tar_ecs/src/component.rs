@@ -12,7 +12,8 @@ pub use tar_ecs_macros::Component;
 ///
 /// Read further: [`Bundle`](crate::bundle::Bundle)
 ///
-/// SAFETY:
+/// # Safety
+///
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
     fn uid() -> UComponentId {
@@ -68,6 +69,9 @@ impl ComponentInfo {
         self.callbacks.get(id)
     }
 
+    /// # Safety
+    ///
+    /// `id` and `func` must be related, else ub
     #[inline]
     pub unsafe fn set_callback(&mut self, id: CallbackId, func: CallbackFunc) {
         self.callbacks.add(id, func)

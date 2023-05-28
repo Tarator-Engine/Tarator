@@ -379,7 +379,7 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeEntityEntryVisitor<'a> {
     fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
         let mut world = World::new();
 
-        while let Some(()) = seq.next_element_seed(DeEntity { world: &mut world, constuctors: &self.constuctors})? {}
+        while let Some(()) = seq.next_element_seed(DeEntity { world: &mut world, constuctors: self.constuctors})? {}
 
         Ok(world)
     }

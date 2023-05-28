@@ -100,9 +100,9 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             let new_stmt: syn::Stmt = if let Some(bundle_type) = bundle_type {
                 if is_mut {
-                    parse_quote!(let #name = world.get_component_query_mut::<#bundle_type>();)
+                    parse_quote!(let #name = world.component_query_mut::<#bundle_type>();)
                 } else {
-                    parse_quote!(let #name = world.get_component_query::<#bundle_type>();)
+                    parse_quote!(let #name = world.component_query::<#bundle_type>();)
                 }
             } else {
                 panic!("queries should have a structure like: 'Query<(Component1, Component2)>'");

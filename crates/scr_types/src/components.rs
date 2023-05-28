@@ -24,10 +24,12 @@ impl Default for Transform {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to render
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone)]
 pub struct Rendering {
     pub model_id: uuid::Uuid,
 }
+
+unsafe impl tar_ecs::component::Component for Rendering {}
 
 /// This Component indicates taht the entity is a camera.
 ///
