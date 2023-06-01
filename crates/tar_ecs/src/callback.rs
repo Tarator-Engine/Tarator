@@ -2,6 +2,11 @@ use tar_ecs_macros::identifier;
 
 use crate::{component::Component, store::sparse::MutSparseSet};
 
+pub use tar_ecs_macros::Callback;
+
+/// # Safety
+///
+/// Manual implementations discouraged, use [`Callback`] derive
 pub unsafe trait InnerCallback: Sized {
     const UID: UCallbackId;
 }
@@ -65,7 +70,7 @@ impl Callbacks {
 
     #[inline]
     pub fn get(&self, id: CallbackId) -> Option<CallbackFunc> {
-        self.callbacks.get(id).map(|func| *func)
+        self.callbacks.get(id).copied()
     }
 }
 

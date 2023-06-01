@@ -1,3 +1,5 @@
+use std::cell::UnsafeCell;
+
 use crate::{
     bundle::BundleId,
     store::{sparse::MutSparseSet, table::Table},
@@ -14,7 +16,7 @@ impl Archetype {
     #[inline]
     pub fn new(bundle_id: BundleId, parents: Vec<BundleId>, type_info: &impl TypeInfo) -> Self {
         Self {
-            table: unsafe { Table::new(bundle_id, type_info) },
+            table: Table::new(bundle_id, type_info),
             parents,
         }
     }
@@ -34,17 +36,32 @@ impl Archetype {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Archetypes {
-    archetypes: MutSparseSet<BundleId, Archetype>,
+    archetypes: UnsafeCell<MutSparseSet<BundleId, Archetype>>,
+}
+
+impl Clone for Archetypes {
+    fn clone(&self) -> Self {
+        Self {
+            archetypes: UnsafeCell::new(unsafe { (*self.archetypes.get()).clone() })
+        }
+    }
+}
+
+impl Default for Archetypes {
+    #[inline]
+    fn default() -> Self {
+         Self {
+            archetypes: UnsafeCell::new(MutSparseSet::new()),
+        }
+    }    
 }
 
 impl Archetypes {
     #[inline]
     pub fn new() -> Self {
-        Self {
-            archetypes: MutSparseSet::new(),
-        }
+        Default::default()
     }
 
     #[inline]
@@ -58,7 +75,7 @@ impl Archetypes {
                 let mut parents = Vec::new();
 
                 unsafe {
-                    for (id, archetype) in (*(&self.archetypes as *const _ as *mut MutSparseSet<BundleId, Archetype>)).iter_mut() {
+                    for (id, archetype) in (*self.archetypes.get()).iter_mut() {
                         type_info.get_bundle_info(*id, |parent_info| {
                             if info.is_superset(parent_info) {
                                 archetype.parents.push(bundle_id);
@@ -74,19 +91,19 @@ impl Archetypes {
             .expect("Bundle wasn't initialized!");
 
         let archetype = Archetype::new(bundle_id, parents, type_info);
-        unsafe { (*(&self.archetypes as *const _ as *mut MutSparseSet<_, _>)).insert(bundle_id, archetype) };
+        unsafe { (*self.archetypes.get()).insert(bundle_id, archetype) };
     }
 }
 
 impl Archetypes {
     #[inline]
     pub fn get(&self, bundle_id: BundleId) -> Option<&Archetype> {
-        self.archetypes.get(bundle_id)
+        unsafe { (*self.archetypes.get()).get(bundle_id) }
     }
 
     #[inline]
     pub fn get_mut(&mut self, bundle_id: BundleId) -> Option<&mut Archetype> {
-        self.archetypes.get_mut(bundle_id)
+        unsafe { (*self.archetypes.get()).get_mut(bundle_id) }
     }
 
     #[inline]
@@ -95,17 +112,17 @@ impl Archetypes {
         i1: BundleId,
         i2: BundleId,
     ) -> Option<(&mut Archetype, &mut Archetype)> {
-        self.archetypes.get_2_mut(i1, i2)
+        unsafe { (*self.archetypes.get()).get_2_mut(i1, i2) }
     }
 
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&BundleId, &Archetype)> {
-        self.archetypes.iter()
+        unsafe { (*self.archetypes.get()).iter() }
     }
 
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&BundleId, &mut Archetype)> {
-        self.archetypes.iter_mut()
+        unsafe { (*self.archetypes.get()).iter_mut() }
     }
 
 }

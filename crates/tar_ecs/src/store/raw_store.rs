@@ -27,17 +27,30 @@ impl std::fmt::Debug for RawStore {
 }
 
 impl RawStore {
-    /// SAFETY:
+    /// # Safety
+    ///
     /// - Layout must be valid
     pub unsafe fn new(item_layout: Layout) -> Self {
-        Self {
-            item_layout,
-            capacity: (item_layout.size() == 0).then(|| usize::MAX).unwrap_or_else(|| 0),
-            len: 0,
-            data: (item_layout.size() == 0).then(|| ptr::NonNull::<u8>::dangling().as_ptr()).unwrap_or_else(|| ptr::null_mut())
+        if item_layout.size() == 0 {
+            Self {
+                item_layout,
+                capacity: usize::MAX,
+                len: 0,
+                data: ptr::NonNull::dangling().as_ptr()
+            }
+        } else {
+            Self {
+                item_layout,
+                capacity: 0,
+                len: 0,
+                data: ptr::null_mut()
+            }
         }
     }
 
+    /// # Safety
+    ///
+    /// Returned address is uninitialized
     #[inline]
     pub unsafe fn alloc(&mut self) -> *mut u8 {
         self.reserve_exact(1);
@@ -46,6 +59,10 @@ impl RawStore {
         self.get_unchecked_mut(index)
     }
 
+    /// # Safety
+    ///
+    /// - `index` is < `self.len`
+    /// - Returned address must be dropped
     #[inline]
     pub unsafe fn swap_remove_and_forget_unchecked(&mut self, index: usize) -> *mut u8 {
         debug_assert!(index < self.len, "Index is out of bounds! ({}>={})", index, self.len);
@@ -68,7 +85,8 @@ impl RawStore {
         self.get_ptr().add(new_len * size)
     }
 
-    /// SAFETY:
+    /// # Safety
+    ///
     /// - `index` is < `self.len`
     /// - `data` is valid
     #[inline]
@@ -93,7 +111,8 @@ impl RawStore {
         unsafe { self.grow_exact(increment); }
     }
 
-    /// SAFETY:
+    /// # Safety
+    ///
     /// - Should only be called on non-zero sized types
     pub unsafe fn grow_exact(&mut self, increment: usize) {
         debug_assert!(self.item_layout.size() != 0);
@@ -117,6 +136,9 @@ impl RawStore {
 
     }
 
+    /// # Safety
+    ///
+    /// Swapped objects must already be either dropped or copied
     pub unsafe fn free_unused(&mut self) {
         if self.item_layout.size() == 0 {
             return;
@@ -141,6 +163,9 @@ impl RawStore {
         self.capacity = self.len;
     }
 
+    /// # Safety
+    ///
+    /// All objects must be dropped manually
     pub unsafe fn dealloc(&mut self) {
         self.len = 0;
         
@@ -172,7 +197,8 @@ impl RawStore {
         self.data
     }
 
-    /// SAFETY:
+    /// # Safety
+    ///
     /// - `index` is < `self.len`
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> *const u8 {
@@ -181,7 +207,8 @@ impl RawStore {
         self.get_ptr().add(index * size)
     }
     
-    /// SAFETY:
+    /// # Safety
+    ///
     /// - `index` is < `self.len`
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> *mut u8 {

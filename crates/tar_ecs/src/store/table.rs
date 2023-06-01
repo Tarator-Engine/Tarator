@@ -31,9 +31,9 @@ pub struct Table {
 
 impl Table {
     #[inline]
-    pub unsafe fn new(bundle_id: BundleId, type_info: &impl TypeInfo) -> Self {
+    pub fn new(bundle_id: BundleId, type_info: &impl TypeInfo) -> Self {
 
-        let mut ids: Vec<_> = type_info.get_bundle_info(bundle_id, |info| info.component_ids().iter().map(|id| *id).collect()).unwrap();
+        let mut ids: Vec<_> = type_info.get_bundle_info(bundle_id, |info| info.component_ids().iter().copied().collect()).unwrap();
 
         ids.sort_by(|a, b| {
             debug_assert!(a != b, "Duplicate components not yet supported!");
@@ -79,7 +79,7 @@ impl Table {
         let layout = Layout::from_size_align(size, align).unwrap();
 
         Self {
-            store: RawStore::new(layout),
+            store: unsafe { RawStore::new(layout) },
             indexer: indexer.lock(),
             entities: Vec::new()
         }
@@ -97,6 +97,9 @@ impl Table {
         self.indexer.contains(id)
     }
 
+    /// # Safety
+    ///
+    /// `data` must be part of this table
     pub unsafe fn push_from<T: Bundle>(&mut self, entity: Entity, data: T, type_info: &impl TypeInfo) {
         self.entities.push(entity);
         let alloc = self.store.alloc();
@@ -107,6 +110,9 @@ impl Table {
         });
     }
 
+    /// # Safety
+    ///
+    /// `data` must be part of this table
     pub unsafe fn set_from<T: Bundle>(&mut self, index: usize, data: T, type_info: &impl TypeInfo) {
         debug_assert!(index < self.len());
 
@@ -127,6 +133,9 @@ impl Table {
         })
     }
 
+    /// # Safety
+    ///
+    /// `data` must be part of this table
     pub unsafe fn init_from<T: Bundle>(&mut self, index: usize, data: T, type_info: &impl TypeInfo) {
         debug_assert!(index < self.len());
 
@@ -141,6 +150,9 @@ impl Table {
         })
     }
     
+    /// # Safety
+    ///
+    /// `data` must be part of this table
     pub unsafe fn move_into(&mut self, other: &mut Self, index: usize) -> Option<Entity> {
         let src_data = self.store.swap_remove_and_forget_unchecked(index);
         let dst_data = other.store.alloc();
@@ -175,6 +187,9 @@ impl Table {
         }
     }
 
+    /// # Safety
+    ///
+    /// `data` must be part of this table
     pub unsafe fn drop_component(&mut self, index: usize, id: ComponentId) {
         debug_assert!(index < self.len());
         
@@ -187,6 +202,9 @@ impl Table {
         }
     }
 
+    /// # Safety
+    ///
+    /// `data` must be part of this table
     pub unsafe fn drop(&mut self, index: usize) -> Option<Entity> {
         let dealloc = self.store.swap_remove_and_forget_unchecked(index);
 
@@ -211,14 +229,19 @@ impl Table {
     }
 
     #[inline]
-    pub unsafe fn free_unused(&mut self) {
-        self.store.free_unused()
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[inline]
+    pub fn free_unused(&mut self) {
+        unsafe { self.store.free_unused() }
     }
 }
 
 impl Drop for Table {
     fn drop(&mut self) {
-        while self.store.len() > 0 {
+        while !self.store.is_empty() {
             unsafe {
                 let data = self.store.swap_remove_and_forget_unchecked(self.store.len() - 1);
                 for (_, item) in self.indexer.iter() {
@@ -241,9 +264,12 @@ pub trait Indexer: Sized {
     type Output;
 
     fn get(&self, id: ComponentId) -> Option<Self::Output>;
+    /// # Safety
+    ///
+    /// May panic and cause memory leak
     unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output;
     fn get_size(&self, id: ComponentId) -> Option<usize>;
-    fn table<'a>(&'a self) -> &'a Table;
+    fn table(&self) -> &Table;
 }
 
 pub struct RowIndexer {
@@ -252,6 +278,9 @@ pub struct RowIndexer {
 }
 
 impl RowIndexer {
+    /// # Safety
+    ///
+    /// No bounds checking
     #[inline]
     pub unsafe fn new(row: usize, table: *mut Table) -> Self {
         debug_assert!(row < (*table).store.len());
@@ -272,13 +301,14 @@ impl Indexer for RowIndexer {
         }
     }
 
+    /// # Safety
+    ///
+    /// Will panic if `id` is not part of table, which may cause memory leak
     #[inline]
     unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output {
-        unsafe {
-            let data = (*self.table).store.get_unchecked_mut(self.row);
-            let item = (*self.table).indexer.get(id).unwrap();
-            data.add(item.index)
-        }
+        let data = (*self.table).store.get_unchecked_mut(self.row);
+        let item = (*self.table).indexer.get(id).unwrap();
+        data.add(item.index)
     }
 
     #[inline]
@@ -286,7 +316,7 @@ impl Indexer for RowIndexer {
         unsafe { (*self.table).indexer.get(id).map(|item| item.size) }
     }
 
-    fn table<'a>(&'a self) -> &'a Table {
+    fn table(&self) -> &Table {
         unsafe { &*self.table }
     }
 }
@@ -297,6 +327,11 @@ pub struct ConstRowIndexer {
 }
 
 impl ConstRowIndexer {
+    /// Same as [`RowIndexer`]
+    ///
+    /// # Safety
+    ///
+    /// See above
     #[inline]
     pub unsafe fn new(row: usize, table: *const Table) -> Self {
         debug_assert!(row < (*table).store.len());
@@ -317,6 +352,11 @@ impl Indexer for ConstRowIndexer {
         }
     }
 
+    /// Same as [`RowIndexer`]
+    ///
+    /// # Safety
+    ///
+    /// See above
     #[inline]
     unsafe fn get_unchecked(&self, id: ComponentId) -> Self::Output {
         unsafe {
@@ -331,7 +371,8 @@ impl Indexer for ConstRowIndexer {
         unsafe { (*self.table).indexer.get(id).map(|item| item.size) }
     }
 
-    fn table<'a>(&'a self) -> &'a Table {
+    fn table(&self) -> &Table {
         unsafe { &*self.table }
     }
 }
+

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_quote, punctuated::Punctuated};
+use syn::{parse_quote, punctuated::Punctuated, DeriveInput};
 
 extern crate proc_macro;
 
@@ -100,9 +100,9 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             let new_stmt: syn::Stmt = if let Some(bundle_type) = bundle_type {
                 if is_mut {
-                    parse_quote!(let #name = world.get_component_query_mut::<#bundle_type>();)
+                    parse_quote!(let #name = world.component_query_mut::<#bundle_type>();)
                 } else {
-                    parse_quote!(let #name = world.get_component_query::<#bundle_type>();)
+                    parse_quote!(let #name = world.component_query::<#bundle_type>();)
                 }
             } else {
                 panic!("queries should have a structure like: 'Query<(Component1, Component2)>'");
@@ -171,3 +171,22 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     quote!(#func).into()
 }
+
+#[proc_macro_derive(Component)]
+pub fn derive_component(input: TokenStream) -> TokenStream {
+    let mut ast = syn::parse_macro_input!(input as DeriveInput);
+    ast.attrs.push(parse_quote!( #[derive(tar_ecs::component::Component)] ));
+    let name = &ast.ident;
+    let generics = &ast.generics;
+    let (impl_generics, type_generics, where_clause) = &generics.split_for_impl();
+    let serde_name = format!("\"{name}\"");
+
+    quote!(
+        unsafe impl #impl_generics tar_ecs::component::Component for #name #type_generics #where_clause {}
+
+        impl #impl_generics SerdeComponent for #name #type_generics #where_clause {
+            const NAME: &'static str = #serde_name;
+        }
+    ).into()
+}
+
