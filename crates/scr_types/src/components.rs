@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
 use tar_ecs::prelude::*;
-use serde::{Serialize, Deserialize};
 
-use crate::{ecs_serde::SerdeComponent, prims::{Quat, Rad, Vec3}};
+use crate::{
+    ecs_serde::SerdeComponent,
+    prims::{Quat, Rad, Vec3},
+};
 
 /// This component stored transform attributes
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
@@ -25,14 +28,17 @@ impl SerdeComponent for Transform {
     const NAME: &'static str = "scr::Transform";
 }
 
-
 /// This Component indicates that an entity is rendered
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to render
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Rendering {
     pub model_id: uuid::Uuid,
+}
+
+impl SerdeComponent for Rendering {
+    const NAME: &'static str = "scr::Rendering";
 }
 
 /// This Component indicates taht the entity is a camera.

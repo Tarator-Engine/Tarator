@@ -39,7 +39,7 @@ pub fn get_render_entities() -> RenderEntities {
     unsafe {
         if let Some(world) = &mut WORLD {
             let mut res = vec![];
-            world.component_query::<(Transform, Rendering)>(|e| {
+            world.component_query::<(Transform, Rendering)>().for_each(|e| {
                 res.push((e.0.clone(), e.1.clone()));
             });
             return RenderEntities {
