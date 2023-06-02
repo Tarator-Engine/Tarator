@@ -1,14 +1,14 @@
 pub mod components;
+pub mod ecs_serde;
 pub mod game_state;
 pub mod prims;
-pub mod ecs_serde;
 
 use std::fmt::Debug;
 
 extern crate self as scr_types;
 
-pub use scr_types_macros::{InitSystems, System, Component};
 use prelude::{Rendering, Transform};
+pub use scr_types_macros::{Component, InitSystems, System};
 
 pub type System = fn(&mut tar_ecs::prelude::World, &game_state::GameState);
 
