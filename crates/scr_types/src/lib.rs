@@ -5,6 +5,8 @@ pub mod ecs_serde;
 
 use std::fmt::Debug;
 
+extern crate self as scr_types;
+
 pub use scr_types_macros::{InitSystems, System, Component};
 use prelude::{Rendering, Transform};
 

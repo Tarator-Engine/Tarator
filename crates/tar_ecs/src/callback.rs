@@ -2,7 +2,7 @@ use tar_ecs_macros::identifier;
 
 use crate::{component::Component, store::sparse::MutSparseSet};
 
-pub use tar_ecs_macros::Callback;
+pub use crate::macros::Callback;
 
 /// # Safety
 ///
