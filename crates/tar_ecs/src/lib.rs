@@ -25,5 +25,6 @@ pub mod prelude {
     pub use super::component::{Component, ComponentInfo, UComponentId};
     pub use super::entity::Entity;
     pub use super::store::table::Indexer;
+    pub use tar_ecs_macros::{Callback, Component};
 }
 

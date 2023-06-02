@@ -1,5 +1,5 @@
 //! The structure of the serializer is following:
-//! 
+//!
 //! World:
 //! | id: Uuid
 //! | ee:
@@ -12,17 +12,13 @@
 //! An example of a (de)serialization of a world can be found in `tests::serdeialize`] at the
 //! bottom of this file.
 
-use std::collections::HashMap;
+use erased_serde::{Deserializer as EDeserializer, Serialize as ESerialize};
 use fxhash::FxBuildHasher;
-use serde::ser::{ SerializeStruct, SerializeMap, SerializeSeq };
-use erased_serde::{
-    Serialize as ESerialize,
-    Deserializer as EDeserializer
-};
+use serde::ser::{SerializeMap, SerializeSeq, SerializeStruct};
+use std::collections::HashMap;
 
-use tar_ecs::prelude::*;
 use crate::components::Info;
-
+use tar_ecs::prelude::*;
 
 /// To be implemented on Components that want to be serde-ed
 ///
@@ -32,6 +28,7 @@ use crate::components::Info;
 /// use scr_types::ecs_serde::{SerdeComponent};
 /// use serde::{Serialize, Deserialize};
 /// use tar_ecs::prelude::*;
+/// use scr_types::ecs_serde::SerdeComponent;
 ///
 /// #[derive(Component, Serialize, Deserialize)]
 /// struct Foo {
@@ -42,19 +39,20 @@ use crate::components::Info;
 ///     const NAME: &'static str = "example::Foo";
 /// }
 /// ```
-///
-/// TODO: SUPPORT GENERICS
 pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserialize<'a> {
     const NAME: &'static str;
 
-    fn construct(deserializer: &mut dyn EDeserializer, world: &mut World, entity: Entity) -> Result<(), erased_serde::Error> {
+    fn construct(
+        deserializer: &mut dyn EDeserializer,
+        world: &mut World,
+        entity: Entity,
+    ) -> Result<(), erased_serde::Error> {
         let this: Self = erased_serde::deserialize(deserializer)?; // TODO: Use unwrap_or_default instad?
         world.entity_set(entity, this);
 
         Ok(())
     }
 }
-
 
 /// A wrapper for world serialization
 ///
@@ -87,7 +85,7 @@ pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserial
 /// ```
 pub struct SerWorld<'a> {
     world: &'a World,
-    id: uuid::Uuid
+    id: uuid::Uuid,
 }
 
 impl<'a> SerWorld<'a> {
@@ -108,15 +106,14 @@ impl<'a> serde::Serialize for SerWorld<'a> {
     }
 }
 
-
 pub struct DeWorld {
     pub id: uuid::Uuid,
-    pub world: World
+    pub world: World,
 }
 
 #[derive(Default)]
 pub struct DeWorldBuilder<'a> {
-    constuctors: ConstructorMap<'a>
+    constuctors: ConstructorMap<'a>,
 }
 
 impl<'a> DeWorldBuilder<'a> {
@@ -129,19 +126,30 @@ impl<'a> DeWorldBuilder<'a> {
         self
     }
 
-    pub fn build<'de, D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<DeWorld, D::Error> {
+    pub fn build<'de, D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<DeWorld, D::Error> {
         use serde::de::DeserializeSeed;
 
         self.deserialize(deserializer)
     }
 }
 
-
 impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeWorldBuilder<'a> {
     type Value = DeWorld;
 
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_struct("World", &["id", "ee"], DeWorldVisitor { constuctors: self.constuctors }) 
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_struct(
+            "World",
+            &["id", "ee"],
+            DeWorldVisitor {
+                constuctors: self.constuctors,
+            },
+        )
     }
 }
 
@@ -151,13 +159,11 @@ pub struct SerializeCallback {
     s: HashMap<&'static str, *const dyn ESerialize, FxBuildHasher>
 }
 
-
 impl<T: SerdeComponent> Callback<T> for SerializeCallback {
     fn callback(&mut self, component: &T) {
         self.s.insert(T::NAME, component);
     }
 }
-
 
 struct SerComponent<'a> {
     world: &'a World,
@@ -176,7 +182,7 @@ impl<'a> serde::Serialize for SerComponent<'a> {
         self.world.entity_callback(self.entity, &mut callback);
 
         let mut s = serializer.serialize_map(Some(callback.s.len()))?;
-        
+
         for (key, value) in callback.s {
             s.serialize_entry(key, unsafe { &*value })?
         }
@@ -185,10 +191,9 @@ impl<'a> serde::Serialize for SerComponent<'a> {
     }
 }
 
-
 struct SerEntity<'a> {
     world: &'a World,
-    entity: Entity
+    entity: Entity,
 }
 
 impl<'a> SerEntity<'a> {
@@ -200,7 +205,7 @@ impl<'a> SerEntity<'a> {
 impl<'a> serde::Serialize for SerEntity<'a> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("Entity", 3)?;
-    
+
         let info = self.world.entity_get::<Info>(self.entity).unwrap();
         let components = SerComponent::new(self.world, self.entity);
 
@@ -212,9 +217,8 @@ impl<'a> serde::Serialize for SerEntity<'a> {
     }
 }
 
-
 struct SerEntityEntry<'a> {
-    world: &'a World
+    world: &'a World,
 }
 
 impl<'a> SerEntityEntry<'a> {
@@ -237,65 +241,62 @@ impl<'a> serde::Serialize for SerEntityEntry<'a> {
     }
 }
 
-
-
-
-
-type ConstructorFunc = fn(&mut dyn EDeserializer, &mut World, Entity) -> Result<(), erased_serde::Error>;
+type ConstructorFunc =
+    fn(&mut dyn EDeserializer, &mut World, Entity) -> Result<(), erased_serde::Error>;
 type ConstructorMap<'a> = HashMap<&'a str, ConstructorFunc, FxBuildHasher>;
 
-
-
 struct DeWorldVisitor<'a> {
-    constuctors: ConstructorMap<'a>
+    constuctors: ConstructorMap<'a>,
 }
 
 struct DeEntityEntry<'a> {
-    constuctors: &'a ConstructorMap<'a>
+    constuctors: &'a ConstructorMap<'a>,
 }
 
 struct DeEntityEntryVisitor<'a> {
-    constuctors: &'a ConstructorMap<'a>
+    constuctors: &'a ConstructorMap<'a>,
 }
 
 struct DeEntity<'a> {
     world: &'a mut World,
-    constuctors: &'a ConstructorMap<'a>
+    constuctors: &'a ConstructorMap<'a>,
 }
 
 struct DeEntityVisitor<'a> {
     world: &'a mut World,
-    constuctors: &'a ConstructorMap<'a>
+    constuctors: &'a ConstructorMap<'a>,
 }
 
 struct DeComponents<'a> {
     entity: Entity,
     world: &'a mut World,
-    constuctors: &'a ConstructorMap<'a>
+    constuctors: &'a ConstructorMap<'a>,
 }
 
 struct DeComponentsVisitor<'a> {
     entity: Entity,
     world: &'a mut World,
-    constuctors: &'a ConstructorMap<'a>
+    constuctors: &'a ConstructorMap<'a>,
 }
 
 struct DeComponent<'a> {
     entity: Entity,
     world: &'a mut World,
-    func: ConstructorFunc
+    func: ConstructorFunc,
 }
-
 
 impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeComponent<'a> {
     type Value = ();
 
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
         let d = &mut <dyn erased_serde::Deserializer>::erase(deserializer);
-        (self.func)(d, self.world, self.entity).map_err(|e| serde::de::Error::custom(format!("Could not parse component: {e}")))
+        (self.func)(d, self.world, self.entity)
+            .map_err(|e| serde::de::Error::custom(format!("Could not parse component: {e}")))
     }
 }
-
 
 impl<'a, 'de> serde::de::Visitor<'de> for DeComponentsVisitor<'a> {
     type Value = ();
@@ -306,27 +307,36 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeComponentsVisitor<'a> {
 
     fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
         while let Some(key) = map.next_key::<&str>()? {
-            map.next_value_seed(
-                DeComponent { 
-                    entity: self.entity,
-                    world: self.world,
-                    func: *self.constuctors.get(key).ok_or(serde::de::Error::custom(format!("Component constructor for {key} not initialized")))?
-                })?
+            map.next_value_seed(DeComponent {
+                entity: self.entity,
+                world: self.world,
+                func: *self
+                    .constuctors
+                    .get(key)
+                    .ok_or(serde::de::Error::custom(format!(
+                        "Component constructor for {key} not initialized"
+                    )))?,
+            })?
         }
 
         Ok(())
     }
 }
 
-
 impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeComponents<'a> {
     type Value = ();
 
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_map(DeComponentsVisitor { world: self.world, entity: self.entity, constuctors: self.constuctors }) 
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_map(DeComponentsVisitor {
+            world: self.world,
+            entity: self.entity,
+            constuctors: self.constuctors,
+        })
     }
 }
-
 
 impl<'a, 'de> serde::de::Visitor<'de> for DeEntityVisitor<'a> {
     type Value = ();
@@ -339,13 +349,21 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeEntityVisitor<'a> {
         let mut id = None;
         let mut name = None;
         let entity = self.world.entity_create();
-        
+
         while let Some(key) = map.next_key()? {
             match key {
-                "id" => id = Some(uuid::Uuid::parse_str(map.next_value()?).map_err(|e| serde::de::Error::custom(format!("Could not parse world id: {}", e)))?),
+                "id" => {
+                    id = Some(uuid::Uuid::parse_str(map.next_value()?).map_err(|e| {
+                        serde::de::Error::custom(format!("Could not parse world id: {}", e))
+                    })?)
+                }
                 "name" => name = Some(map.next_value()?),
-                "components" => map.next_value_seed(DeComponents { world: self.world, entity, constuctors: self.constuctors })?,
-                _ => ()
+                "components" => map.next_value_seed(DeComponents {
+                    world: self.world,
+                    entity,
+                    constuctors: self.constuctors,
+                })?,
+                _ => (),
             }
         }
 
@@ -363,15 +381,23 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeEntityVisitor<'a> {
     }
 }
 
-
 impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeEntity<'a> {
     type Value = ();
 
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_struct("Entity", &["id", "name", "components"], DeEntityVisitor { world: self.world, constuctors: self.constuctors })  
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_struct(
+            "Entity",
+            &["id", "name", "components"],
+            DeEntityVisitor {
+                world: self.world,
+                constuctors: self.constuctors,
+            },
+        )
     }
 }
-
 
 impl<'a, 'de> serde::de::Visitor<'de> for DeEntityEntryVisitor<'a> {
     type Value = World;
@@ -383,21 +409,27 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeEntityEntryVisitor<'a> {
     fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
         let mut world = World::new();
 
-        while let Some(()) = seq.next_element_seed(DeEntity { world: &mut world, constuctors: self.constuctors})? {}
+        while let Some(()) = seq.next_element_seed(DeEntity {
+            world: &mut world,
+            constuctors: &self.constuctors,
+        })? {}
 
         Ok(world)
     }
 }
 
-
 impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeEntityEntry<'a> {
     type Value = World;
 
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_seq(DeEntityEntryVisitor { constuctors: self.constuctors }) 
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_seq(DeEntityEntryVisitor {
+            constuctors: self.constuctors,
+        })
     }
 }
-
 
 impl<'a, 'de> serde::de::Visitor<'de> for DeWorldVisitor<'a> {
     type Value = DeWorld;
@@ -407,8 +439,16 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeWorldVisitor<'a> {
     }
 
     fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        let id = uuid::Uuid::parse_str(seq.next_element()?.ok_or(serde::de::Error::invalid_length(0, &self))?).map_err(|e| serde::de::Error::custom(format!("Could not parse world id: {}", e)))?;
-        let world = seq.next_element_seed(DeEntityEntry { constuctors: &self.constuctors })?.ok_or(serde::de::Error::invalid_length(1, &self))?;
+        let id = uuid::Uuid::parse_str(
+            seq.next_element()?
+                .ok_or(serde::de::Error::invalid_length(0, &self))?,
+        )
+        .map_err(|e| serde::de::Error::custom(format!("Could not parse world id: {}", e)))?;
+        let world = seq
+            .next_element_seed(DeEntityEntry {
+                constuctors: &self.constuctors,
+            })?
+            .ok_or(serde::de::Error::invalid_length(1, &self))?;
 
         Ok(DeWorld { id, world })
     }
@@ -419,9 +459,17 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeWorldVisitor<'a> {
 
         while let Some(key) = map.next_key()? {
             match key {
-                "id" => id = Some(uuid::Uuid::parse_str(map.next_value()?).map_err(|e| serde::de::Error::custom(format!("Could not parse world id: {}", e)))?),
-                "ee" => world = Some(map.next_value_seed(DeEntityEntry { constuctors: &self.constuctors })?),
-                _ => ()
+                "id" => {
+                    id = Some(uuid::Uuid::parse_str(map.next_value()?).map_err(|e| {
+                        serde::de::Error::custom(format!("Could not parse world id: {}", e))
+                    })?)
+                }
+                "ee" => {
+                    world = Some(map.next_value_seed(DeEntityEntry {
+                        constuctors: &self.constuctors,
+                    })?)
+                }
+                _ => (),
             }
         }
 
@@ -437,22 +485,18 @@ impl<'a, 'de> serde::de::Visitor<'de> for DeWorldVisitor<'a> {
     }
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
-    use tar_ecs::prelude::*;    
-    use super::{SerdeComponent, SerWorld, SerializeCallback, DeWorldBuilder};
+    use super::{DeWorldBuilder, SerWorld, SerdeComponent, SerializeCallback};
     use crate::components::{Info, Transform};
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
     use serde_json::de::Deserializer as JsonDeserializer;
+    use tar_ecs::prelude::*;
 
     #[derive(Debug, Component, Serialize, Deserialize)]
     struct Foo {
         foo1: u32,
-        foo2: String
+        foo2: String,
     }
 
     impl SerdeComponent for Foo {
@@ -477,10 +521,16 @@ mod tests {
 
             let entity = world.entity_create();
             let data = (
-                Info { id, name: "GigachadEntity".into() },
+                Info {
+                    id,
+                    name: "GigachadEntity".into(),
+                },
                 Transform::default(),
-                Foo { foo1: 50, foo2: "We are baba!".into() },
-                Bar(vec![50, 6665, 13407, 324])
+                Foo {
+                    foo1: 50,
+                    foo2: "We are baba!".into(),
+                },
+                Bar(vec![50, 6665, 13407, 324]),
             );
             world.entity_set(entity, data);
 
@@ -491,9 +541,11 @@ mod tests {
             .constructor::<Transform>()
             .constructor::<Foo>()
             .constructor::<Bar>()
-            .build(&mut JsonDeserializer::from_str(&serialized)).unwrap();
+            .build(&mut JsonDeserializer::from_str(&serialized))
+            .unwrap();
 
-        deworld.world
+        deworld
+            .world
             .component_query::<(Info, Transform, Foo, Bar)>()
             .for_each(|(info, t, foo, bar)| {
                 assert!(info.name == "GigachadEntity");
@@ -505,4 +557,3 @@ mod tests {
             });
     }
 }
-

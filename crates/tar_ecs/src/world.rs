@@ -27,8 +27,9 @@ pub struct WorldId(usize);
 
 static WORLD_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-impl Default for WorldId {
-    fn default() -> Self {
+impl WorldId {
+    /// Will panic if it gets called more than [`usize::MAX`] times
+    pub fn new() -> Self {
         WORLD_COUNT
             // Relaxed ordering is sufficient, as we do not do any critical procedures
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
@@ -36,14 +37,6 @@ impl Default for WorldId {
             })
             .map(WorldId)
             .expect("Too many worlds were created!")
-       
-    }
-}
-
-impl WorldId {
-    /// Will panic if it gets called more than [`usize::MAX`] times
-    pub fn new() -> Self {
-        Default::default()
     }
 
     #[inline]
@@ -108,19 +101,21 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn bundle_init<T: Bundle>(&mut self) -> BundleId {
+    pub fn bundle_init<'a, T: Bundle>(&mut self) -> BundleId {
         unsafe { (*self.type_info.get()).init_bundle_from::<T>() }
     }
 
     #[inline]
-    pub fn bundle_id<T: Bundle>(&self) -> Option<BundleId> {
+    pub fn bundle_id<'a, T: Bundle>(&self) -> Option<BundleId> {
         unsafe { (*self.type_info.get()).get_bundle_id_from::<T>() }
     }
 } 
 
-impl Default for World<Local> {
+
+impl World<Local> {
+    /// Will panic if it gets called more than [`usize::MAX`] times
     #[inline]
-    fn default() -> Self {
+    pub fn new() -> Self {
         let mut type_info = Local::new();
         let archetypes = Archetypes::new();
         let bundle_id = type_info.init_bundle_from::<()>();
@@ -132,14 +127,6 @@ impl Default for World<Local> {
             archetypes,
             type_info: UnsafeCell::new(type_info)
         }
-    }
-}
-
-impl World<Local> {
-    /// Will panic if it gets called more than [`usize::MAX`] times
-    #[inline]
-    pub fn new() -> Self {
-        Default::default()
     }
 }
 
@@ -191,7 +178,7 @@ impl<TI: TypeInfo> World<TI> {
     /// Using this function may result in some memory relocations, so calling this often may result
     /// in fairly poor performance.
     #[inline]
-    pub fn entity_set<T: Bundle>(&mut self, entity: Entity, data: T) {
+    pub fn entity_set<'a, T: Bundle>(&mut self, entity: Entity, data: T) {
         let to_set_bundle_id = self.bundle_init::<T>();
 
         let Some(meta) = self.entities.get_mut(entity) else {
@@ -248,7 +235,7 @@ impl<TI: TypeInfo> World<TI> {
         }
     }
 
-    pub fn entity_unset<T: Bundle>(&mut self, entity: Entity) {
+    pub fn entity_unset<'a, T: Bundle>(&mut self, entity: Entity) {
         let to_unset_bundle_id = self.bundle_init::<T>();
 
         let Some(meta) = self.entities.get_mut(entity) else {
@@ -259,7 +246,7 @@ impl<TI: TypeInfo> World<TI> {
             unsafe { &*self.type_info.get() }.get_bundle_info(to_unset_bundle_id, |info| {
                 let info = meta_info - info;
                 
-                if info.is_empty() {
+                if info.len() == 0 {
                     None
                 } else {
                     Some(info)
@@ -314,7 +301,7 @@ impl<TI: TypeInfo> World<TI> {
 
     /// Returns a [`Vec<Entity>`] with every [`Entity`] that has given [`Bundle`].
     #[inline]
-    pub fn entity_collect<T: Bundle>(&self) -> Vec<Entity> {
+    pub fn entity_collect<'a, T: Bundle>(&self) -> Vec<Entity> {
         let o_bundle_id = unsafe { (*self.type_info.get()).init_bundle_from::<T>() };
         self.archetypes.try_init(o_bundle_id, unsafe { &*self.type_info.get() });
 
@@ -387,7 +374,7 @@ impl<TI: TypeInfo> World<TI> {
 impl<TI: TypeInfo> World<TI> {
     /// Clones every [`CloneBundle`] into a [`Vec`]
     #[inline]
-    pub fn component_collect<T: CloneBundle>(&self) -> Vec<T> {
+    pub fn component_collect<'a, T: CloneBundle>(&'a self) -> Vec<T> {
         let mut bundles = Vec::new();
         self.component_query::<T>().for_each(|bundle| bundles.push(T::clone_bundles(bundle)));
 
@@ -395,7 +382,7 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn component_query<T: Bundle>(&self) -> Query<T, TI> {
+    pub fn component_query<'a, T: Bundle>(&'a self) -> Query<'a, T, TI> {
         let bundle_id = unsafe { (*self.type_info.get()).init_bundle_from::<T>() };
         self.archetypes.try_init(bundle_id, unsafe { &*self.type_info.get() });
 
@@ -403,7 +390,7 @@ impl<TI: TypeInfo> World<TI> {
     }
 
     #[inline]
-    pub fn component_query_mut<T: Bundle>(&mut self) -> QueryMut<T, TI> {
+    pub fn component_query_mut<'a, T: Bundle>(&'a mut self) -> QueryMut<'a, T, TI> {
         let bundle_id = unsafe { (*self.type_info.get()).init_bundle_from::<T>() };
         self.archetypes.try_init(bundle_id, unsafe { &*self.type_info.get() });
 
@@ -421,7 +408,7 @@ impl<TI: TypeInfo> World<TI> {
     pub fn free_unused_memory(&mut self) {
         for (_, archetype) in self.archetypes.iter_mut() {
             let table = archetype.table_mut();
-            table.free_unused()
+            unsafe { table.free_unused(); }
         }
     }
 }

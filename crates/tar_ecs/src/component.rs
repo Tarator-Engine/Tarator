@@ -5,15 +5,13 @@ use tar_ecs_macros::identifier;
 use crate::callback::{ Callback, CallbackFunc, CallbackId, Callbacks };
 
 pub use crate::macros::Component;
-
 /// A [`Component`] is nothing more but data, which can be stored in a given
 /// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can
 /// be derived via `#[derive(Component)]`.
 ///
 /// Read further: [`Bundle`](crate::bundle::Bundle)
 ///
-/// # Safety
-///
+/// SAFETY:
 /// - Manual implementation is discouraged
 pub unsafe trait Component: Sized + Send + Sync + 'static {
     fn uid() -> UComponentId {
@@ -69,9 +67,6 @@ impl ComponentInfo {
         self.callbacks.get(id)
     }
 
-    /// # Safety
-    ///
-    /// `id` and `func` must be related, else ub
     #[inline]
     pub unsafe fn set_callback(&mut self, id: CallbackId, func: CallbackFunc) {
         self.callbacks.add(id, func)

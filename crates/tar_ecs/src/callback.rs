@@ -70,7 +70,7 @@ impl Callbacks {
 
     #[inline]
     pub fn get(&self, id: CallbackId) -> Option<CallbackFunc> {
-        self.callbacks.get(id).copied()
+        self.callbacks.get(id).map(|func| *func)
     }
 }
 

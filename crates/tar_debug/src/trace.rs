@@ -40,7 +40,7 @@ impl Session {
             }
         };
 
-        if tracer.sessions.insert(thread_id::get(), ret.as_mut().into()).is_some() {
+        if let Some(_) = tracer.sessions.insert(thread_id::get(), ret.as_mut().into()) {
             panic!("Child sessions are not supported!");
         }
 

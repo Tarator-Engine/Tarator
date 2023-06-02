@@ -43,7 +43,7 @@ impl<'a, T: Bundle, TI: TypeInfo> Iterator for Query<'a, T, TI> {
         let indexer = unsafe { ConstRowIndexer::new(self.index, self.table) };
         self.index += 1;
 
-        return unsafe { T::from_components_as_ref(&*self.world.type_info.get(), &mut |id| indexer.get(id) ) };
+        return unsafe { T::from_components_as_ref(&*(*self.world).type_info.get(), &mut |id| indexer.get(id) ) };
     }
 }
 
@@ -92,7 +92,7 @@ impl<'a, T: Bundle, TI: TypeInfo> Iterator for QueryMut<'a, T, TI> {
         let indexer = unsafe { RowIndexer::new(self.index, self.table) };
         self.index += 1;
 
-        return unsafe { T::from_components_as_mut(&*self.world.type_info.get(), &mut |id| indexer.get(id) ) };
+        return unsafe { T::from_components_as_mut(&*(*self.world).type_info.get(), &mut |id| indexer.get(id) ) };
     }
 }
 

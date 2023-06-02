@@ -27,7 +27,6 @@ pub trait TypeInfo: Sized + 'static {
     fn component_add_callback_from<T: Callback<U>, U: Component>(&mut self);
 }
 
-#[derive(Default)]
 pub struct Local {
     bundles: Vec<BundleInfo>,
     bundle_ids: HashMap<UBundleId, BundleId, FxBuildHasher>,
@@ -39,7 +38,13 @@ pub struct Local {
 impl Local {
     #[inline]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            bundles: Vec::new(),
+            bundle_ids: HashMap::default(),
+            components: Vec::new(),
+            component_ids: HashMap::default(),
+            callback_ids: HashMap::default(),
+        }
     }
 }
 
@@ -48,7 +53,7 @@ impl TypeInfo for Local {
     fn init_component_from<T: Component>(&mut self) -> ComponentId {
         self.component_ids
             .get(&T::uid())
-            .copied()
+            .map(|id| *id)
             .unwrap_or_else(|| {
                 let index = self.components.len();
                 self.components.push(ComponentInfo::new_from::<T>());
@@ -61,7 +66,7 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_component_id_from<T: Component>(&self) -> Option<ComponentId> {
-        self.component_ids.get(&T::uid()).copied()
+        self.component_ids.get(&T::uid()).map(|id| *id)
     }
 
     #[inline]
@@ -104,7 +109,7 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_callback_id_from<T: Callback<U>, U: Component>(&self) -> Option<CallbackId> {
-        self.callback_ids.get(&T::UID).copied()
+        self.callback_ids.get(&T::UID).map(|id| *id)
     }
 
     #[inline]
@@ -154,6 +159,6 @@ impl TypeInfo for Local {
 
     #[inline]
     fn get_bundle_id_from<T: Bundle>(&self) -> Option<BundleId> {
-        self.bundle_ids.get(&T::uid()).copied()
+        self.bundle_ids.get(&T::uid()).map(|id| *id)
     }
 }

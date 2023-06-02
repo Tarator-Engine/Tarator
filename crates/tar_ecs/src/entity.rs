@@ -76,7 +76,7 @@ impl EntityMeta {
 /// # Links
 ///
 /// [ECS back and forth - Part 3](https://skypjack.github.io/2019-05-06-ecs-baf-part-3)
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Entities {
     meta: Vec<EntityMeta>,
     /// `free_next` is pointing to the next dead [`Entity`] that can get revived, and `free_count`
@@ -91,7 +91,11 @@ pub struct Entities {
 impl Entities {
     #[inline]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            meta: Vec::new(),
+            free_count: 0,
+            free_next: 0
+        }
     }
 
     /// Instantiates a new [`EntityMeta`] or revives one, and returns a mutable reference which can
@@ -183,19 +187,11 @@ impl Entities {
         Some(meta)
     }
 
-    /// # Safety
-    ///
-    /// - No bound checks
-    /// - No invalid checks
     #[inline]
     pub unsafe fn get_unchecked(&self, entity: Entity) -> &EntityMeta {
         self.meta.get_unchecked(entity.id().as_usize())
     }
 
-    /// # Safety
-    ///
-    /// - No bound checks
-    /// - No invalid checks
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, entity: Entity) -> &mut EntityMeta {
         self.meta.get_unchecked_mut(entity.id().as_usize()) 

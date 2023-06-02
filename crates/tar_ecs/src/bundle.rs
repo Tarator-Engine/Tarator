@@ -15,9 +15,8 @@ use tar_ecs_macros::{ foreach_tuple, identifier };
 /// This is isefull to set and get [`Component`]s on a [`World`](crate::world::World), as setting
 /// or deleting every [`Component`] one by one can get a bit slow.
 ///
-/// # Safety
-///
-/// Manual implementations are discouraged
+/// SAFETY:
+/// - Manual implementations are discouraged
 pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// Implemented as a tuple of [`Component`] refs/ptr
     type Ptr: Copy;
@@ -32,9 +31,6 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// Initializes and gets the [`ComponentId`]s via `func`
     fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId));
 
-    /// # Safety
-    ///
-    /// Must create valid type from function or crash
     unsafe fn from_components(
         type_info: &impl TypeInfo,
         func: &mut impl FnMut(ComponentId) -> *mut u8,
@@ -43,8 +39,7 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// Returns a tuple of references to the components in the order of `Self`. The references are
     /// set using the return value of `func`.
     ///
-    /// # Safety
-    ///
+    /// SAFETY:
     /// - Returning [`None`] from `func` is always safe
     /// - If the return value of `func` is [`Some`], the pointer has to point to valid data of
     /// [`ComponentId`] type
@@ -53,11 +48,6 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
         func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
     ) -> Option<Self::Ref<'a>>;
 
-    /// Same as `from_components_as_ref`
-    ///
-    /// # Safety
-    ///
-    /// See above
     unsafe fn from_components_as_mut<'a>(
         type_info: &impl TypeInfo,
         func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
@@ -66,8 +56,7 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// Get the components of this [`Bundle`] with a corresponding [`ComponentId`]. This passes
     /// ownership to `func`.
     ///
-    /// # Safety
-    ///
+    /// SAFETY:
     /// - pointer in `func` must be used, else will create memory leak if data has to be dropped
     /// - data in `func` must be manually dropped
     unsafe fn get_components(
@@ -79,11 +68,6 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
 
 /// Helper-trait to clone [`Bundle`]s with ease, where every [`Component`] has [`Clone`]
 /// implemented
-///
-/// # Safety
-///
-/// Manual implementations discouraged, type should automatically be implemented for every bundle
-/// where Components implement Clone
 pub unsafe trait CloneBundle: Bundle + Clone {
     fn clone_bundles<'a>(bundles: Self::Ref<'a>) -> Self;
 }
@@ -217,11 +201,6 @@ impl BundleInfo {
     #[inline]
     pub fn len(&self) -> usize {
         self.component_ids.len()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     #[inline]

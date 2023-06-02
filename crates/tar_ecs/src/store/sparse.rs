@@ -59,28 +59,13 @@ macro_rules! impl_sparse_array {
 impl_sparse_array!(SparseArray);
 impl_sparse_array!(MutSparseArray);
 
-impl<I: SparseSetIndex, V> Default for SparseArray<I, V> {
-    #[inline]
-    fn default() -> Self {
-         Self {
-            values: Box::new([]),
-            marker: PhantomData,
-         }
-    }
-}
-
 impl<I: SparseSetIndex, V> SparseArray<I, V> {
     #[inline]
     pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-
-impl<I: SparseSetIndex, V> Default for MutSparseArray<I, V> {
-    #[inline]
-    fn default() -> Self {
-        Self::new()        
+        Self {
+            values: Box::new([]),
+            marker: PhantomData,
+        }
     }
 }
 
@@ -155,11 +140,6 @@ macro_rules! impl_sparse_set {
             }
 
             #[inline]
-            pub fn is_empty(&self) -> bool {
-                self.len() == 0
-            }
-
-            #[inline]
             pub fn contains(&self, index: I) -> bool {
                 self.sparse.contains(index)
             }
@@ -215,29 +195,14 @@ macro_rules! impl_sparse_set {
 impl_sparse_set!(SparseSet);
 impl_sparse_set!(MutSparseSet);
 
-impl<I: SparseSetIndex, V: Clone> Default for SparseSet<I, V> {
+impl<I: SparseSetIndex, V: Clone> SparseSet<I, V> {
     #[inline]
-    fn default() -> Self {
+    pub fn new() -> Self {
         Self {
             dense: Box::new([]),
             indices: Box::new([]),
             sparse: SparseArray::new(),
         }
-    }
-}
-
-impl<I: SparseSetIndex, V: Clone> SparseSet<I, V> {
-    #[inline]
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-
-impl<I: SparseSetIndex, V: Clone> Default for MutSparseSet<I, V> {
-    #[inline]
-    fn default() -> Self {
-        Self::new() 
     }
 }
 
@@ -288,6 +253,11 @@ impl<I: SparseSetIndex, V: Clone> MutSparseSet<I, V> {
             self.dense.push(value);
             unsafe { self.dense.get_unchecked_mut(dense_index) }
         }
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.dense.len() == 0
     }
 
     pub fn remove(&mut self, index: I) -> Option<V> {
