@@ -1,8 +1,5 @@
-use crate::{
-    ecs_serde::SerdeComponent,
-    prims::{Quat, Rad, Vec3},
-    Component,
-};
+use crate::prims::{Quat, Rad, Vec3};
+use scr_types_macros::Component;
 use serde::{Deserialize, Serialize};
 
 /// This component stored transform attributes

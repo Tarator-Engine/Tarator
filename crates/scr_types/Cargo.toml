@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-macros = { path = "macros/" }
+scr_types_macros = { path = "scr_types_macros/" }
 tar_ecs = { path = "../tar_ecs" }
 
 uuid = { version = "1", features = ["v4", "serde"] }

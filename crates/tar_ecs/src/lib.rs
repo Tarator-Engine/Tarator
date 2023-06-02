@@ -3,9 +3,9 @@ pub mod bundle;
 pub mod callback;
 pub mod component;
 pub mod entity;
+pub mod query;
 pub mod store;
 pub mod type_info;
-pub mod query;
 pub mod world;
 
 #[cfg(test)]
@@ -25,6 +25,4 @@ pub mod prelude {
     pub use super::component::{Component, ComponentInfo, UComponentId};
     pub use super::entity::Entity;
     pub use super::store::table::Indexer;
-    pub use tar_ecs_macros::{Callback, Component};
 }
-
