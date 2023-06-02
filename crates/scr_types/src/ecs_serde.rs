@@ -25,6 +25,7 @@ use tar_ecs::prelude::*;
 /// # Example
 ///
 /// ```
+/// use scr_types::ecs_serde::{SerdeComponent};
 /// use serde::{Serialize, Deserialize};
 /// use tar_ecs::prelude::*;
 /// use scr_types::ecs_serde::SerdeComponent;
@@ -60,9 +61,9 @@ pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserial
 /// ```
 /// use tar_ecs::prelude::*;
 /// use serde::{Serialize, Deserialize};
-/// use scr_types::ecs_serde::{SerdeComponent, SerializeCallback, SerWorld};
-/// use scr_types::prelude::Info;
-///
+/// use scr_types::components::Info;
+/// use scr_types::ecs_serde::{SerdeComponent, SerializeCallback, SerWorld, DeWorld};
+/// 
 /// #[derive(Component, Serialize, Deserialize)]
 /// struct Foo(u32);
 ///
@@ -155,7 +156,7 @@ impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeWorldBuilder<'a> {
 /// Serializes all the components existing on an entity
 #[derive(Callback, Default)]
 pub struct SerializeCallback {
-    s: HashMap<&'static str, *const dyn ESerialize, FxBuildHasher>,
+    s: HashMap<&'static str, *const dyn ESerialize, FxBuildHasher>
 }
 
 impl<T: SerdeComponent> Callback<T> for SerializeCallback {

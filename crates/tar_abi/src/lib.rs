@@ -5,65 +5,90 @@ use std::process::Command;
 use fs_extra::dir::CopyOptions;
 use libloading::{Library, Symbol};
 use scr_types::{game_state::GameState, RenderEntities, Systems};
+use syn::parse_quote;
 
 type InitSystemsFunc<'lib> = Symbol<'lib, fn() -> Systems>;
 type RunSystemsFunc<'lib> = Symbol<'lib, fn(&Systems, &GameState)>;
 type GetRenderEntitiesFunc<'lib> = Symbol<'lib, fn() -> RenderEntities>;
 type AddBasicModelFunc<'lib> = Symbol<'lib, fn(uuid::Uuid)>;
 
-const INTERNAL_RS_FILE: &str = "
-use scr_types::{game_state::GameState, Systems, RenderEntities};
-use scr_types::prelude::*;
-use tar_ecs::prelude::*;
+fn get_internal_file() -> syn::File {
+    parse_quote!(
+        use scr_types::{game_state::GameState, Systems, RenderEntities};
+        use scr_types::prelude::*;
+        use tar_ecs::prelude::*;
+        use scr_types::ecs_serde::SerWorld;
 
-static mut WORLD: Option<tar_ecs::prelude::World> = None;
+        static mut WORLD: Option<tar_ecs::prelude::World> = None;
 
-#[no_mangle]
-pub fn run_systems(systems: &Systems, game_state: &GameState) {
-    unsafe {
-        if WORLD.is_none() {
-            WORLD = Some(tar_ecs::prelude::World::new());
-        }
-    }
-
-    for sys in &systems.systems {
-        let system = sys.0;
-        unsafe {
-            system(&mut WORLD.as_mut().unwrap(), game_state);
-        }
-    }
-}
-
-#[no_mangle]
-pub fn get_render_entities() -> RenderEntities {
-    unsafe {
-        if let Some(world) = &mut WORLD {
-            let mut res = vec![];
-            world.component_query::<(Transform, Rendering)>().for_each(|e| {
-                res.push((e.0.clone(), e.1.clone()));
-            });
-            return RenderEntities {
-                entities: res,
+        #[no_mangle]
+        pub fn save_world() {
+            unsafe {
+                if let Some(world) = WORLD {
+                    let serialized =
+                        serde_json::to_string(&SerWorld::new(&world, uuid::Uuid::new_v4()))
+                            .unwrap();
+                }
             }
         }
-    }
 
-    RenderEntities {
-        entities: vec![]
-    }
-}
-
-#[no_mangle]
-pub fn add_basic_model(id: uuid::Uuid) {
-    println!(\"adding moddel\");
-    unsafe {
-        if let Some(world) = &mut WORLD {
-            let e = world.entity_create();
-            world.entity_set(e, (scr_types::prelude::Transform::default(), scr_types::prelude::Rendering{model_id: id}));
+        #[no_mangle]
+        pub fn setup() {
+            unsafe {
+                WORLD = Some(tar_ecs::prelude::World::new());
+            }
         }
-    }
+
+        #[no_mangle]
+        pub fn run_systems(systems: &Systems, game_state: &GameState) {
+            unsafe {
+                if WORLD.is_none() {
+                    WORLD = Some(tar_ecs::prelude::World::new());
+                }
+            }
+
+            for sys in &systems.systems {
+                let system = sys.0;
+                unsafe {
+                    system(&mut WORLD.as_mut().unwrap(), game_state);
+                }
+            }
+        }
+
+        #[no_mangle]
+        pub fn get_render_entities() -> RenderEntities {
+            unsafe {
+                if let Some(world) = &mut WORLD {
+                    let mut res = vec![];
+                    world
+                        .component_query::<(Transform, Rendering)>()
+                        .for_each(|e| {
+                            res.push((e.0.clone(), e.1.clone()));
+                        });
+                    return RenderEntities { entities: res };
+                }
+            }
+
+            RenderEntities { entities: vec![] }
+        }
+
+        #[no_mangle]
+        pub fn add_basic_model(id: uuid::Uuid) {
+            unsafe {
+                if let Some(world) = &mut WORLD {
+                    let e = world.entity_create();
+                    world.entity_set(
+                        e,
+                        (
+                            scr_types::prelude::Transform::default(),
+                            scr_types::prelude::Rendering { model_id: id },
+                        ),
+                    );
+                }
+            }
+        }
+    )
 }
-";
 
 pub trait ScriptsLib {
     fn init(&self) -> Systems;
@@ -106,7 +131,11 @@ pub fn load_scripts_lib() -> std::io::Result<(Library, Systems)> {
     )
     .unwrap();
 
-    std::fs::write(".scr/src/internal.rs", INTERNAL_RS_FILE).unwrap();
+    std::fs::write(
+        ".scr/src/internal.rs",
+        prettyplease::unparse(&get_internal_file()),
+    )
+    .unwrap();
 
     let source_lib_rs = std::fs::read_to_string(".scr/src/lib.rs").unwrap();
 

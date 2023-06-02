@@ -1,7 +1,9 @@
+use crate::{
+    ecs_serde::SerdeComponent,
+    prims::{Quat, Rad, Vec3},
+    Component,
+};
 use serde::{Deserialize, Serialize};
-use tar_ecs::prelude::*;
-
-use crate::prims::{Quat, Rad, Vec3};
 
 /// This component stored transform attributes
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
@@ -59,7 +61,7 @@ impl Default for Camera {
 /// **Note**: [`Info`] does not derive Serialize, Deserialize or SerdeComponent,
 /// because we use [`Info`] as a top-level entity descriptor and not part of the
 /// components section in the serializations of the worlds.
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Info {
     pub name: String,
     pub id: uuid::Uuid,

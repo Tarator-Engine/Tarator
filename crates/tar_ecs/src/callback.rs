@@ -2,6 +2,11 @@ use tar_ecs_macros::identifier;
 
 use crate::{component::Component, store::sparse::MutSparseSet};
 
+pub use crate::macros::Callback;
+
+/// # Safety
+///
+/// Manual implementations discouraged, use [`Callback`] derive
 pub unsafe trait InnerCallback: Sized {
     const UID: UCallbackId;
 }
