@@ -1,6 +1,9 @@
-use serde::{Serialize, Deserialize};
-use crate::{Component, ecs_serde::SerdeComponent, prims::{Quat, Rad, Vec3}};
-use tar_ecs::component::Component as RawComponent;
+use crate::{
+    ecs_serde::SerdeComponent,
+    prims::{Quat, Rad, Vec3},
+    Component,
+};
+use serde::{Deserialize, Serialize};
 
 /// This component stored transform attributes
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
@@ -20,19 +23,14 @@ impl Default for Transform {
     }
 }
 
-
 /// This Component indicates that an entity is rendered
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to render
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Rendering {
     pub model_id: uuid::Uuid,
 }
-
-// TODO: If you're able to (de)serialize, derive Component instead of manually implementing
-// `RawComponent`
-unsafe impl RawComponent for Rendering {}
 
 /// This Component indicates taht the entity is a camera.
 ///
@@ -57,23 +55,17 @@ impl Default for Camera {
     }
 }
 
-
 /// This component stores basic entity info e.g. name
 /// it is required for it to be shown in the editor
 ///
 /// **Note**: [`Info`] does not derive Serialize, Deserialize or SerdeComponent,
 /// because we use [`Info`] as a top-level entity descriptor and not part of the
 /// components section in the serializations of the worlds.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Info {
     pub name: String,
     pub id: uuid::Uuid,
 }
-
-// Manually implementing, because we don't want to serialize [`Info`]
-// TODO: Use tar_ecs derive
-unsafe impl tar_ecs::component::Component for Info {}
-
 
 impl Default for Info {
     fn default() -> Self {
