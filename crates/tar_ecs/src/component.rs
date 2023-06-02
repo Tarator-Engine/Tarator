@@ -4,7 +4,7 @@ use tar_ecs_macros::identifier;
 
 use crate::callback::{ Callback, CallbackFunc, CallbackId, Callbacks };
 
-pub use tar_ecs_macros::Component;
+pub use crate::macros::Component;
 
 /// A [`Component`] is nothing more but data, which can be stored in a given
 /// [`World`](crate::world::World) on an [`Entity`](crate::entity::Entity). [`Component`] can

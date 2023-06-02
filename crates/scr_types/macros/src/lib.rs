@@ -175,16 +175,15 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
-    let mut ast = syn::parse_macro_input!(input as DeriveInput);
-    ast.attrs.push(parse_quote!( #[derive(tar_ecs::component::Component)] ));
+    let ast = syn::parse_macro_input!(input as DeriveInput);
     let name = &ast.ident;
     let generics = &ast.generics;
     let (impl_generics, type_generics, where_clause) = &generics.split_for_impl();
     let serde_name = syn::LitStr::new(&name.to_string(), Span::call_site());
 
     quote!(
-        unsafe impl #impl_generics tar_ecs::component::Component for #name #type_generics #where_clause {}
-
+        unsafe impl #impl_generics ::tar_ecs::component::Component for #name #type_generics #where_clause {}
+        
         impl #impl_generics SerdeComponent for #name #type_generics #where_clause {
             const NAME: &'static str = #serde_name;
         }
