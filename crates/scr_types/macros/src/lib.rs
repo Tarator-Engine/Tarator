@@ -1,4 +1,5 @@
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::quote;
 use syn::{parse_quote, punctuated::Punctuated, DeriveInput};
 
@@ -179,7 +180,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let name = &ast.ident;
     let generics = &ast.generics;
     let (impl_generics, type_generics, where_clause) = &generics.split_for_impl();
-    let serde_name = format!("\"{name}\"");
+    let serde_name = syn::LitStr::new(&name.to_string(), Span::call_site());
 
     quote!(
         unsafe impl #impl_generics tar_ecs::component::Component for #name #type_generics #where_clause {}

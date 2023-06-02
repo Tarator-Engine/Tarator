@@ -29,6 +29,7 @@ use crate::components::Info;
 /// # Example
 ///
 /// ```
+/// use scr_types::ecs_serde::{SerdeComponent};
 /// use serde::{Serialize, Deserialize};
 /// use tar_ecs::prelude::*;
 ///
@@ -61,6 +62,9 @@ pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserial
 ///
 /// ```
 /// use tar_ecs::prelude::*;
+/// use serde::{Serialize, Deserialize};
+/// use scr_types::components::Info;
+/// use scr_types::ecs_serde::{SerdeComponent, SerializeCallback, SerWorld, DeWorld};
 /// 
 /// #[derive(Component, Serialize, Deserialize)]
 /// struct Foo(u32);
@@ -79,7 +83,7 @@ pub trait SerdeComponent: Component + serde::Serialize + for<'a> serde::Deserial
 /// world.entity_set(entity, Info { id: entity_id, name: "Entity".into() });
 ///
 /// let world_id = uuid::Uuid::new_v4();
-/// serde_json::to_string(SerWorld::new(&world, entity_id)).unwrap();
+/// serde_json::to_string(&SerWorld::new(&world, entity_id)).unwrap();
 /// ```
 pub struct SerWorld<'a> {
     world: &'a World,
@@ -143,7 +147,7 @@ impl<'a, 'de> serde::de::DeserializeSeed<'de> for DeWorldBuilder<'a> {
 
 /// Serializes all the components existing on an entity
 #[derive(Callback, Default)]
-struct SerializeCallback {
+pub struct SerializeCallback {
     s: HashMap<&'static str, *const dyn ESerialize, FxBuildHasher>
 }
 
