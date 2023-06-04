@@ -17,18 +17,18 @@ fn get_internal_file() -> syn::File {
         use scr_types::{game_state::GameState, Systems, RenderEntities};
         use scr_types::prelude::*;
         use tar_ecs::prelude::*;
-        use scr_types::ecs_serde::SerWorld;
+        use scr_types::component::ser::SerWorld;
 
         static mut WORLD: Option<tar_ecs::prelude::World> = None;
 
         #[no_mangle]
         pub fn save_world() {
             unsafe {
-                if let Some(world) = WORLD {
+                /*if let Some(world) = WORLD {
                     let serialized =
                         serde_json::to_string(&SerWorld::new(&world, uuid::Uuid::new_v4()))
                             .unwrap();
-                }
+                }*/
             }
         }
 
@@ -59,17 +59,13 @@ fn get_internal_file() -> syn::File {
         pub fn get_render_entities() -> RenderEntities {
             unsafe {
                 if let Some(world) = &mut WORLD {
-                    let mut res = vec![];
-                    world
-                        .component_query::<(Transform, Rendering)>()
-                        .for_each(|e| {
-                            res.push((e.0.clone(), e.1.clone()));
-                        });
-                    return RenderEntities { entities: res };
+                    let res = world.component_collect::<(Transform, Rendering)>();
+                    RenderEntities { entities: res }
+                } else {
+                    RenderEntities { entities: vec![] }
                 }
             }
 
-            RenderEntities { entities: vec![] }
         }
 
         #[no_mangle]

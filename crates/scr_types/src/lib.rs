@@ -1,7 +1,9 @@
-pub mod components;
-pub mod ecs_serde;
+pub mod component;
 pub mod game_state;
 pub mod prims;
+
+#[cfg(test)]
+mod tests;
 
 use std::fmt::Debug;
 
@@ -13,7 +15,7 @@ pub use scr_types_macros::{Component, InitSystems, System};
 pub type System = fn(&mut tar_ecs::prelude::World, &game_state::GameState);
 
 pub mod prelude {
-    pub use crate::components::*;
+    pub use crate::component::*;
     pub use crate::game_state::GameState;
     pub use crate::InitSystems;
     pub use crate::System;

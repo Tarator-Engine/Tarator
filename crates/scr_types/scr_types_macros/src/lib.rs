@@ -184,7 +184,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     quote!(
         unsafe impl #impl_generics ::tar_ecs::component::Component for #name #type_generics #where_clause {}
 
-        impl #impl_generics ::scr_types::ecs_serde::SerdeComponent for #name #type_generics #where_clause {
+        impl #impl_generics ::scr_types::component::SerdeComponent for #name #type_generics #where_clause {
             const NAME: &'static str = #serde_name;
         }
     ).into()
