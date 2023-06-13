@@ -4,11 +4,7 @@ use tar_types::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::{
-    camera,
-    model::{texture, Model},
-    state::RenderState,
-};
+use crate::{camera, model::texture, state::RenderState};
 use tar_shader::shader::{
     self,
     bind_groups::{BindGroup0, BindGroupLayout0},
@@ -160,21 +156,21 @@ pub async fn new_state(window: &Window) -> RenderState {
             directional_lights: light_storage_buffer.as_entire_buffer_binding(),
         },
     );
-    let box_models = tar_res::import_models("assets/box/Box.gltf").unwrap();
+    // let box_models = tar_res::import_models("assets/box/Box.gltf").unwrap();
 
-    let mut box_models = box_models
-        .into_iter()
-        .map(|model| Model::from_stored(model, &device, &queue, config.format))
-        .collect();
+    // let mut box_models = box_models
+    //     .into_iter()
+    //     .map(|model| Model::from_stored(model, &device, &queue, config.format))
+    //     .collect();
 
-    let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
+    // let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
-    let mut models: Vec<Model> = schifi_models
-        .into_iter()
-        .map(|model| Model::from_stored(model, &device, &queue, config.format))
-        .collect();
+    // let mut models: Vec<Model> = schifi_models
+    //     .into_iter()
+    //     .map(|model| Model::from_stored(model, &device, &queue, config.format))
+    //     .collect();
 
-    models.append(&mut box_models);
+    // models.append(&mut box_models);
 
     let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), -PI / 4.0 * 3.0, -PI / 4.0);
     let editor_cam_controller = camera::CameraController::new(1.0, 1.0);
@@ -209,7 +205,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         adapter,
         config,
         global_frame_bind_group,
-        models,
+        models: vec![],
         uniform_buffer: uniform_data_buffer,
         uniform_data,
         editor_cam,
