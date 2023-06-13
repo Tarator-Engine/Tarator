@@ -157,7 +157,12 @@ pub async fn new_state(window: &Window) -> RenderState {
             directional_lights: light_storage_buffer.as_entire_buffer_binding(),
         },
     );
-    let models = HashMap::new();
+    // let box_models = tar_res::import_models("assets/box/Box.gltf").unwrap();
+
+    // let mut box_models = box_models
+    //     .into_iter()
+    //     .map(|model| Model::from_stored(model, &device, &queue, config.format))
+    //     .collect();
 
     // let schifi_models = tar_res::import_models("assets/scifi_helmet/SciFiHelmet.gltf").unwrap();
 
@@ -165,6 +170,8 @@ pub async fn new_state(window: &Window) -> RenderState {
     //     .into_iter()
     //     .map(|model| Model::from_stored(model, &device, &queue, config.format))
     //     .collect();
+
+    // models.append(&mut box_models);
 
     let editor_cam = camera::Camera::new((2.0, 2.0, 2.0), -PI / 4.0 * 3.0, -PI / 4.0);
     let editor_cam_controller = camera::CameraController::new(1.0, 1.0);
@@ -199,7 +206,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         adapter,
         config,
         global_frame_bind_group,
-        models,
+        models: HashMap::new(),
         uniform_buffer: uniform_data_buffer,
         uniform_data,
         editor_cam,
@@ -232,6 +239,8 @@ pub fn render(
     state
         .editor_cam_controller
         .update_camera(&mut state.editor_cam, dt);
+
+    state.editor_projection.aspect = state.config.width as f32 / state.config.height as f32;
 
     let view = calc_view_matrix(&state.editor_cam);
     let proj = calc_proj_matrix(&state.editor_projection);
