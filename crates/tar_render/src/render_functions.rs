@@ -240,6 +240,8 @@ pub fn render(
         .editor_cam_controller
         .update_camera(&mut state.editor_cam, dt);
 
+    state.editor_projection.aspect = state.config.width as f32 / state.config.height as f32;
+
     let view = calc_view_matrix(&state.editor_cam);
     let proj = calc_proj_matrix(&state.editor_projection);
 

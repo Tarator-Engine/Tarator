@@ -2,16 +2,17 @@ use std::{fs, path::PathBuf};
 
 use egui::{ScrollArea, SidePanel, TopBottomPanel, Ui};
 
+/// This data is preserved across frames
 #[derive(Default)]
 pub struct GuiInData {
     pub dt: std::time::Duration,
     pub fps: u32,
     pub game_view_texture: Option<egui::TextureHandle>,
     pub running: bool,
-    pub model_load_string: String,
     pub file_system_gui: FilesystemGui,
 }
 
+/// This data is generated each frame in the gui function
 #[derive(Default)]
 pub struct GuiOutData {
     pub mouse_in_game_view: bool,
@@ -22,29 +23,28 @@ pub struct GuiOutData {
 
 pub fn gui(context: &egui::Context, state: &mut GuiInData) -> GuiOutData {
     let mut out = GuiOutData::default();
-    egui::Window::new("Info/Controls")
-        .resizable(false)
+
+    SidePanel::left("side_panel")
+        .resizable(true)
         .show(context, |ui| {
-            ui.label("Here you can see different frame timings");
+            ui.label("Here you can see different frame timings:");
             ui.label(format!("Frame time: {:?}", state.dt));
             ui.label(format!("FPS: {}", state.fps));
-
-            if ui.button("run").clicked() {
-                state.running = true;
-            }
-            if ui.button("stop running").clicked() {
-                state.running = false;
-            }
-            ui.label(format!("running: {:?}", state.running));
-
-            out.reload_scripts = ui.button("reload scripts").clicked();
-
-            ui.text_edit_singleline(&mut state.model_load_string);
-
-            if ui.button("load model").clicked() {
-                out.load_model = Some(state.model_load_string.clone());
-            }
         });
+
+    egui::TopBottomPanel::top(egui::Id::new("top_panel")).show(context, |ui| {
+        ui.vertical_centered_justified(|ui| {
+            egui::Grid::new("buttons-grid").show(ui, |ui| {
+                if !state.running && ui.button("▶").clicked() {
+                    state.running = true;
+                };
+                if state.running && ui.button("⏸").clicked() {
+                    state.running = false;
+                }
+                out.reload_scripts = ui.button("⟲").clicked();
+            })
+        });
+    });
 
     egui::CentralPanel::default()
         .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
@@ -52,7 +52,7 @@ pub fn gui(context: &egui::Context, state: &mut GuiInData) -> GuiOutData {
             out.mouse_in_game_view = ui.ui_contains_pointer()
         });
 
-    state.file_system_gui.ui(context);
+    out.load_model = state.file_system_gui.ui(context);
 
     egui::CentralPanel::default()
         .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
@@ -133,12 +133,8 @@ impl FilesystemGui {
 }
 
 impl FilesystemGui {
-    fn ui(&mut self, ctx: &egui::Context) {
-        TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.label("Filesystem GUI");
-        });
-
-        SidePanel::left("side_panel").show(ctx, |_| {});
+    fn ui(&mut self, ctx: &egui::Context) -> Option<String> {
+        let mut out = None;
 
         TopBottomPanel::bottom("bottom_panel").show(ctx, |tbp_ui| {
             let (_, files) = self.list_directory_contents();
@@ -204,7 +200,7 @@ impl FilesystemGui {
                         file_name.file_name().unwrap().to_string_lossy().to_string();
                     if file_name_str.ends_with(".gltf") || file_name_str.ends_with(".tarasset") {
                         if ui0.button("Load File").clicked() {
-                            // TODO: Button action
+                            out = Some(file_name.to_string_lossy().to_string());
                         }
                     }
                 }
@@ -215,6 +211,7 @@ impl FilesystemGui {
 
             self.file_management_ui(tbp_ui);
         });
+        return out;
     }
 
     fn file_management_ui(&mut self, ui: &mut Ui) {
