@@ -17,4 +17,4 @@ serde = { version = "1", features = ["derive"] }
 rmp-serde = "1"
 
 tar_shader = { path = "../tar_shader" }
-tar_types = { path = "../tar_types" }
+scr_types = { path = "../scr_types" }

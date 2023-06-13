@@ -68,7 +68,7 @@ impl Material {
         };
 
         let mat_data = MaterialData {
-            albedo: stored.pbr.base_color_factor.into(),
+            albedo: stored.pbr.base_color_factor,
             emissive: stored.emissive.factor.into(),
             roughness: stored.pbr.roughness_factor,
             metallic: stored.pbr.metallic_factor,
@@ -205,7 +205,7 @@ impl Material {
             emissive,
             pipeline,
             material_data_buffer,
-            bind_group: bind_group,
+            bind_group,
         }
     }
 }

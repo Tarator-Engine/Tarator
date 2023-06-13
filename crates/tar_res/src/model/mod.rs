@@ -11,14 +11,15 @@ pub struct Model {
     pub vertices: Vec<Vertex>,
     pub indices: Option<Vec<u32>>,
     pub material: material::Material,
+    pub name: String,
 }
 
 impl Model {
-    pub fn new_from_gltf(model: easy_gltf::Model) -> Self {
+    pub fn new_from_gltf(model: easy_gltf::Model, name: String) -> Self {
         let vertices = model
             .vertices()
-            .into_iter()
-            .map(|v| Vertex::from(v))
+            .iter()
+            .map(Vertex::from)
             .collect::<Vec<Vertex>>();
         let indices = model
             .indices()
@@ -30,6 +31,7 @@ impl Model {
             vertices,
             indices,
             material,
+            name,
         }
     }
 }

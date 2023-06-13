@@ -56,7 +56,7 @@ pub fn gui(context: &egui::Context, state: &mut GuiInData) -> GuiOutData {
 
     egui::CentralPanel::default()
         .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
-        .show(&context, |ui| {
+        .show(context, |ui| {
             out.mouse_in_game_view = ui.ui_contains_pointer()
         });
 

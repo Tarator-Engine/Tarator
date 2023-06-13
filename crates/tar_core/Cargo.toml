@@ -9,14 +9,16 @@ edition = "2021"
 egui = "0.21.0"
 egui-winit = "0.21.1"
 egui-wgpu = "0.21.0"
+egui_file = "0.8"
 wgpu = "0.15.1"
 winit = "0.28.1"
 eframe = { version = "0.21.3", features = ["wgpu"] }
 tar_render = { path = "../tar_render" }
 tar_res = { path = "../tar_res" }
 tar_gui = { path = "../tar_gui" }
-tar_types = { path = "../tar_types" }
-tar_ecs = { path = "../tar_ecs" }
+tar_abi = { path = "../tar_abi" }
+scr_types = { path = "../scr_types" }
+cfg-if = "1"
 env_logger = "0.10.0"
 log = "0.4.17"
 cgmath = "0.18"
@@ -27,3 +29,5 @@ crossbeam-channel = "0.5.6"
 parking_lot = "0.12"
 pollster = "0.3.0"
 uuid = { version = "1.3.0", features = ["v4"] }
+libloading = "0.8.0"
+ron = "0.8.0"

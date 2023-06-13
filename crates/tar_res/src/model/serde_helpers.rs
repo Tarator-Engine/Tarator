@@ -146,8 +146,8 @@ where
             let inner = seq
                 .next_element()?
                 .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-            Ok(RgbImage::from_raw(width, height, inner)
-                .ok_or(de::Error::custom("something went really wrong"))?)
+            RgbImage::from_raw(width, height, inner)
+                .ok_or(de::Error::custom("something went really wrong"))
         }
 
         fn visit_map<V>(self, mut map: V) -> Result<RgbImage, V::Error>
@@ -182,12 +182,12 @@ where
             let width = width.ok_or_else(|| de::Error::missing_field("width"))?;
             let height = height.ok_or_else(|| de::Error::missing_field("height"))?;
             let inner = inner.ok_or_else(|| de::Error::missing_field("inner"))?;
-            Ok(RgbImage::from_raw(width, height, inner)
-                .ok_or(de::Error::custom("something went really wrong"))?)
+            RgbImage::from_raw(width, height, inner)
+                .ok_or(de::Error::custom("something went really wrong"))
         }
     }
 
-    const FIELDS: &'static [&'static str] = &["secs", "nanos"];
+    const FIELDS: &[&str] = &["secs", "nanos"];
     deserializer.deserialize_struct("Duration", FIELDS, RgbImageVisitor)
 }
 
@@ -254,8 +254,8 @@ where
             let inner = seq
                 .next_element()?
                 .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-            Ok(GrayImage::from_raw(width, height, inner)
-                .ok_or(de::Error::custom("something went really wrong"))?)
+            GrayImage::from_raw(width, height, inner)
+                .ok_or(de::Error::custom("something went really wrong"))
         }
 
         fn visit_map<V>(self, mut map: V) -> Result<GrayImage, V::Error>
@@ -290,12 +290,12 @@ where
             let width = width.ok_or_else(|| de::Error::missing_field("width"))?;
             let height = height.ok_or_else(|| de::Error::missing_field("height"))?;
             let inner = inner.ok_or_else(|| de::Error::missing_field("inner"))?;
-            Ok(GrayImage::from_raw(width, height, inner)
-                .ok_or(de::Error::custom("something went really wrong"))?)
+            GrayImage::from_raw(width, height, inner)
+                .ok_or(de::Error::custom("something went really wrong"))
         }
     }
 
-    const FIELDS: &'static [&'static str] = &["secs", "nanos"];
+    const FIELDS: &[&str] = &["secs", "nanos"];
     deserializer.deserialize_struct("Duration", FIELDS, GrayImageVisitor)
 }
 
@@ -362,8 +362,8 @@ where
             let inner = seq
                 .next_element()?
                 .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-            Ok(RgbaImage::from_raw(width, height, inner)
-                .ok_or(de::Error::custom("something went really wrong"))?)
+            RgbaImage::from_raw(width, height, inner)
+                .ok_or(de::Error::custom("something went really wrong"))
         }
 
         fn visit_map<V>(self, mut map: V) -> Result<RgbaImage, V::Error>
@@ -398,11 +398,11 @@ where
             let width = width.ok_or_else(|| de::Error::missing_field("width"))?;
             let height = height.ok_or_else(|| de::Error::missing_field("height"))?;
             let inner = inner.ok_or_else(|| de::Error::missing_field("inner"))?;
-            Ok(RgbaImage::from_raw(width, height, inner)
-                .ok_or(de::Error::custom("something went really wrong"))?)
+            RgbaImage::from_raw(width, height, inner)
+                .ok_or(de::Error::custom("something went really wrong"))
         }
     }
 
-    const FIELDS: &'static [&'static str] = &["secs", "nanos"];
+    const FIELDS: &[&str] = &["secs", "nanos"];
     deserializer.deserialize_struct("Duration", FIELDS, RgbaImageVisitor)
 }

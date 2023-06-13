@@ -1,24 +1,38 @@
-use crate::archetype::ArchetypeId;
+use tar_ecs_macros::identifier;
 
+use crate::{
+    bundle::BundleId,
+    store::sparse::SparseSetIndex
+};
+
+identifier!(EntityId, u32);
+identifier!(Version, u32);
+
+impl Version {
+    #[inline]
+    pub fn inc(&mut self) {
+        self.0 += 1
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct Entity(u32, u32);
+pub struct Entity(EntityId, Version);
 
 impl Entity {
-    pub const INVALID: Self = Self(u32::MAX, u32::MAX);
+    pub const INVALID: Self = Self(EntityId::INVALID, Version::INVALID);
 
     #[inline]
     pub fn new(id: u32, version: u32) -> Self {
-        Self(id, version)
+        Self(EntityId::new(id), Version(version))
     }
 
     #[inline]
-    pub fn id(self) -> u32 {
+    pub fn id(self) -> EntityId {
         self.0
     }
 
     #[inline]
-    pub fn version(self) -> u32 {
+    pub fn version(self) -> Version {
         self.1
     }
 }
@@ -27,26 +41,26 @@ impl Entity {
 /// Saves the component location of an [`Entity`], as well as it's current version. Every time an
 /// [`Entity`] gets deleted, the corresponding [`EntityMeta`] gets invalidated and the version gets
 /// incremented (in order to recycle it's existanse).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EntityMeta {
-    pub archetype_id: ArchetypeId,
+    pub bundle_id: BundleId,
     pub index: usize,
-    pub version: u32
+    pub version: Version
 }
 
 impl EntityMeta {
     #[inline]
     pub const fn new() -> Self {
         Self {
-            archetype_id: ArchetypeId::INVALID,
-            version: 0,
+            bundle_id: BundleId::INVALID,
+            version: Version::new(0),
             index: 0
         }
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.archetype_id == ArchetypeId::EMPTY
+        self.bundle_id == BundleId::EMPTY
     }
 }
 
@@ -62,7 +76,7 @@ impl EntityMeta {
 /// # Links
 ///
 /// [ECS back and forth - Part 3](https://skypjack.github.io/2019-05-06-ecs-baf-part-3)
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Entities {
     meta: Vec<EntityMeta>,
     /// `free_next` is pointing to the next dead [`Entity`] that can get revived, and `free_count`
@@ -101,37 +115,37 @@ impl Entities {
 
         let free = &mut self.meta[self.free_next];
         // Free entities should have an [`ArchetypeId`] variant [`ArchetypeId::INVALID`]
-        debug_assert!(free.archetype_id == ArchetypeId::INVALID);
+        debug_assert!(free.bundle_id == BundleId::INVALID);
 
         // set `free_next` to the index our free had pointed to
         self.free_next = free.index;
         self.free_count -= 1;
 
         // Set our freed [`EntityMeta`]
-        free.archetype_id = ArchetypeId::EMPTY;
+        free.bundle_id = BundleId::EMPTY;
         free.index = 0;
 
         // SAFETY:
         // Index was saved by free_next
-        (Entity::new(index as u32, free.version), unsafe { self.meta.get_unchecked_mut(index) })
+        (Entity::new(index as u32, free.version.id()), unsafe { self.meta.get_unchecked_mut(index) })
     }
 
     /// Returns the destroyed [`EntityMeta`] which can be used to drop all
     /// [`Component`](crate::component::Component)s of given [`Entity`]. Will return [`None`] if
     /// the [`Entity`] was already destroyed or revived.
     pub fn destroy(&mut self, entity: Entity) -> Option<EntityMeta> {
-        let index = entity.id() as usize;
+        let index = entity.id().as_usize();
         let meta = &mut self.meta[index];
 
         // Ignore if:
         // - Version differs
         // - Entity is already destroyed
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+        if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
         }
 
         let old_meta = EntityMeta {
-            archetype_id: meta.archetype_id,
+            bundle_id: meta.bundle_id,
             version: meta.version,
             index: meta.index
         };
@@ -140,11 +154,11 @@ impl Entities {
         // and set `free_next` to our index, as well as increment `free_count`. Also increment the
         // current version of our [`EntityMeta`].
         meta.index = self.free_next;
-        meta.version += 1;
+        meta.version.inc();
         self.free_next = index;
         self.free_count += 1;
 
-        meta.archetype_id = ArchetypeId::INVALID;
+        meta.bundle_id = BundleId::INVALID;
 
         Some(old_meta)
     }
@@ -152,9 +166,9 @@ impl Entities {
     /// Returns [`None`] if the [`Entity`] was already destroyed or revived.
     #[inline]
     pub fn get(&self, entity: Entity) -> Option<&EntityMeta> {
-        let meta = &self.meta[entity.id() as usize];
+        let meta = &self.meta[entity.id().as_usize()];
 
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+        if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
         }
 
@@ -164,9 +178,9 @@ impl Entities {
     /// Returns [`None`] if the [`Entity`] was already destroyed or revived.
     #[inline]
     pub fn get_mut(&mut self, entity: Entity) -> Option<&mut EntityMeta> {
-        let meta = self.meta.get_mut(entity.id() as usize)?;
+        let meta = self.meta.get_mut(entity.id().as_usize())?;
 
-        if meta.version != entity.version() || meta.archetype_id == ArchetypeId::INVALID {
+        if meta.version != entity.version() || meta.bundle_id == BundleId::INVALID {
             return None;
         }
 
@@ -174,13 +188,13 @@ impl Entities {
     }
 
     #[inline]
-    pub unsafe fn get_unchecked(&self, index: usize) -> &EntityMeta {
-        self.meta.get_unchecked(index) 
+    pub unsafe fn get_unchecked(&self, entity: Entity) -> &EntityMeta {
+        self.meta.get_unchecked(entity.id().as_usize())
     }
 
     #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntityMeta {
-        self.meta.get_unchecked_mut(index) 
+    pub unsafe fn get_unchecked_mut(&mut self, entity: Entity) -> &mut EntityMeta {
+        self.meta.get_unchecked_mut(entity.id().as_usize()) 
     }
 
     /// Returns how many [`Entity`]s are currently dead
