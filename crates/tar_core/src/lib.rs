@@ -1,3 +1,4 @@
+mod add_object;
 mod convert_event;
 mod double_buffer;
 mod render;
@@ -9,7 +10,9 @@ use convert_event::deref_event;
 use parking_lot::{Mutex, MutexGuard};
 use tar_render::render_functions;
 use winit::{
-    event::*,
+    event::{
+        DeviceEvent, ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent,
+    },
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -26,7 +29,7 @@ pub async fn run() {
         .with_title("Tarator")
         // .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
         .build(&event_loop)
-        .unwrap();
+        .expect("failed to aquire window");
 
     let game_render_state = render_functions::new_state(&window).await;
 
@@ -81,7 +84,15 @@ pub async fn run() {
     let mut since_start = 0;
     let mut frames: u32 = 0;
 
-    let main_thread_state = state::MainThreadState { window };
+    let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
+
+    tar_abi::load_world(&lib);
+
+    let mut main_thread_state = state::MainThreadState {
+        window,
+        scripts_lib: Some(lib),
+        scripts_systems: Some(systems),
+    };
 
     let mut gui_data = GuiInData::default();
 
@@ -92,6 +103,7 @@ pub async fn run() {
                 share_state.resize = false;
                 let now = instant::Instant::now();
                 share_state.dt = now - last_render_time;
+                gui_data.dt = share_state.dt;
                 last_render_time = now;
                 let secs = start_time.elapsed().as_secs();
                 frames += 1;
@@ -102,7 +114,7 @@ pub async fn run() {
                 }
 
                 for event in &winit_window_events {
-                    let _res = egui_state.on_event(&context, &event);
+                    let _res = egui_state.on_event(&context, event);
 
                     // if state.mouse_in_view || !res.consumed {
                     //     state.events.push(event.clone().to_static().unwrap());
@@ -153,6 +165,45 @@ pub async fn run() {
                 let gui_out = tar_gui::gui(&context, &mut gui_data);
 
                 share_state.mouse_in_view = gui_out.mouse_in_game_view;
+                share_state.load_data = None;
+
+                if let Some(path) = gui_out.load_model {
+                    // TODO!: better impl
+                    if path.ends_with(".gltf") || path.ends_with(".glb") {
+                        add_object::add_gltf_object(path).unwrap();
+                    } else if path.ends_with(".tarasset") {
+                        let id = uuid::Uuid::new_v4();
+                        share_state.load_data = Some((path, id));
+                        if let Some(scr_lib) = &main_thread_state.scripts_lib {
+                            tar_abi::add_basic_model(scr_lib, id);
+                        } else {
+                            share_state.load_data = None;
+                        }
+                    }
+                }
+
+                // run scripts
+                if let Some(scr_lib) = &main_thread_state.scripts_lib {
+                    if gui_data.running {
+                        tar_abi::run_scripts(
+                            scr_lib,
+                            main_thread_state.scripts_systems.as_ref().unwrap(),
+                            &scr_types::game_state::GameState { dt: share_state.dt },
+                        );
+                    }
+                    share_state.render_entities = tar_abi::get_render_data(scr_lib);
+                }
+                if gui_out.reload_scripts {
+                    if let Some(lib) = &main_thread_state.scripts_lib {
+                        tar_abi::save_world(lib);
+                    }
+                    main_thread_state.scripts_lib = None;
+                    main_thread_state.scripts_systems = None;
+                    let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
+                    tar_abi::load_world(&lib);
+                    main_thread_state.scripts_lib = Some(lib);
+                    main_thread_state.scripts_systems = Some(systems);
+                }
 
                 let output = context.end_frame();
 

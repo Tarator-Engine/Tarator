@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use scr_types::prims::{Vec3, Vec4};
 use serde::{Deserialize, Serialize};
-use tar_types::{Vec3, Vec4};
 
 use super::serde_helpers::*;
 
@@ -16,11 +16,8 @@ pub struct Material {
 impl Material {
     pub fn new_from_gltf(material: Arc<easy_gltf::Material>) -> Self {
         let pbr = PbrMaterial::new_from_gltf(material.pbr.clone());
-        let normal = material.normal.clone().map(|n| NormalMap::new_from_gltf(n));
-        let occlusion = material
-            .occlusion
-            .clone()
-            .map(|o| Occlusion::new_from_gltf(o));
+        let normal = material.normal.clone().map(NormalMap::new_from_gltf);
+        let occlusion = material.occlusion.clone().map(Occlusion::new_from_gltf);
         let emissive = Emissive::new_from_gltf(material.emissive.clone());
 
         Self {

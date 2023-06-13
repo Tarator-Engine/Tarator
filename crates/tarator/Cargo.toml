@@ -17,3 +17,6 @@ env_logger = "0.10"
 log = "0.4"
 pollster = "0.3.0"
 tar_core = { path = "../tar_core" }
+tar_abi = { path = "../tar_abi" }
+scr_types = { path = "../scr_types" }
+uuid = { version = "1", features = ["v4"] }

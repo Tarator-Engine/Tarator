@@ -1,5 +1,5 @@
+use scr_types::prims::Mat4;
 use tar_shader::shader;
-use tar_types::Mat4;
 use wgpu::util::DeviceExt;
 
 pub mod material;
@@ -57,8 +57,8 @@ impl Model {
 
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("instance buffer"),
-            contents: &bytemuck::cast_slice(instances.as_slice()),
-            usage: wgpu::BufferUsages::VERTEX,
+            contents: bytemuck::cast_slice(instances.as_slice()),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         Self {
@@ -70,6 +70,23 @@ impl Model {
             instances,
             instance_buffer,
         }
+    }
+
+    pub fn update_transform(&mut self, t: &scr_types::prelude::Transform, queue: &wgpu::Queue) {
+        let mat = glam::Mat4::from_scale_rotation_translation(t.scale.into(), t.rot, t.pos.into());
+
+        let instance = vec![shader::Instance {
+            model_matrix_0: mat.x_axis,
+            model_matrix_1: mat.y_axis,
+            model_matrix_2: mat.z_axis,
+            model_matrix_3: mat.w_axis,
+        }];
+
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(instance.as_slice()),
+        );
     }
 
     pub fn render<'rps>(&'rps self, render_pass: &mut wgpu::RenderPass<'rps>) {

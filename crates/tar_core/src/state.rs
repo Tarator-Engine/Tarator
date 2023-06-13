@@ -1,4 +1,5 @@
 use egui::{ClippedPrimitive, TexturesDelta};
+use scr_types::RenderEntities;
 
 #[derive(Debug, Clone, Default)]
 pub struct ShareState {
@@ -15,8 +16,14 @@ pub struct ShareState {
     pub resize: bool,
     pub mouse_pressed: bool,
     pub mouse_in_view: bool,
+
+    pub load_data: Option<(String, uuid::Uuid)>,
+
+    pub render_entities: RenderEntities,
 }
 #[derive(Debug)]
 pub struct MainThreadState {
     pub window: winit::window::Window,
+    pub scripts_lib: Option<libloading::Library>,
+    pub scripts_systems: Option<scr_types::Systems>,
 }

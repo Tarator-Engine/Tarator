@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tar_shader::shader;
 
 use crate::{
@@ -20,7 +22,7 @@ pub struct RenderState {
     pub uniform_data: shader::UniformData,
 
     // the models for rendering
-    pub models: Vec<Model>,
+    pub models: HashMap<uuid::Uuid, Model>,
 
     // editor camera data
     pub editor_cam: camera::Camera,
