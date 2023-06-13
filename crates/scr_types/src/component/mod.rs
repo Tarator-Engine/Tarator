@@ -2,8 +2,8 @@ use crate::prims::{Quat, Rad, Vec3};
 use crate::Component;
 use serde::{Deserialize, Serialize};
 
-pub mod ser;
 pub mod de;
+pub mod ser;
 
 /// To be implemented on Components that want to be serde-ed
 ///
@@ -18,10 +18,11 @@ pub mod de;
 ///     bar: u32
 /// }
 /// ```
-pub trait SerdeComponent: tar_ecs::component::Component + serde::Serialize + for<'a> serde::Deserialize<'a> {
+pub trait SerdeComponent:
+    tar_ecs::component::Component + serde::Serialize + for<'a> serde::Deserialize<'a>
+{
     const NAME: &'static str;
 }
-
 
 /// This component stored transform attributes
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]

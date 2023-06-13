@@ -58,7 +58,7 @@ fn get_internal_file(components: Vec<(String, String)>) -> syn::File {
     parse_quote!(
         use scr_types::{game_state::GameState, Systems, RenderEntities};
         use scr_types::prelude::*;
-        use scr_types::ecs_serde::{SerWorld, SerializeCallback, DeWorldBuilder};
+        use scr_types::component::{ser::SerWorld, ser::SerializeCallback, de::DeWorldBuilder};
 
         #(use crate::#imports;)*
 

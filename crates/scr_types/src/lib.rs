@@ -2,9 +2,6 @@ pub mod component;
 pub mod game_state;
 pub mod prims;
 
-#[cfg(test)]
-mod tests;
-
 use std::fmt::Debug;
 
 extern crate self as scr_types;
