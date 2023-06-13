@@ -126,17 +126,13 @@ fn get_internal_file(components: Vec<(String, String)>) -> syn::File {
         pub fn get_render_entities() -> RenderEntities {
             unsafe {
                 if let Some(world) = &mut WORLD {
-                    let mut res = vec![];
-                    world
-                        .component_query::<(Transform, Rendering)>()
-                        .for_each(|e| {
-                            res.push((e.0.clone(), e.1.clone()));
-                        });
-                    return RenderEntities { entities: res };
+                    let res = world.component_collect::<(Transform, Rendering)>();
+                    RenderEntities { entities: res }
+                } else {
+                    RenderEntities { entities: vec![] }
                 }
             }
 
-            RenderEntities { entities: vec![] }
         }
 
         #[no_mangle]

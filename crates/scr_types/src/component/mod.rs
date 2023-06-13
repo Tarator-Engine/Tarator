@@ -1,6 +1,27 @@
 use crate::prims::{Quat, Rad, Vec3};
-use scr_types_macros::Component;
+use crate::Component;
 use serde::{Deserialize, Serialize};
+
+pub mod ser;
+pub mod de;
+
+/// To be implemented on Components that want to be serde-ed
+///
+/// # Example
+///
+/// ```
+/// use scr_types::Component;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Component, Serialize, Deserialize)]
+/// struct Foo {
+///     bar: u32
+/// }
+/// ```
+pub trait SerdeComponent: tar_ecs::component::Component + serde::Serialize + for<'a> serde::Deserialize<'a> {
+    const NAME: &'static str;
+}
+
 
 /// This component stored transform attributes
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
