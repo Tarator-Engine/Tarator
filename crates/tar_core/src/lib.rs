@@ -84,10 +84,14 @@ pub async fn run() {
     let mut since_start = 0;
     let mut frames: u32 = 0;
 
+    let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
+
+    tar_abi::load_world(&lib);
+
     let mut main_thread_state = state::MainThreadState {
         window,
-        scripts_lib: None,
-        scripts_systems: None,
+        scripts_lib: Some(lib),
+        scripts_systems: Some(systems),
     };
 
     let mut gui_data = GuiInData::default();
@@ -190,9 +194,13 @@ pub async fn run() {
                     share_state.render_entities = tar_abi::get_render_data(scr_lib);
                 }
                 if gui_out.reload_scripts {
+                    if let Some(lib) = &main_thread_state.scripts_lib {
+                        tar_abi::save_world(lib);
+                    }
                     main_thread_state.scripts_lib = None;
                     main_thread_state.scripts_systems = None;
                     let (lib, systems) = tar_abi::load_scripts_lib().unwrap();
+                    tar_abi::load_world(&lib);
                     main_thread_state.scripts_lib = Some(lib);
                     main_thread_state.scripts_systems = Some(systems);
                 }

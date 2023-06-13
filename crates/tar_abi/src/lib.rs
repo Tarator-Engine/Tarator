@@ -76,8 +76,8 @@ fn get_internal_file(components: Vec<(String, String)>) -> syn::File {
                     let serialized =
                         serde_json::to_string(&SerWorld::new(&world, uuid::Uuid::new_v4()))
                             .unwrap();
-                    println!("{serialized:?}");
-                    std::fs::write("/data/world.json", serialized).unwrap();
+                    println!("{serialized}");
+                    std::fs::write("data/world.json", serialized);
                 }
             }
         }
@@ -85,17 +85,24 @@ fn get_internal_file(components: Vec<(String, String)>) -> syn::File {
         #[no_mangle]
         pub fn load_world() {
             unsafe {
-                let serialized = std::fs::read_to_string("/data/world.json").unwrap();
-                println!("{serialized}");
-                let deworld = DeWorldBuilder::new()
-                    .constructor::<Transform>()
-                    .constructor::<Rendering>()
-                    .constructor::<Camera>()
-                    .constructor::<Info>()
-                    #(.constructor::<#comps>())*
-                    .build(&mut serde_json::Deserializer::from_str(&serialized))
-                    .unwrap();
-                WORLD = Some(deworld.world);
+                match std::fs::read_to_string("data/world.json") {
+                    Ok(serialized) => {
+                        println!("loading: {serialized}");
+                        let deworld = DeWorldBuilder::new()
+                            .constructor::<Transform>()
+                            .constructor::<Rendering>()
+                            .constructor::<Camera>()
+                            .constructor::<Info>()
+                            #(.constructor::<#comps>())*
+                            .build(&mut serde_json::Deserializer::from_str(&serialized))
+                            .unwrap();
+                        println!("loaded");
+                        WORLD = Some(deworld.world);
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                    }
+                }
             }
         }
 
@@ -145,6 +152,7 @@ fn get_internal_file(components: Vec<(String, String)>) -> syn::File {
                         (
                             scr_types::prelude::Transform::default(),
                             scr_types::prelude::Rendering { model_id: id },
+                            scr_types::prelude::Info {name: String::new(), id: uuid::Uuid::new_v4()}
                         ),
                     );
                 }
