@@ -10,5 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 scr_types = { path = "../crates/scr_types" }
-tar_ecs = { path = "../crates/tar_ecs" }
 libc = "0.2"
+uuid = "1"
+serde = "1"
+serde_json = "1"

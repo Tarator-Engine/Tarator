@@ -76,6 +76,15 @@ pub fn foreach_tuple(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
+    impl_component(input)
+}
+
+#[proc_macro_attribute]
+pub fn make_component(_: TokenStream, input: TokenStream) -> TokenStream {
+    impl_component(input)
+}
+
+fn impl_component(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
 
     ast.generics
@@ -87,7 +96,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     quote! {
-        unsafe impl #impl_generics Component for #name #type_generics #where_clause {}
+        unsafe impl #impl_generics ::tar_ecs::component::Component for #name #type_generics #where_clause {}
     }
     .into()
 }
@@ -98,13 +107,13 @@ pub fn derive_callback(input: TokenStream) -> TokenStream {
 
     let name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
+    let (_, uid) = uuid::Uuid::new_v4().as_u64_pair();
 
     quote! {
-        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {}
-
-        impl #impl_generics Callback<()> for #name #type_generics #where_clause {
-            fn callback(&mut self, _: &mut ()) {}
+        unsafe impl #impl_generics InnerCallback for #name #type_generics #where_clause {
+            const UID: UCallbackId = UCallbackId::new(#uid);
         }
+        impl #impl_generics Callback<()> for #name #type_generics #where_clause {}
     }
     .into()
 }

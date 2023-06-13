@@ -4,12 +4,15 @@ pub struct GuiInData {
     pub fps: u32,
     pub game_view_texture: Option<egui::TextureHandle>,
     pub running: bool,
+    pub model_load_string: String,
 }
 
 #[derive(Default)]
 pub struct GuiOutData {
     pub mouse_in_game_view: bool,
     pub reload_scripts: bool,
+
+    pub load_model: Option<String>,
 }
 
 pub fn gui(context: &egui::Context, state: &mut GuiInData) -> GuiOutData {
@@ -30,11 +33,17 @@ pub fn gui(context: &egui::Context, state: &mut GuiInData) -> GuiOutData {
             ui.label(format!("running: {:?}", state.running));
 
             out.reload_scripts = ui.button("reload scripts").clicked();
+
+            ui.text_edit_singleline(&mut state.model_load_string);
+
+            if ui.button("load model").clicked() {
+                out.load_model = Some(state.model_load_string.clone());
+            }
         });
 
     egui::CentralPanel::default()
         .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
-        .show(&context, |ui| {
+        .show(context, |ui| {
             out.mouse_in_game_view = ui.ui_contains_pointer()
         });
 

@@ -22,7 +22,7 @@ trait CheckElement: Component {}
 struct CheckComponents(usize);
 
 impl<C: CheckElement> Callback<C> for CheckComponents {
-    fn callback(&mut self, _: &mut C) {
+    fn callback(&mut self, _: &C) {
         self.0 += 1;
     }
 }
@@ -51,7 +51,7 @@ fn callback() {
 fn component_query() {
     let mut world = World::new();
 
-    fn init_entity<T: CloneBundle>(world: &mut World, data: T) {
+    fn init_entity<'a, T: CloneBundle>(world: &mut World, data: T) {
         for _ in 0..1 {
             let entity = world.entity_create();
             world.entity_set(entity, data.clone());
@@ -80,25 +80,17 @@ fn component_query() {
         ),
     );
 
-    fn check_component<T: Bundle>(world: &mut World, rec: usize) {
+    fn check_component<'a, T: Bundle>(world: &'a mut World, rec: usize) {
         let mut count = 0;
-        world.component_query::<T>(|_| {
+        world.component_query::<T>().for_each(|_| {
             count += 1;
         });
         assert!(count == rec, "{}", count);
 
         count = 0;
-        world.component_query_mut::<T>(|_| {
+        world.component_query_mut::<T>().for_each(|_| {
             count += 1;
         });
-        assert!(count == rec, "{}", count);
-
-        count = 0;
-        world.get_component_query::<T>().for_each(|_| count += 1);
-        assert!(count == rec, "{}", count);
-
-        count = 0;
-        world.get_component_query_mut::<T>().for_each(|_| count += 1);
         assert!(count == rec, "{}", count);
     }
 
@@ -120,7 +112,7 @@ fn component_query() {
     check_component::<(Label, Rotation, Position)>(&mut world, 2);
     check_component::<(Label, Player, Rotation, Position)>(&mut world, 1);
 
-    world.component_query::<Label>(|label| {
+    world.component_query::<Label>().for_each(|label| {
         assert!(label.0.as_str() == "Entity");
     });
 }
@@ -134,12 +126,12 @@ fn entity_unset() {
         (Position([0, 0]), Rotation(0), Player, Label("".into())),
     );
     assert!(world
-        .entity_get::<(Position, Rotation, Player, Label), _>(entity, |_| {})
+        .entity_get::<(Position, Rotation, Player, Label)>(entity)
         .is_some());
     world.entity_unset::<(Position, Rotation, Label)>(entity);
-    assert!(world.entity_get::<Position, _>(entity, |_| {}).is_none());
-    assert!(world.entity_get::<Rotation, _>(entity, |_| {}).is_none());
-    assert!(world.entity_get::<Player, _>(entity, |_| {}).is_some());
-    assert!(world.entity_get::<Label, _>(entity, |_| {}).is_none());
+    assert!(world.entity_get::<Position>(entity).is_none());
+    assert!(world.entity_get::<Rotation>(entity).is_none());
+    assert!(world.entity_get::<Player>(entity).is_some());
+    assert!(world.entity_get::<Label>(entity).is_none());
 }
 

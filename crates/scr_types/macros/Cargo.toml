@@ -1,5 +1,5 @@
 [package]
-name = "macros"
+name = "scr_types_macros"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ proc-macro = true
 syn = { version = "2.0.14", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+tar_ecs_macros = { path = "../../tar_ecs/macros" }

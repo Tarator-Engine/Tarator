@@ -25,14 +25,14 @@ macro_rules! impl_sparse_set_index {
 impl_sparse_set_index!(u8, u16, u32, u64, usize);
 
 /// Immutable: values cannot be changed after construction
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SparseArray<I, V = I> {
     values: Box<[Option<V>]>,
     marker: PhantomData<I>,
 }
 
 /// Mutable: values can be changed after construction
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MutSparseArray<I, V = I> {
     values: Vec<Option<V>>,
     marker: PhantomData<I>,
@@ -117,15 +117,15 @@ impl<I: SparseSetIndex, V> MutSparseArray<I, V> {
     }
 }
 
-#[derive(Debug)]
-pub struct SparseSet<I, V: 'static> {
+#[derive(Clone, Debug)]
+pub struct SparseSet<I, V: 'static + Clone> {
     dense: Box<[V]>,
     indices: Box<[I]>,
     sparse: SparseArray<I, usize>,
 }
 
-#[derive(Debug)]
-pub struct MutSparseSet<I, V: 'static> {
+#[derive(Clone, Debug)]
+pub struct MutSparseSet<I, V: 'static + Clone> {
     dense: Vec<V>,
     indices: Vec<I>,
     sparse: MutSparseArray<I, usize>,
@@ -133,7 +133,7 @@ pub struct MutSparseSet<I, V: 'static> {
 
 macro_rules! impl_sparse_set {
     ($ty:ident) => {
-        impl<I: SparseSetIndex, V> $ty<I, V> {
+        impl<I: SparseSetIndex, V: Clone> $ty<I, V> {
             #[inline]
             pub fn len(&self) -> usize {
                 self.dense.len()
@@ -195,7 +195,7 @@ macro_rules! impl_sparse_set {
 impl_sparse_set!(SparseSet);
 impl_sparse_set!(MutSparseSet);
 
-impl<I: SparseSetIndex, V> SparseSet<I, V> {
+impl<I: SparseSetIndex, V: Clone> SparseSet<I, V> {
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -206,7 +206,7 @@ impl<I: SparseSetIndex, V> SparseSet<I, V> {
     }
 }
 
-impl<I: SparseSetIndex, V> MutSparseSet<I, V> {
+impl<I: SparseSetIndex, V: Clone> MutSparseSet<I, V> {
     #[inline]
     pub const fn new() -> Self {
         Self {

@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use tar_render::render_functions;
 use winit::event::{DeviceEvent, KeyboardInput};
 
-use crate::{state::ShareState, DoubleBuffer};
+use crate::{add_object, state::ShareState, DoubleBuffer};
 
 pub struct RenderData {
     pub pre_render_finished_barrier: Arc<Barrier>,
@@ -57,6 +57,10 @@ pub fn render_fn(data: RenderData) {
             render_functions::resize(shared_state.window_size, &mut game_render_state)
         }
 
+        if let Some((path, id)) = shared_state.load_data {
+            add_object::load_object_to_renderer(&mut game_render_state, path, id).unwrap();
+        }
+
         let output_frame = match game_render_state.surface.get_current_texture() {
             Ok(frame) => Some(frame),
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -85,8 +89,14 @@ pub fn render_fn(data: RenderData) {
                     });
 
             // My rendering
-            render_functions::render(&mut game_render_state, &mut encoder, &view, shared_state.dt)
-                .unwrap();
+            render_functions::render(
+                &mut game_render_state,
+                &mut encoder,
+                &view,
+                shared_state.dt,
+                shared_state.render_entities,
+            )
+            .unwrap();
 
             // Egui rendering now
 
@@ -113,7 +123,7 @@ pub fn render_fn(data: RenderData) {
                     &game_render_state.device,
                     &game_render_state.queue,
                     &mut encoder,
-                    &shared_state.paint_jobs.as_ref(),
+                    shared_state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 )
             };
@@ -134,7 +144,7 @@ pub fn render_fn(data: RenderData) {
 
                 egui_renderer.render(
                     &mut render_pass,
-                    &shared_state.paint_jobs.as_ref(),
+                    shared_state.paint_jobs.as_ref(),
                     &screen_descriptor,
                 );
             }

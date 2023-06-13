@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, punctuated::Punctuated};
+use syn::{parse_quote, punctuated::Punctuated, DeriveInput};
 
 extern crate proc_macro;
 
@@ -9,15 +10,15 @@ extern crate proc_macro;
 /// the System using the InitSystems macro.
 ///
 /// ## Example:
-/// ```rust
+/// ```ignore
 /// #[derive(Component)]
 /// pub struct Item(String);
 ///
 /// #[System(Update)]
-/// pub fn move_items(items: Vec<(Transform, Item)>) {
+/// pub fn move_items(items: Vec<(Transform, Item)>, state: GameState<()>) {
 ///     for (transform, item) in items {
 ///         let before = transform.pos;
-///         transform.pos.x += 1;
+///         transform.pos.x += 1.0 * state.dt;
 ///         let after = transform.pos;
 ///         println!("moved {item} from {before} to {after}");
 ///     }
@@ -45,12 +46,14 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let inputs = func.sig.inputs;
 
-    let arg: syn::FnArg = parse_quote!(world: &mut ::tar_ecs::prelude::World);
+    let arg: syn::FnArg = parse_quote!(world: &mut ::scr_types::prelude::World);
 
     func.sig.inputs = Punctuated::new();
     func.sig.inputs.push(arg);
 
     let mut new_stmts = vec![];
+
+    let mut state_arg = None;
 
     for input in inputs {
         let pat = match input {
@@ -58,25 +61,13 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
             syn::FnArg::Typed(t) => t,
         };
 
-        // inputs.push(quote!(#pat).to_string());
-
-        // let name = if let syn::Pat::Ident(i) = *pat.pat.clone() {
-        //     i.ident
-        // } else {
-        //     unreachable!()
-        // };
-
-        // let bundle_type = match *pat.ty {
-        //     syn::Type::
-        // };
-        // let is_vec = true;
-
         let name = match *pat.pat {
             syn::Pat::Ident(i) => i.ident,
             _ => panic!("queries should be of type: 'Vec<(Component1, Component2)>'"),
         };
 
-        let is_mut: bool;
+        let mut is_mut = false;
+        let mut is_state = false;
 
         let bundle_type = match *pat.ty {
             syn::Type::Path(p) => {
@@ -85,26 +76,47 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 match last.ident.to_string().as_str() {
                     "Query" => is_mut = false,
                     "QueryMut" => is_mut = true,
+                    "GameState" => is_state = true,
                     _ => panic!("only Query and QueryMut are supported as function parameters"),
                 }
-
-                match last.arguments {
-                    syn::PathArguments::AngleBracketed(a) => a.args,
-                    _ => panic!(
+                if is_state {
+                    None
+                } else {
+                    Some(match last.arguments {
+                        syn::PathArguments::AngleBracketed(a) => a.args,
+                        _ => panic!(
                         "queries should have a structure like: 'Query<(Component1, Component2)>'"
                     ),
+                    })
                 }
             }
             _ => panic!("queries should have a structure like: 'Query<(Component1, Component2)>'"),
         };
-
-        let new_stmt: syn::Stmt = if is_mut {
-            parse_quote!(let #name = world.get_component_query_mut::<#bundle_type>();)
+        if is_state {
+            let arg: syn::FnArg = parse_quote!(#name: &::scr_types::game_state::GameState);
+            if state_arg.is_some() {
+                panic!("only one instance of game_state is allowed")
+            }
+            state_arg = Some(arg);
         } else {
-            parse_quote!(let #name = world.get_component_query::<#bundle_type>();)
-        };
-        new_stmts.push(new_stmt);
+            let new_stmt: syn::Stmt = if let Some(bundle_type) = bundle_type {
+                if is_mut {
+                    parse_quote!(let #name = world.component_query_mut::<#bundle_type>();)
+                } else {
+                    parse_quote!(let #name = world.component_query::<#bundle_type>();)
+                }
+            } else {
+                panic!("queries should have a structure like: 'Query<(Component1, Component2)>'");
+            };
+            new_stmts.push(new_stmt);
+        }
     }
+
+    func.sig.inputs.push(if let Some(arg) = state_arg {
+        arg
+    } else {
+        parse_quote!(_state: &::scr_types::game_state::GameState)
+    });
 
     // add the requested bundles/components
     let mut tmp = func.block.stmts;
@@ -118,7 +130,7 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// This macro allows you to specify what systems you want to use and when you want them.
 ///
 /// ## Example:
-/// ```rust
+/// ```ignore
 /// #[derive(Component)]
 /// pub struct Item(String);
 ///
@@ -159,4 +171,21 @@ pub fn InitSystems(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     func.attrs.push(parse_quote!(#[no_mangle]));
 
     quote!(#func).into()
+}
+
+#[proc_macro_derive(Component)]
+pub fn derive_component(input: TokenStream) -> TokenStream {
+    let ast = syn::parse_macro_input!(input as DeriveInput);
+    let name = &ast.ident;
+    let generics = &ast.generics;
+    let (impl_generics, type_generics, where_clause) = &generics.split_for_impl();
+    let serde_name = syn::LitStr::new(&name.to_string(), Span::call_site());
+
+    quote!(
+        unsafe impl #impl_generics ::scr_types::tar_ecs::component::Component for #name #type_generics #where_clause {}
+
+        impl #impl_generics ::scr_types::component::SerdeComponent for #name #type_generics #where_clause {
+            const NAME: &'static str = #serde_name;
+        }
+    ).into()
 }

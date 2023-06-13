@@ -1,9 +1,31 @@
-use tar_ecs::prelude::Component;
-
 use crate::prims::{Quat, Rad, Vec3};
+use crate::Component;
+use serde::{Deserialize, Serialize};
+
+pub mod de;
+pub mod ser;
+
+/// To be implemented on Components that want to be serde-ed
+///
+/// # Example
+///
+/// ```
+/// use scr_types::Component;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Component, Serialize, Deserialize)]
+/// struct Foo {
+///     bar: u32
+/// }
+/// ```
+pub trait SerdeComponent:
+    tar_ecs::component::Component + serde::Serialize + for<'a> serde::Deserialize<'a>
+{
+    const NAME: &'static str;
+}
 
 /// This component stored transform attributes
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct Transform {
     pub pos: Vec3,
     pub rot: Quat,
@@ -24,7 +46,7 @@ impl Default for Transform {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to render
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Rendering {
     pub model_id: uuid::Uuid,
 }
@@ -33,7 +55,7 @@ pub struct Rendering {
 ///
 /// **Note**: The [`Transform`] component is also required
 /// to act like a camera
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Camera {
     pub fovy: Rad,
     pub znear: f32,
@@ -54,7 +76,11 @@ impl Default for Camera {
 
 /// This component stores basic entity info e.g. name
 /// it is required for it to be shown in the editor
-#[derive(Debug, Clone)]
+///
+/// **Note**: [`Info`] does not derive Serialize, Deserialize or SerdeComponent,
+/// because we use [`Info`] as a top-level entity descriptor and not part of the
+/// components section in the serializations of the worlds.
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
 pub struct Info {
     pub name: String,
     pub id: uuid::Uuid,
