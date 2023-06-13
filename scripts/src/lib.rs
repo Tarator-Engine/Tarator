@@ -1,3 +1,5 @@
+mod playercomponent;
+
 use scr_types::prelude::*;
 
 #[System(Update)]

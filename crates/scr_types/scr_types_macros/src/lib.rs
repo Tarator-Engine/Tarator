@@ -46,7 +46,7 @@ pub fn System(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let inputs = func.sig.inputs;
 
-    let arg: syn::FnArg = parse_quote!(world: &mut ::tar_ecs::prelude::World);
+    let arg: syn::FnArg = parse_quote!(world: &mut ::scr_types::prelude::World);
 
     func.sig.inputs = Punctuated::new();
     func.sig.inputs.push(arg);
@@ -182,7 +182,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let serde_name = syn::LitStr::new(&name.to_string(), Span::call_site());
 
     quote!(
-        unsafe impl #impl_generics ::tar_ecs::component::Component for #name #type_generics #where_clause {}
+        unsafe impl #impl_generics ::scr_types::tar_ecs::component::Component for #name #type_generics #where_clause {}
 
         impl #impl_generics ::scr_types::ecs_serde::SerdeComponent for #name #type_generics #where_clause {
             const NAME: &'static str = #serde_name;

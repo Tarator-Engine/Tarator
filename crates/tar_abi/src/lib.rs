@@ -1,41 +1,108 @@
 //! This crate is used for loading and accessing compiled scripts (via the compiled scripts internal.rs)
 
-use std::process::Command;
+use std::{fs, process::Command};
 
 use fs_extra::dir::CopyOptions;
 use libloading::{Library, Symbol};
+use proc_macro2::Span;
 use scr_types::{game_state::GameState, RenderEntities, Systems};
 use syn::parse_quote;
+use toml::{Table, Value};
 
 type InitSystemsFunc<'lib> = Symbol<'lib, fn() -> Systems>;
 type RunSystemsFunc<'lib> = Symbol<'lib, fn(&Systems, &GameState)>;
 type GetRenderEntitiesFunc<'lib> = Symbol<'lib, fn() -> RenderEntities>;
 type AddBasicModelFunc<'lib> = Symbol<'lib, fn(uuid::Uuid)>;
+type SaveWorldFunc<'lib> = Symbol<'lib, fn()>;
+type LoadWorldFunc<'lib> = Symbol<'lib, fn()>;
 
-fn get_internal_file() -> syn::File {
+fn get_component_names() -> Result<Vec<(String, String)>, std::io::Error> {
+    let base_table = fs::read_to_string(".scr/Info.toml")?.parse::<Table>();
+
+    // TODO!: better error handling
+    let table = match base_table {
+        Ok(t) => t,
+        Err(_) => return Err(std::io::Error::from_raw_os_error(0)),
+    };
+
+    // TODO!: better error handling again
+    // (if the user accidentally changes the name of the components table the whole engine crashes)
+    let comps_value = table["Components"].clone();
+
+    let components_map = match comps_value {
+        Value::Table(t) => t,
+        _ => panic!("something in the Info.toml file is seriously wrong"),
+    };
+
+    let mut names = vec![];
+
+    for (k, v) in components_map {
+        if let Value::String(s) = v {
+            names.push((k, s));
+        }
+    }
+
+    Ok(names)
+}
+
+fn get_internal_file(components: Vec<(String, String)>) -> syn::File {
+    println!("{components:?}");
+    let mut comps: Vec<syn::Ident> = vec![];
+    let mut imports: Vec<syn::Path> = vec![];
+    for (name, mut path) in components {
+        comps.push(syn::Ident::new(&name, Span::call_site()));
+        path.push_str("::");
+        path.push_str(&name);
+        imports.push(syn::parse_str(&path).unwrap());
+    }
     parse_quote!(
         use scr_types::{game_state::GameState, Systems, RenderEntities};
         use scr_types::prelude::*;
-        use tar_ecs::prelude::*;
-        use scr_types::ecs_serde::SerWorld;
+        use scr_types::ecs_serde::{SerWorld, SerializeCallback, DeWorldBuilder};
 
-        static mut WORLD: Option<tar_ecs::prelude::World> = None;
+        #(use crate::#imports;)*
+
+        static mut WORLD: Option<World> = None;
 
         #[no_mangle]
         pub fn save_world() {
             unsafe {
-                if let Some(world) = WORLD {
+                if let Some(world) = &mut WORLD {
+                    world.component_add_callback::<SerializeCallback, Transform>();
+                    world.component_add_callback::<SerializeCallback, Rendering>();
+                    world.component_add_callback::<SerializeCallback, Camera>();
+                    world.component_add_callback::<SerializeCallback, Info>();
+                    #(world.component_add_callback::<SerializeCallback, #comps>();)*
                     let serialized =
                         serde_json::to_string(&SerWorld::new(&world, uuid::Uuid::new_v4()))
                             .unwrap();
+                    println!("{serialized:?}");
+                    std::fs::write("/data/world.json", serialized).unwrap();
                 }
+            }
+        }
+
+        #[no_mangle]
+        pub fn load_world() {
+            unsafe {
+                let serialized = std::fs::read_to_string("/data/world.json").unwrap();
+                println!("{serialized}");
+                let deworld = DeWorldBuilder::new()
+                    .constructor::<Transform>()
+                    .constructor::<Rendering>()
+                    .constructor::<Camera>()
+                    .constructor::<Info>()
+                    #(.constructor::<#comps>())*
+                    .build(&mut serde_json::Deserializer::from_str(&serialized))
+                    .unwrap();
+                WORLD = Some(deworld.world);
             }
         }
 
         #[no_mangle]
         pub fn setup() {
             unsafe {
-                WORLD = Some(tar_ecs::prelude::World::new());
+                WORLD = Some(World::new());
             }
         }
 
@@ -43,7 +110,7 @@ fn get_internal_file() -> syn::File {
         pub fn run_systems(systems: &Systems, game_state: &GameState) {
             unsafe {
                 if WORLD.is_none() {
-                    WORLD = Some(tar_ecs::prelude::World::new());
+                    WORLD = Some(World::new());
                 }
             }
 
@@ -95,6 +162,8 @@ pub trait ScriptsLib {
     fn run(&self, systems: &Systems, game_state: &GameState);
     fn get_render_entities(&self) -> RenderEntities;
     fn add_model(&self, id: uuid::Uuid);
+    fn save_world(&self);
+    fn load_world(&self);
 }
 
 impl ScriptsLib for Library {
@@ -121,6 +190,20 @@ impl ScriptsLib for Library {
 
         add_basic_model(id);
     }
+
+    fn save_world(&self) {
+        println!("saving world");
+        let save_world: SaveWorldFunc = unsafe { self.get("save_world".as_bytes()).unwrap() };
+
+        save_world();
+    }
+
+    fn load_world(&self) {
+        println!("loading world");
+        let load_world: LoadWorldFunc = unsafe { self.get("load_world".as_bytes()).unwrap() };
+
+        load_world();
+    }
 }
 
 pub fn load_scripts_lib() -> std::io::Result<(Library, Systems)> {
@@ -131,9 +214,11 @@ pub fn load_scripts_lib() -> std::io::Result<(Library, Systems)> {
     )
     .unwrap();
 
+    let components = get_component_names()?;
+
     std::fs::write(
         ".scr/src/internal.rs",
-        prettyplease::unparse(&get_internal_file()),
+        prettyplease::unparse(&get_internal_file(components)),
     )
     .unwrap();
 
@@ -166,4 +251,12 @@ pub fn get_render_data(lib: &Library) -> RenderEntities {
 
 pub fn add_basic_model(lib: &Library, id: uuid::Uuid) {
     lib.add_model(id)
+}
+
+pub fn save_world(lib: &Library) {
+    lib.save_world();
+}
+
+pub fn load_world(lib: &Library) {
+    lib.load_world();
 }

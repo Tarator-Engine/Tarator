@@ -15,10 +15,14 @@ pub type System = fn(&mut tar_ecs::prelude::World, &game_state::GameState);
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::game_state::GameState;
+    pub use crate::Component;
     pub use crate::InitSystems;
     pub use crate::System;
     pub use crate::Systems;
+    pub use tar_ecs::prelude::World;
 }
+
+pub use tar_ecs;
 
 #[derive(Debug, Default, Clone)]
 #[repr(C)]
