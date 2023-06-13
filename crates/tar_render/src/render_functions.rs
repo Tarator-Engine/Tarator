@@ -206,7 +206,7 @@ pub async fn new_state(window: &Window) -> RenderState {
         adapter,
         config,
         global_frame_bind_group,
-        models: vec![],
+        models: HashMap::new(),
         uniform_buffer: uniform_data_buffer,
         uniform_data,
         editor_cam,
