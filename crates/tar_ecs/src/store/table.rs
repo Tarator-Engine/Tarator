@@ -101,7 +101,7 @@ impl Table {
         self.entities.push(entity);
         let alloc = self.store.alloc();
 
-        data.get_components(type_info, &mut |id, data| {
+        data.get_components(type_info, |id, data| {
             let item = self.indexer.get(id).unwrap();
             ptr::copy(data, alloc.add(item.index), item.size);
         });
@@ -112,7 +112,7 @@ impl Table {
 
         let store_data = self.store.get_unchecked_mut(index);
 
-        data.get_components(type_info, &mut |id, data| {
+        data.get_components(type_info, |id, data| {
             let item = self.indexer.get(id).expect("Component not part of table!");
 
             let dst = store_data.add(item.index);
@@ -132,7 +132,7 @@ impl Table {
 
         let indexer = RowIndexer::new(index, self);
 
-        data.get_components(type_info, &mut |id, data| {
+        data.get_components(type_info, |id, data| {
             let size = indexer.get_size(id).expect("Component not part of table!");
             if size != 0 {
                 let dst = indexer.get_unchecked(id);

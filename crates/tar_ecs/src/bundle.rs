@@ -29,11 +29,11 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     }
 
     /// Initializes and gets the [`ComponentId`]s via `func`
-    fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId));
+    fn init_component_ids(type_info: &mut impl TypeInfo, func: impl FnMut(ComponentId));
 
     unsafe fn from_components(
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId) -> *mut u8,
+        func: impl FnMut(ComponentId) -> *mut u8,
     ) -> Self::Ptr;
 
     /// Returns a tuple of references to the components in the order of `Self`. The references are
@@ -45,12 +45,12 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     /// [`ComponentId`] type
     unsafe fn from_components_as_ref<'a>(
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
+        func: impl FnMut(ComponentId) -> Option<*const u8>,
     ) -> Option<Self::Ref<'a>>;
 
     unsafe fn from_components_as_mut<'a>(
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
+        func: impl FnMut(ComponentId) -> Option<*mut u8>,
     ) -> Option<Self::Mut<'a>>;
 
     /// Get the components of this [`Bundle`] with a corresponding [`ComponentId`]. This passes
@@ -62,7 +62,7 @@ pub unsafe trait Bundle: Sized + Send + Sync + 'static {
     unsafe fn get_components(
         self,
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId, *mut u8),
+        func: impl FnMut(ComponentId, *mut u8),
     );
 }
 
@@ -79,14 +79,14 @@ unsafe impl<T: Component> Bundle for T {
     type Mut<'a> = &'a mut Self;
 
     #[inline]
-    fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId)) {
+    fn init_component_ids(type_info: &mut impl TypeInfo, mut func: impl FnMut(ComponentId)) {
         func(type_info.init_component_from::<T>())
     }
 
     #[inline]
     unsafe fn from_components(
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId) -> *mut u8,
+        mut func: impl FnMut(ComponentId) -> *mut u8,
     ) -> Self::Ptr {
         func(
             type_info
@@ -98,14 +98,14 @@ unsafe impl<T: Component> Bundle for T {
 
     unsafe fn from_components_as_ref<'a>(
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId) -> Option<*const u8>,
+        mut func: impl FnMut(ComponentId) -> Option<*const u8>,
     ) -> Option<Self::Ref<'a>> {
         func(type_info.get_component_id_from::<T>()?).map(|data| &*data.cast::<T>())
     }
 
     unsafe fn from_components_as_mut<'a>(
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId) -> Option<*mut u8>,
+        mut func: impl FnMut(ComponentId) -> Option<*mut u8>,
     ) -> Option<Self::Mut<'a>> {
         func(type_info.get_component_id_from::<T>()?).map(|data| &mut *data.cast::<T>())
     }
@@ -114,7 +114,7 @@ unsafe impl<T: Component> Bundle for T {
     unsafe fn get_components(
         self,
         type_info: &impl TypeInfo,
-        func: &mut impl FnMut(ComponentId, *mut u8),
+        mut func: impl FnMut(ComponentId, *mut u8),
     ) {
         func(
             type_info
@@ -140,34 +140,34 @@ macro_rules! component_tuple_impl {
 
             #[inline]
             #[allow(unused_variables)]
-            fn init_component_ids(type_info: &mut impl TypeInfo, func: &mut impl FnMut(ComponentId)) {
-                $(<$c as Bundle>::init_component_ids(type_info, func);)*
+            fn init_component_ids(type_info: &mut impl TypeInfo, mut func: impl FnMut(ComponentId)) {
+                $(<$c as Bundle>::init_component_ids(type_info, &mut func);)*
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> *mut u8) -> Self::Ptr {
-                ($($c::from_components(type_info, func),)*)
+            unsafe fn from_components(type_info: &impl TypeInfo, mut func: impl FnMut(ComponentId) -> *mut u8) -> Self::Ptr {
+                ($($c::from_components(type_info, &mut func),)*)
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_as_ref<'a>(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> Option<*const u8>) -> Option<Self::Ref<'a>> {
-                Some(($($c::from_components_as_ref(type_info, func)?,)*))
+            unsafe fn from_components_as_ref<'a>(type_info: &impl TypeInfo, mut func: impl FnMut(ComponentId) -> Option<*const u8>) -> Option<Self::Ref<'a>> {
+                Some(($($c::from_components_as_ref(type_info, &mut func)?,)*))
             }
 
             #[inline]
             #[allow(unused_variables)]
-            unsafe fn from_components_as_mut<'a>(type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId) -> Option<*mut u8>) -> Option<Self::Mut<'a>> {
-                Some(($($c::from_components_as_mut(type_info, func)?,)*))
+            unsafe fn from_components_as_mut<'a>(type_info: &impl TypeInfo, mut func: impl FnMut(ComponentId) -> Option<*mut u8>) -> Option<Self::Mut<'a>> {
+                Some(($($c::from_components_as_mut(type_info, &mut func)?,)*))
             }
 
             #[inline]
             #[allow(unused_variables, unused_mut)]
-            unsafe fn get_components(self, type_info: &impl TypeInfo, func: &mut impl FnMut(ComponentId, *mut u8)) {
+            unsafe fn get_components(self, type_info: &impl TypeInfo, mut func: impl FnMut(ComponentId, *mut u8)) {
                 #[allow(non_snake_case)]
                 let ($(mut $c,)*) = self;
-                $($c.get_components(type_info, func);)*
+                $($c.get_components(type_info, &mut func);)*
             }
         }
 
